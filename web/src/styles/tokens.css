@@ -10,21 +10,21 @@
   --surface-3: #e9eeeb;
   --text: #171a19;
   --text-2: #5c6461;
-  --text-3: #7c8681;
+  --text-3: #68716d; /* darkened from #7c8681 to meet WCAG AA (4.5:1) on light surfaces */
   --line: #e5e9e7;
   --line-2: #d6ddd9;
   --accent: #171a19;
   --accent-fg: #ffffff;
-  --green: #12805c;
+  --green: #0f7050; /* AA-compliant on --green-bg (badge text) and white */
   --green-bg: #e4f3ec;
-  --red: #d92d20;
+  --red: #c9271b; /* AA-compliant on --red-bg (badge text) and white */
   --red-bg: #fdecea;
   --amber: #b54708;
   --amber-bg: #fef3e7;
   --blue: #175cd3;
   --blue-bg: #eaf1fd;
   --gray-dot: #98a2a0;
-  --focus: #12805c;
+  --focus: #0f7050;
   --frame-a: #dff3e7;
   --frame-b: #c9ead6;
 
