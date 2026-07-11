@@ -24,5 +24,12 @@ export function initTheme() {
   media?.addEventListener('change', () => {
     if (readThemePref() === 'system') applyTheme('system');
   });
+  // ?theme=light|dark|system overrides the stored preference (handy for
+  // demos and screenshots).
+  const param = new URLSearchParams(window.location.search).get('theme');
+  if (param === 'light' || param === 'dark' || param === 'system') {
+    applyTheme(param);
+    return;
+  }
   applyTheme(readThemePref());
 }
