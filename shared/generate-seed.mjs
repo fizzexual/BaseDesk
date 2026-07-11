@@ -68,12 +68,14 @@ const contactSeed = [
   ['Diego Fuentes', 'diego@cardinalcoffee.mx', 'Cardinal Coffee', 'Mexico City, Mexico', 'America/Mexico_City'],
   ['Alice Berg', 'alice.berg@proton.me', null, 'Oslo, Norway', 'Europe/Oslo'],
 ];
+const MRR_TIERS = [49900, 99900, 149900, 249900, 499900, 999900, 1999900];
 const contacts = contactSeed.map(([name, email, company, location, timezone], i) => ({
   id: 'c_' + pad(i + 1, 2),
   name, email, company,
   avatarHue: hashHue(email),
   location, timezone,
   createdAt: iso(NOW_MS - ri(35, 500) * DAY - ri(0, 23) * HOUR),
+  mrr: company === null ? null : pick(MRR_TIERS),
 }));
 const personalContactIds = contacts.filter((c) => c.company === null).map((c) => c.id);
 
@@ -578,10 +580,68 @@ ticketSlots.forEach((slot, index) => {
 rawMessages.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.ticketId < b.ticketId ? -1 : 1));
 const messages = rawMessages.map((m, i) => ({ id: 'm_' + pad(i + 1, 5), ...m }));
 
-const out = { agents, contacts, tickets, messages, canned };
+// ---------------------------------------------------------------- deals
+// 35 deals: ~46% expansion, ~31% inbound, ~23% retention; 46% won / 40% open / 14% lost.
+// At least 6 won deals close within the last 7 days so the money pill and revenue
+// charts are non-empty against the fixed NOW.
+const companyContacts = contacts.filter((c) => c.company !== null);
+const dealTypePool = shuffle([
+  ...Array(16).fill('expansion'), ...Array(11).fill('inbound'), ...Array(8).fill('retention'),
+]);
+const dealStagePool = shuffle([
+  ...Array(16).fill('won'), ...Array(14).fill('open'), ...Array(5).fill('lost'),
+]);
+const dealValues = [50000, 90000, 120000, 250000, 480000, 750000, 1200000, 2400000];
+const ticketsByContact = {};
+for (const t of tickets) (ticketsByContact[t.requesterId] ||= []).push(t);
+
+const deals = [];
+let wonWithin7 = 0;
+for (let i = 0; i < 35; i++) {
+  const type = dealTypePool[i];
+  const stage = dealStagePool[i];
+  const contact = pick(companyContacts);
+  const value = pick(dealValues);
+  const ownerId = agents[i % agents.length].id;
+  let createdMs;
+  let closedMs = null;
+  if (stage === 'won' && wonWithin7 < 6) {
+    closedMs = NOW_MS - ri(0, 6) * DAY - ri(1, 23) * HOUR;
+    createdMs = closedMs - ri(2, 25) * DAY - ri(0, 23) * HOUR;
+    wonWithin7 += 1;
+  } else if (stage === 'won' || stage === 'lost') {
+    createdMs = NOW_MS - ri(8, 45) * DAY - ri(0, 23) * HOUR;
+    closedMs = createdMs + ri(1, 10) * DAY + ri(0, 23) * HOUR;
+    if (closedMs > NOW_MS - HOUR) closedMs = NOW_MS - ri(8, 40) * HOUR;
+  } else {
+    createdMs = NOW_MS - ri(1, 30) * DAY - ri(0, 23) * HOUR;
+  }
+  const updatedMs = closedMs ?? createdMs;
+  const cTickets = ticketsByContact[contact.id] || [];
+  const ticketId = cTickets.length && rnd() < 0.6 ? pick(cTickets).id : null;
+  const title =
+    type === 'expansion' ? `Upgrade to Business — ${ri(2, 25)} seats`
+    : type === 'retention' ? `Retention: ${contact.company} renewal`
+    : `New: ${contact.company} team plan`;
+  const note =
+    type === 'expansion' ? 'Wants SSO and more seats; positive on the call.'
+    : type === 'retention' ? 'Renewal at risk; weighing options.'
+    : 'Inbound from the pricing page; evaluating plans.';
+  deals.push({
+    id: 'd_' + pad(i + 1, 3),
+    title, type, stage, value, currency: 'USD',
+    contactId: contact.id, ticketId, ownerId, note,
+    createdAt: iso(createdMs),
+    closedAt: closedMs !== null ? iso(closedMs) : null,
+    updatedAt: iso(updatedMs),
+  });
+}
+deals.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+
+const out = { agents, contacts, tickets, messages, canned, deals };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
-console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned`);
+console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals`);
 
 
 
