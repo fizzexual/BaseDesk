@@ -57,7 +57,16 @@ function monotonePath(xs: number[], ys: number[]): string {
   return d;
 }
 
-export function AreaChart({ series, height = 220 }: { series: AreaSeries[]; height?: number }) {
+export function AreaChart({
+  series,
+  height = 220,
+  formatValue = (v: number) => nf.format(v),
+}: {
+  series: AreaSeries[];
+  height?: number;
+  /** Formats y-axis labels and tooltip values. Defaults to plain integers. */
+  formatValue?: (v: number) => string;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -124,7 +133,7 @@ export function AreaChart({ series, height = 220 }: { series: AreaSeries[]; heig
                 fill="var(--text-3)"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
-                {nf.format(k * step)}
+                {formatValue(k * step)}
               </text>
             </g>
           ))}
@@ -211,7 +220,7 @@ export function AreaChart({ series, height = 220 }: { series: AreaSeries[]; heig
               <div key={s.name} className="flex items-center gap-1.5">
                 <span aria-hidden className="h-[3px] w-3 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="text-[13px] font-semibold tabular-nums text-text">
-                  {nf.format(s.points[hover]?.count ?? 0)}
+                  {formatValue(s.points[hover]?.count ?? 0)}
                 </span>
                 <span className="text-[12px] text-text-3">{s.name.toLowerCase()}</span>
               </div>

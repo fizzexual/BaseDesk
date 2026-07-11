@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { repo } from '../../data';
 import { useApp } from '../../data/store';
-import type { StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
+import { formatMoney } from '../../data/money';
+import type { DealType, StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { IconChart, IconUser } from '../../icons';
@@ -29,7 +30,14 @@ const STATUS_META: { key: TicketStatus; label: string; color: string }[] = [
   { key: 'closed', label: 'Closed', color: 'var(--text-3)' },
 ];
 
+const REVENUE_TYPE_META: { key: DealType; label: string; color: string }[] = [
+  { key: 'expansion', label: 'Expansion', color: 'var(--blue)' },
+  { key: 'retention', label: 'Retention', color: 'var(--amber)' },
+  { key: 'inbound', label: 'Inbound', color: 'var(--green)' },
+];
+
 const nf = new Intl.NumberFormat('en-US');
+const money = (cents: number) => formatMoney(cents, { compact: true });
 
 function fmtFirstReply(minutes: number): string {
   return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
@@ -197,6 +205,51 @@ export function ReportsPage() {
               ) : (
                 <HBars rows={agentRows} labelWidth="w-36" />
               )}
+            </ChartCard>
+          </div>
+
+          <header className="mt-2 flex items-baseline gap-2.5">
+            <h2 className="text-[15px] font-semibold text-text">Revenue</h2>
+            <span className="text-[13px] text-text-3">Support-driven deals</span>
+          </header>
+
+          <div className="grid min-w-0 grid-cols-4 gap-3">
+            <StatCard label="Won this month" value={money(stats.revenue.wonThisMonth)} />
+            <StatCard label="Saved revenue" value={money(stats.revenue.savedRevenue)} />
+            <StatCard label="Win rate" value={`${Math.round(stats.revenue.winRate * 100)}%`} />
+            <StatCard label="Open pipeline" value={money(stats.revenue.openPipeline)} />
+          </div>
+
+          <div className="grid min-w-0 grid-cols-2 gap-4">
+            <ChartCard
+              title="Won over time"
+              aside={<LegendDot color="var(--green)" label="Won" />}
+            >
+              <AreaChart
+                formatValue={money}
+                series={[
+                  {
+                    name: 'Won',
+                    color: 'var(--green)',
+                    points: stats.revenue.wonLast14Days.map((d) => ({ date: d.date, count: d.value })),
+                  },
+                ]}
+              />
+            </ChartCard>
+
+            <ChartCard title="Won by type">
+              <div className="flex h-full items-center">
+                <Donut
+                  title="Won by type"
+                  formatValue={money}
+                  segments={REVENUE_TYPE_META.map((t) => ({
+                    key: t.key,
+                    label: t.label,
+                    value: stats.revenue.wonByType[t.key],
+                    color: t.color,
+                  }))}
+                />
+              </div>
             </ChartCard>
           </div>
         </>

@@ -16,7 +16,16 @@ const C = SIZE / 2;
 const CIRC = 2 * Math.PI * R;
 const nf = new Intl.NumberFormat('en-US');
 
-export function Donut({ segments }: { segments: DonutSegment[] }) {
+export function Donut({
+  segments,
+  formatValue = (v: number) => nf.format(v),
+  title = 'Breakdown',
+}: {
+  segments: DonutSegment[];
+  /** Formats the center total, legend values, and tooltip. Defaults to integers. */
+  formatValue?: (v: number) => string;
+  title?: string;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ seg: DonutSegment; x: number; y: number } | null>(null);
 
@@ -48,7 +57,7 @@ export function Donut({ segments }: { segments: DonutSegment[] }) {
         height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
-        aria-label={`Priority mix: ${segments.map((s) => `${s.label} ${s.value}`).join(', ')}`}
+        aria-label={`${title}: ${segments.map((s) => `${s.label} ${formatValue(s.value)}`).join(', ')}`}
         className="shrink-0"
       >
         <circle cx={C} cy={C} r={R} fill="none" stroke="var(--surface-2)" strokeWidth={STROKE} />
@@ -84,7 +93,7 @@ export function Donut({ segments }: { segments: DonutSegment[] }) {
           fontWeight={600}
           fill="var(--text)"
         >
-          {nf.format(total)}
+          {formatValue(total)}
         </text>
       </svg>
       <ul className="flex min-w-0 flex-col gap-2">
@@ -92,7 +101,7 @@ export function Donut({ segments }: { segments: DonutSegment[] }) {
           <li key={s.key} className="flex items-center gap-2">
             <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
             <span className="w-16 text-[13px] text-text-2">{s.label}</span>
-            <span className="text-[13px] font-medium tabular-nums text-text">{nf.format(s.value)}</span>
+            <span className="text-[13px] font-medium tabular-nums text-text">{formatValue(s.value)}</span>
           </li>
         ))}
       </ul>
@@ -106,7 +115,7 @@ export function Donut({ segments }: { segments: DonutSegment[] }) {
           }}
         >
           <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[13px] font-semibold tabular-nums text-text">{nf.format(hover.seg.value)}</span>
+            <span className="text-[13px] font-semibold tabular-nums text-text">{formatValue(hover.seg.value)}</span>
             <span className="text-[12px] text-text-3">
               {hover.seg.label.toLowerCase()} · {total > 0 ? Math.round((hover.seg.value / total) * 100) : 0}%
             </span>
