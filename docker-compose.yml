@@ -1,0 +1,11 @@
+services:
+  basedesk:
+    build: .
+    ports:
+      - '4011:4011'
+    volumes:
+      - basedesk-data:/data
+    restart: unless-stopped
+
+volumes:
+  basedesk-data:
