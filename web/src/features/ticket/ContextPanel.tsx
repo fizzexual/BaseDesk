@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../data/store';
-import type { Contact, Ticket } from '../../data/types';
+import { useDealsForContact } from '../../data/hooks';
+import { formatMoney } from '../../data/money';
+import type { Contact, Deal, DealStage, Ticket } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
 import { StatusBadge } from '../../components/StatusBadge';
+import { DealStageBadge, DealTypeBadge } from '../../components/DealBadges';
+import { Menu, type MenuItem } from '../../components/Menu';
+import { toast } from '../../components/Toast';
+import { IconChevronDown, IconPlus } from '../../icons';
+import { DealDialog } from '../revenue/DealDialog';
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -22,6 +29,41 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline gap-2">
       <span className="w-20 shrink-0 text-[12px] font-medium text-text-3">{label}</span>
       <span className="min-w-0 truncate text-[13px] text-text-2">{value}</span>
+    </div>
+  );
+}
+
+const STAGES: DealStage[] = ['open', 'won', 'lost'];
+
+function DealRow({ deal, onEdit }: { deal: Deal; onEdit: () => void }) {
+  const updateDeal = useApp((s) => s.updateDeal);
+  const stageItems: MenuItem[] = STAGES.map((stage) => ({
+    label: stage === 'open' ? 'Open' : stage === 'won' ? 'Won' : 'Lost',
+    checked: deal.stage === stage,
+    onSelect: () => {
+      updateDeal(deal.id, { stage }).catch(() => toast('Could not update the deal'));
+    },
+  }));
+  return (
+    <div className="flex items-center gap-2 py-1.5">
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={onEdit}>
+        <div className="flex items-center gap-1.5">
+          <DealTypeBadge type={deal.type} />
+          <span className="truncate text-[13px] font-medium">{deal.title}</span>
+        </div>
+        <div className="mt-0.5 text-[13px] tabular-nums text-text-2">{formatMoney(deal.value)}</div>
+      </button>
+      <Menu
+        align="end"
+        triggerLabel="Change stage"
+        trigger={
+          <span className="inline-flex items-center gap-1">
+            <DealStageBadge stage={deal.stage} />
+            <IconChevronDown size={13} className="text-text-3" />
+          </span>
+        }
+        items={stageItems}
+      />
     </div>
   );
 }
@@ -51,6 +93,35 @@ export function ContextPanel({ ticket }: { ticket: Ticket }) {
   }
 
   const localTime = contact.timezone !== null ? formatLocalTime(contact.timezone) : null;
+
+  return (
+    <RevenueAwarePanel ticket={ticket} contact={contact} localTime={localTime} recent={recent} />
+  );
+}
+
+function RevenueAwarePanel({
+  ticket,
+  contact,
+  localTime,
+  recent,
+}: {
+  ticket: Ticket;
+  contact: Contact;
+  localTime: string | null;
+  recent: Ticket[];
+}) {
+  const deals = useDealsForContact(ticket.requesterId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Deal | undefined>(undefined);
+
+  function openNew() {
+    setEditing(undefined);
+    setDialogOpen(true);
+  }
+  function openEdit(deal: Deal) {
+    setEditing(deal);
+    setDialogOpen(true);
+  }
 
   return (
     <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-line">
@@ -91,6 +162,28 @@ export function ContextPanel({ ticket }: { ticket: Ticket }) {
         )}
       </section>
       <section className="border-t border-line p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-text-3">Revenue</h3>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[12px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+            onClick={openNew}
+          >
+            <IconPlus size={13} />
+            Log opportunity
+          </button>
+        </div>
+        {deals.length === 0 ? (
+          <p className="text-[13px] text-text-3">No opportunities yet.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-line">
+            {deals.map((deal) => (
+              <DealRow key={deal.id} deal={deal} onEdit={() => openEdit(deal)} />
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="border-t border-line p-4">
         <Link
           to={`/contacts/${contact.id}`}
           className="text-[13px] font-medium text-text-2 transition-colors hover:text-text"
@@ -98,6 +191,13 @@ export function ContextPanel({ ticket }: { ticket: Ticket }) {
           View profile
         </Link>
       </section>
+      <DealDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        deal={editing}
+        presetContactId={ticket.requesterId}
+        presetTicketId={ticket.id}
+      />
     </aside>
   );
 }
