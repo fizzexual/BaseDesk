@@ -65,6 +65,9 @@ export function TicketTable({
               else rowRefs.current.delete(t.id);
             }}
             data-ticket-id={t.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Ticket: ${t.subject}`}
             className={cx(
               'grid h-16 cursor-pointer items-center gap-4 border-b border-line px-4 last:border-0',
               grid,
@@ -72,6 +75,12 @@ export function TicketTable({
             )}
             style={selected ? { boxShadow: 'inset 2px 0 0 0 var(--focus)' } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate(`/ticket/${t.id}`);
+              }
+            }}
           >
             {!hideCustomer && (
               <div className="flex min-w-0 items-center gap-3">

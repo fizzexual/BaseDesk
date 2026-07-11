@@ -106,11 +106,20 @@ export function ContactsPage() {
             {visible.map((c: Contact) => (
               <div
                 key={c.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Contact: ${c.name}`}
                 className={cx(
                   'grid h-14 cursor-pointer items-center gap-4 border-b border-line px-4 last:border-0 hover:bg-surface-2',
                   GRID,
                 )}
                 onClick={() => navigate(`/contacts/${c.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/contacts/${c.id}`);
+                  }
+                }}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={c.name} hue={c.avatarHue} size={28} />
