@@ -26,6 +26,19 @@ BaseDesk is our answer:
 - **Runs anywhere** — a single Node process with a single SQLite file (Node's built-in `node:sqlite`, zero native dependencies). No Elasticsearch, no Redis.
 - **AI as a copilot, not a gatekeeper** — designed for agent-side drafts, triage and summaries (BYO key, v0.2); never an unavoidable bot between you and your customers.
 
+## A look around
+
+| Ticket workspace | Reports |
+| --- | --- |
+| ![Ticket workspace](docs/screenshots/ticket-light.png) | ![Reports](docs/screenshots/reports-light.png) |
+
+<details>
+<summary>Dark theme</summary>
+
+![BaseDesk inbox, dark theme](docs/screenshots/inbox-dark.png)
+
+</details>
+
 ## Quickstart
 
 ### Docker (recommended)
