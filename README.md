@@ -24,13 +24,18 @@ BaseDesk is our answer:
 - **Fast, beautiful, keyboard-first UI** — j/k through the inbox, `Ctrl/⌘ K` command palette, single-key actions, optimistic updates everywhere.
 - **A generous core** — views, reporting, search, snooze, internal notes, canned replies: all product features, never pricing tiers. MIT-licensed, no telemetry, no open-core bait.
 - **Runs anywhere** — a single Node process with a single SQLite file (Node's built-in `node:sqlite`, zero native dependencies). No Elasticsearch, no Redis.
-- **AI as a copilot, not a gatekeeper** — designed for agent-side drafts, triage and summaries (BYO key, v0.2); never an unavoidable bot between you and your customers.
+- **Support that makes money, not just closes tickets** — log expansion, retention and inbound deals right inside the conversation; a pipeline, account-health view and revenue reporting turn support into a growth channel. Incumbents make you leave for Salesforce to do this.
+- **AI as a copilot, not a gatekeeper** — designed for agent-side drafts, triage and summaries (BYO key); never an unavoidable bot between you and your customers.
 
 ## A look around
 
 | Ticket workspace | Reports |
 | --- | --- |
 | ![Ticket workspace](docs/screenshots/ticket-light.png) | ![Reports](docs/screenshots/reports-light.png) |
+
+Revenue pipeline — deals logged from conversations, rolled up per account:
+
+![Revenue pipeline](docs/screenshots/revenue-light.png)
 
 <details>
 <summary>Dark theme</summary>
@@ -80,6 +85,7 @@ npm run typecheck  # strict TS, both workspaces
 
 - **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
+- **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
 - **Reports**: created vs solved, priority mix, status distribution, per-agent load, first-reply/resolution medians
@@ -87,18 +93,20 @@ npm run typecheck  # strict TS, both workspaces
 
 ## API
 
-The web app talks to a plain REST API you can use directly — see the route table in [`docs/superpowers/plans/2026-07-11-basedesk-v0.1.md`](docs/superpowers/plans/2026-07-11-basedesk-v0.1.md). Highlights: `GET /api/bootstrap`, `GET /api/tickets?view=…`, `POST /api/tickets/:id/messages`, `GET /api/stats`, `GET /api/search?q=…`.
+The web app talks to a plain REST API you can use directly — see the route tables in [`docs/superpowers/plans/`](docs/superpowers/plans/). Highlights: `GET /api/bootstrap`, `GET /api/tickets?view=…`, `POST /api/tickets/:id/messages`, `GET /api/deals`, `POST /api/deals`, `GET /api/stats`, `GET /api/search?q=…`.
 
 ## Roadmap
 
-1. **v0.2 — Auth & teams** (first priority)
-2. Email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) — bulletproof threading or nothing
-3. Automation rules + SLA engine (business hours, holidays, timezones)
-4. Knowledge base + customer portal with live ticket status
-5. Slack shared-channel support, then chat widget & WhatsApp
-6. AI copilot (BYO API key) — drafts, triage, summaries; always human-reviewed
-7. Migration importers (osTicket, FreeScout, Zendesk CSV)
-8. Single-binary packaging
+- [x] **Support → Revenue** — deals, pipeline, account health, revenue reporting *(shipped in v0.2)*
+- [ ] Auth & team management
+- [ ] Transparency portal — customer portal + status page + roadmap/feedback voting
+- [ ] Email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) — bulletproof threading or nothing
+- [ ] Automation rules + SLA engine (business hours, holidays, timezones)
+- [ ] Slack shared-channel support, then chat widget & WhatsApp
+- [ ] AI copilot (BYO API key) — drafts, triage, summaries; always human-reviewed
+- [ ] Knowledge base
+- [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
+- [ ] Single-binary packaging
 
 ## Philosophy
 
