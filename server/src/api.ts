@@ -20,6 +20,8 @@ const VIEW_IDS: ViewId[] = [
   'archive', 'spam', 'trash',
 ];
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
+const STATUSES = ['open', 'pending', 'on_hold', 'solved', 'closed'];
+const BUCKETS = ['inbox', 'archive', 'spam', 'trash'];
 const PATCH_KEYS = ['status', 'priority', 'assigneeId', 'tags', 'bucket', 'snoozedUntil', 'subject'] as const;
 
 function newId(prefix: string): string {
@@ -219,6 +221,15 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
+
+    // Validate field values so a buggy or hostile client cannot persist a
+    // ticket in an unknown status/priority/bucket that the UI can't render.
+    if ('status' in patch && !STATUSES.includes(patch.status as string)) return c.json({ error: 'invalid status' }, 400);
+    if ('priority' in patch && !PRIORITIES.includes(patch.priority as TicketPriority)) return c.json({ error: 'invalid priority' }, 400);
+    if ('bucket' in patch && !BUCKETS.includes(patch.bucket as string)) return c.json({ error: 'invalid bucket' }, 400);
+    if ('subject' in patch && (typeof patch.subject !== 'string' || patch.subject.trim() === '')) return c.json({ error: 'invalid subject' }, 400);
+    if ('tags' in patch && !Array.isArray(patch.tags)) return c.json({ error: 'invalid tags' }, 400);
+    if ('assigneeId' in patch && patch.assigneeId !== null && typeof patch.assigneeId !== 'string') return c.json({ error: 'invalid assigneeId' }, 400);
 
     const sets: string[] = [];
     const params: (string | null)[] = [];

@@ -66,6 +66,19 @@ it('filters deals by stage', async () => {
   expect(open.every((d: { stage: string }) => d.stage === 'open')).toBe(true);
 });
 
+it('rejects invalid ticket patch values', async () => {
+  const app = makeApp();
+  const boot = await (await app.request('/api/bootstrap')).json();
+  const id = boot.tickets[0].id;
+  const patch = (b: unknown) =>
+    app.request(`/api/tickets/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+  expect((await patch({ status: 'bogus' })).status).toBe(400);
+  expect((await patch({ priority: 'critical' })).status).toBe(400);
+  expect((await patch({ bucket: 'void' })).status).toBe(400);
+  expect((await patch({ subject: '   ' })).status).toBe(400);
+  expect((await patch({ status: 'solved' })).status).toBe(200);
+});
+
 it('revenue stats present and coherent', async () => {
   const app = makeApp();
   const stats = await (await app.request('/api/stats')).json();
