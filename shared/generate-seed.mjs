@@ -444,13 +444,17 @@ const groupOf = (s) => (s.bucket !== 'inbox' ? s.bucket : s.snooze ? 'snoozed' :
 const scenarioPool = Object.entries(S).flatMap(([k, s]) => Array(s.weight).fill(k));
 // exact priority distribution across all 124 tickets
 const prioPool = shuffle([
-  ...Array(8).fill('urgent'), ...Array(22).fill('high'),
-  ...Array(68).fill('medium'), ...Array(26).fill('low'),
+  ...Array(10).fill('urgent'), ...Array(28).fill('high'),
+  ...Array(56).fill('medium'), ...Array(30).fill('low'),
 ]);
+// Pick RANDOMLY among the scenario's still-available preferences (not
+// first-available) so urgent/high/low stay interleaved across the timeline
+// instead of draining in generation order.
 function takePriority(prefs) {
-  for (const p of prefs) {
-    const i = prioPool.indexOf(p);
-    if (i >= 0) return prioPool.splice(i, 1)[0];
+  const avail = prefs.filter((p) => prioPool.includes(p));
+  if (avail.length > 0) {
+    const p = avail[Math.floor(rnd() * avail.length)];
+    return prioPool.splice(prioPool.indexOf(p), 1)[0];
   }
   return prioPool.shift();
 }
