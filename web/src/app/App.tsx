@@ -9,6 +9,7 @@ import { TicketPage } from '../features/ticket/TicketPage';
 import { ContactsPage } from '../features/contacts/ContactsPage';
 import { ContactPage } from '../features/contacts/ContactPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { RevenuePage } from '../features/revenue/RevenuePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { AiPage } from '../features/ai/AiPage';
 
@@ -56,6 +57,8 @@ export function App() {
             <Route path="/contacts" element={<ContactsPage />} />
             <Route path="/contacts/:id" element={<ContactPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/revenue" element={<RevenuePage />} />
+            <Route path="/revenue/:tab" element={<RevenuePage />} />
             <Route path="/ai" element={<AiPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/:tab" element={<SettingsPage />} />

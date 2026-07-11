@@ -7,6 +7,7 @@ import {
   IconContacts,
   IconInbox,
   IconLogo,
+  IconRevenue,
   IconSettings,
   IconSparkle,
 } from '../icons';
@@ -16,6 +17,7 @@ import { ThemeToggle } from './ThemeToggle';
 const NAV = [
   { to: '/view/all', label: 'Inbox', icon: IconInbox, matches: ['/view', '/ticket'] },
   { to: '/contacts', label: 'Contacts', icon: IconContacts, matches: ['/contacts'] },
+  { to: '/revenue', label: 'Revenue', icon: IconRevenue, matches: ['/revenue'] },
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
 ];

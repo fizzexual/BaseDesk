@@ -25,6 +25,7 @@ import {
   IconKeyboard,
   IconPause,
   IconPlus,
+  IconRevenue,
   IconSearch,
   IconSettings,
   IconSnooze,
@@ -171,6 +172,7 @@ export function Palette() {
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('basedesk:new-contact')), 0);
       },
     },
+    { kind: 'action', id: 'go-revenue', label: 'Go to Revenue', icon: IconRevenue, run: () => navigate('/revenue') },
     { kind: 'action', id: 'go-reports', label: 'Go to Reports', icon: IconChart, run: () => navigate('/reports') },
     { kind: 'action', id: 'go-contacts', label: 'Go to Contacts', icon: IconContacts, run: () => navigate('/contacts') },
     { kind: 'action', id: 'go-settings', label: 'Go to Settings', icon: IconSettings, run: () => navigate('/settings') },

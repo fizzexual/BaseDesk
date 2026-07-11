@@ -331,7 +331,7 @@ export function createAppStore(repository: Repository) {
         if (t.bucket === 'inbox' && !snoozed && t.status !== 'closed' && t.status !== 'solved') {
           const acc = ensure(company);
           acc.openTickets += 1;
-          if (t.priority === 'urgent' || t.priority === 'high') acc.urgentOpen += 1;
+          if (t.priority === 'urgent') acc.urgentOpen += 1;
         }
       }
 
