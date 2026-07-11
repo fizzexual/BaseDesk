@@ -71,7 +71,7 @@ Two deliverables in one repo:
 ## 4. Architecture
 
 - **Monorepo:** npm workspaces — `web/` + `server/` + shared types in `server/src/schema` mirrored via `web/src/data/types.ts` (kept tiny and stable).
-- **Server stack:** Node 20+, Hono (router), better-sqlite3 (storage; synchronous, transactional, zero-config), no ORM — a thin typed data module with explicit SQL. Serves `web/dist` statically in production.
+- **Server stack:** Node 23.4+ (24 LTS in Docker), Hono (router), built-in `node:sqlite` (storage; synchronous, transactional, zero-config, **zero native dependencies**), no ORM — a thin typed data module with explicit SQL. Serves `web/dist` statically in production.
 - **Web stack:** Vite + React 19 + TypeScript (strict) + Tailwind CSS v4 (CSS-first config carrying the design tokens) + Zustand (state) + React Router v7.
 - **No UI kit, no icon library, no chart library:** every icon is a hand-drawn 20×20 SVG React component (1.5px round-capped strokes); charts are in-house SVG.
 - **One font:** Inter Variable (self-hosted via @fontsource-variable/inter) everywhere; tabular numerals for counts/metrics.
