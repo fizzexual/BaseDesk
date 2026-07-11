@@ -1,14 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { getContact, getMessages, getTicket, openDb, rowToTicket, type TicketRow } from './db.js';
+import { getContact, getDeal, getMessages, getTicket, openDb, rowToTicket, type TicketRow } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import type {
-  Agent, BootstrapData, CannedReply, Contact, Message, Ticket, TicketPatch, TicketPriority, ViewId,
+  Agent, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType, Message,
+  Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types.js';
 
 const VERSION = '0.1.0';
+
+const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
+const DEAL_STAGES: DealStage[] = ['open', 'won', 'lost'];
 
 const VIEW_IDS: ViewId[] = [
   'all', 'unassigned', 'mine', 'snoozed',
@@ -94,7 +98,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const contacts = db.prepare('SELECT * FROM contacts ORDER BY rowid').all() as unknown as Contact[];
     const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
     const canned = db.prepare('SELECT * FROM canned_replies ORDER BY rowid').all() as unknown as CannedReply[];
-    const data: BootstrapData = { tickets, contacts, agents, canned, currentAgentId: currentAgentId() };
+    const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
+    const data: BootstrapData = { tickets, contacts, agents, canned, deals, currentAgentId: currentAgentId() };
     return c.json(data);
   });
 
@@ -300,10 +305,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       location: null,
       timezone: null,
       createdAt: new Date().toISOString(),
+      mrr: null,
     };
     db.prepare(
-      'INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt);
+      'INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
     return c.json(contact);
   });
 
@@ -342,6 +348,157 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.delete('/api/canned/:id', (c) => {
     const id = c.req.param('id');
     db.prepare('DELETE FROM canned_replies WHERE id = ?').run(id);
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/deals', (c) => {
+    const stage = c.req.query('stage');
+    const type = c.req.query('type');
+    const contactId = c.req.query('contactId');
+    const clauses: string[] = [];
+    const params: string[] = [];
+    if (stage !== undefined && stage !== '') {
+      if (!DEAL_STAGES.includes(stage as DealStage)) return c.json({ error: `unknown stage: ${stage}` }, 400);
+      clauses.push('stage = ?');
+      params.push(stage);
+    }
+    if (type !== undefined && type !== '') {
+      if (!DEAL_TYPES.includes(type as DealType)) return c.json({ error: `unknown type: ${type}` }, 400);
+      clauses.push('type = ?');
+      params.push(type);
+    }
+    if (contactId !== undefined && contactId !== '') {
+      clauses.push('contactId = ?');
+      params.push(contactId);
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = db.prepare(`SELECT * FROM deals ${where} ORDER BY updatedAt DESC`).all(...params) as unknown as Deal[];
+    return c.json(rows);
+  });
+
+  app.post('/api/deals', async (c) => {
+    let input: {
+      title?: unknown; type?: unknown; value?: unknown; contactId?: unknown;
+      ticketId?: unknown; ownerId?: unknown; note?: unknown;
+    };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { title, type, value, contactId, ticketId, ownerId, note } = input;
+    if (typeof title !== 'string' || title.trim() === '') return c.json({ error: 'title is required' }, 400);
+    if (typeof type !== 'string' || !DEAL_TYPES.includes(type as DealType)) return c.json({ error: 'invalid type' }, 400);
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+      return c.json({ error: 'value must be a non-negative integer (cents)' }, 400);
+    }
+    if (typeof contactId !== 'string' || getContact(db, contactId) === null) {
+      return c.json({ error: 'unknown contactId' }, 400);
+    }
+    let linkedTicketId: string | null = null;
+    if (ticketId !== undefined && ticketId !== null) {
+      if (typeof ticketId !== 'string' || getTicket(db, ticketId) === null) {
+        return c.json({ error: 'unknown ticketId' }, 400);
+      }
+      linkedTicketId = ticketId;
+    }
+    let owner = currentAgentId();
+    if (ownerId !== undefined) {
+      if (typeof ownerId !== 'string') return c.json({ error: 'invalid ownerId' }, 400);
+      owner = ownerId;
+    }
+    const now = new Date().toISOString();
+    const deal: Deal = {
+      id: newId('d_'),
+      title: title.trim(),
+      type: type as DealType,
+      stage: 'open',
+      value,
+      currency: 'USD',
+      contactId,
+      ticketId: linkedTicketId,
+      ownerId: owner,
+      note: typeof note === 'string' ? note : '',
+      createdAt: now,
+      closedAt: null,
+      updatedAt: now,
+    };
+    db.prepare(
+      `INSERT INTO deals (
+        id, title, type, stage, value, currency, contactId, ticketId, ownerId, note, createdAt, closedAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      deal.id, deal.title, deal.type, deal.stage, deal.value, deal.currency, deal.contactId,
+      deal.ticketId, deal.ownerId, deal.note, deal.createdAt, deal.closedAt, deal.updatedAt,
+    );
+    return c.json(deal);
+  });
+
+  app.patch('/api/deals/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = getDeal(db, id);
+    if (existing === null) return c.json({ error: `deal not found: ${id}` }, 404);
+
+    let patch: { title?: unknown; type?: unknown; stage?: unknown; value?: unknown; ownerId?: unknown; note?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    if ('title' in patch) {
+      if (typeof patch.title !== 'string' || patch.title.trim() === '') return c.json({ error: 'invalid title' }, 400);
+      sets.push('title = ?');
+      params.push(patch.title.trim());
+    }
+    if ('type' in patch) {
+      if (typeof patch.type !== 'string' || !DEAL_TYPES.includes(patch.type as DealType)) return c.json({ error: 'invalid type' }, 400);
+      sets.push('type = ?');
+      params.push(patch.type);
+    }
+    if ('value' in patch) {
+      if (typeof patch.value !== 'number' || !Number.isInteger(patch.value) || patch.value < 0) return c.json({ error: 'invalid value' }, 400);
+      sets.push('value = ?');
+      params.push(patch.value);
+    }
+    if ('ownerId' in patch) {
+      if (typeof patch.ownerId !== 'string') return c.json({ error: 'invalid ownerId' }, 400);
+      sets.push('ownerId = ?');
+      params.push(patch.ownerId);
+    }
+    if ('note' in patch) {
+      if (typeof patch.note !== 'string') return c.json({ error: 'invalid note' }, 400);
+      sets.push('note = ?');
+      params.push(patch.note);
+    }
+    const now = new Date().toISOString();
+    if ('stage' in patch) {
+      if (typeof patch.stage !== 'string' || !DEAL_STAGES.includes(patch.stage as DealStage)) return c.json({ error: 'invalid stage' }, 400);
+      const stage = patch.stage as DealStage;
+      sets.push('stage = ?');
+      params.push(stage);
+      if (stage === 'won' || stage === 'lost') {
+        if (existing.closedAt === null) {
+          sets.push('closedAt = ?');
+          params.push(now);
+        }
+      } else {
+        sets.push('closedAt = ?');
+        params.push(null);
+      }
+    }
+    sets.push('updatedAt = ?');
+    params.push(now);
+    db.prepare(`UPDATE deals SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(getDeal(db, id));
+  });
+
+  app.delete('/api/deals/:id', (c) => {
+    const id = c.req.param('id');
+    if (getDeal(db, id) === null) return c.json({ error: `deal not found: ${id}` }, 404);
+    db.prepare('DELETE FROM deals WHERE id = ?').run(id);
     return c.json({ ok: true });
   });
 

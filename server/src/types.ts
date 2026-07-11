@@ -24,9 +24,33 @@ export interface Message {
 export interface Contact {
   id: string; name: string; email: string; company: string | null;
   avatarHue: number; location: string | null; timezone: string | null; createdAt: string;
+  mrr: number | null;
 }
 export interface Agent { id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent'; }
 export interface CannedReply { id: string; title: string; body: string; }
+
+export type DealType = 'expansion' | 'retention' | 'inbound';
+export type DealStage = 'open' | 'won' | 'lost';
+
+export interface Deal {
+  id: string; title: string; type: DealType; stage: DealStage;
+  value: number; currency: string;
+  contactId: string; ticketId: string | null; ownerId: string;
+  note: string; createdAt: string; closedAt: string | null; updatedAt: string;
+}
+
+export interface RevenueStats {
+  wonLast7Days: number; wonThisMonth: number; openPipeline: number;
+  savedRevenue: number; winRate: number;
+  wonByType: Record<DealType, number>;
+  wonLast14Days: { date: string; count: number; value: number }[];
+}
+
+export type DealCreate = {
+  title: string; type: DealType; value: number; contactId: string;
+  ticketId?: string | null; ownerId?: string; note?: string;
+};
+export type DealPatch = Partial<Pick<Deal, 'title' | 'type' | 'stage' | 'value' | 'ownerId' | 'note'>>;
 
 export interface Counts {
   all: number; unassigned: number; mine: number; snoozed: number;
@@ -42,11 +66,12 @@ export interface StatsOverview {
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;
+  revenue: RevenueStats;
 }
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject'>>;
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; currentAgentId: string;
+  canned: CannedReply[]; currentAgentId: string; deals: Deal[];
 }

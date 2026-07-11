@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { rowToTicket, type TicketRow } from './db.js';
-import type { Message, StatsOverview, Ticket, TicketPriority, TicketStatus } from './types.js';
+import { computeRevenue } from './deal-stats.js';
+import type { Deal, Message, StatsOverview, Ticket, TicketPriority, TicketStatus } from './types.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -87,6 +88,8 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
   const openNow = inbox.filter((t) => notSnoozed(t, nowIso) && t.status === 'open').length;
   const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS).toISOString();
 
+  const deals = db.prepare('SELECT * FROM deals').all() as unknown as Deal[];
+
   return {
     createdLast14Days: days.map((date) => ({ date, count: createdByDay.get(date)! })),
     solvedLast14Days: days.map((date) => ({ date, count: solvedByDay.get(date)! })),
@@ -98,5 +101,6 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     openNow,
     createdLast7Days: tickets.filter((t) => t.createdAt >= sevenDaysAgo).length,
     solvedLast7Days: solvedOrClosed.filter((t) => t.updatedAt >= sevenDaysAgo).length,
+    revenue: computeRevenue(deals, now),
   };
 }

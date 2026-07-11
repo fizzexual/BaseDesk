@@ -252,13 +252,16 @@ describe('contacts', () => {
 
 describe('search', () => {
   it('finds a ticket by a substring of a message body', async () => {
-    // From the deterministic seed: message m_00001 on ticket t_001.
-    const res = await app.request(
-      `/api/search?q=${encodeURIComponent('ceramic pieces inside are cracked')}`,
-    );
+    // Derive the query from a real message so the test survives seed changes.
+    const boot = (await (await app.request('/api/bootstrap')).json()) as { tickets: { id: string }[] };
+    const ticketId = boot.tickets[0]!.id;
+    const messages = (await (await app.request(`/api/tickets/${ticketId}/messages`)).json()) as { body: string }[];
+    const phrase = messages[0]!.body.split(/\s+/).slice(0, 6).join(' ');
+
+    const res = await app.request(`/api/search?q=${encodeURIComponent(phrase)}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ticketIds: string[] };
-    expect(body.ticketIds).toContain('t_001');
+    expect(body.ticketIds).toContain(ticketId);
     expect(body.ticketIds.length).toBeLessThanOrEqual(30);
   });
 

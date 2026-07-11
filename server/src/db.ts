@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import type { Contact, Message, Ticket } from './types.js';
+import type { Contact, Deal, Message, Ticket } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -28,7 +28,8 @@ export function openDb(dataDir: string): DatabaseSync {
       avatarHue INTEGER NOT NULL,
       location TEXT,
       timezone TEXT,
-      createdAt TEXT NOT NULL
+      createdAt TEXT NOT NULL,
+      mrr INTEGER
     );
     CREATE TABLE IF NOT EXISTS tickets (
       id TEXT PRIMARY KEY,
@@ -61,10 +62,34 @@ export function openDb(dataDir: string): DatabaseSync {
       title TEXT NOT NULL,
       body TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS deals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      value INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      contactId TEXT NOT NULL,
+      ticketId TEXT,
+      ownerId TEXT NOT NULL,
+      note TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      closedAt TEXT,
+      updatedAt TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_messages_ticket_at ON messages(ticketId, at);
+    CREATE INDEX IF NOT EXISTS idx_deals_contact ON deals(contactId);
+    CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage);
   `);
+
+  // Migration for databases created before v0.2 (contacts predate the mrr column).
+  const contactCols = db.prepare('PRAGMA table_info(contacts)').all() as { name: string }[];
+  if (!contactCols.some((c) => c.name === 'mrr')) {
+    db.exec('ALTER TABLE contacts ADD COLUMN mrr INTEGER');
+  }
+
   return db;
 }
 
@@ -82,4 +107,9 @@ export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
   return db
     .prepare('SELECT * FROM messages WHERE ticketId = ? ORDER BY at ASC, id ASC')
     .all(ticketId) as unknown as Message[];
+}
+
+export function getDeal(db: DatabaseSync, id: string): Deal | null {
+  const row = db.prepare('SELECT * FROM deals WHERE id = ?').get(id) as Deal | undefined;
+  return row ?? null;
 }
