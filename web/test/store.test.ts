@@ -109,18 +109,11 @@ describe('store', () => {
 
   it('patchTicket rolls back the optimistic update when the repository rejects', async () => {
     const local = new LocalRepository(memStorage());
-    const failing: Repository = {
-      bootstrap: () => local.bootstrap(),
-      getMessages: (ticketId) => local.getMessages(ticketId),
-      createTicket: (input) => local.createTicket(input),
-      updateTicket: () => Promise.reject(new Error('write failed')),
-      addMessage: (ticketId, input) => local.addMessage(ticketId, input),
-      createContact: (input) => local.createContact(input),
-      saveCanned: (c) => local.saveCanned(c),
-      deleteCanned: (id) => local.deleteCanned(id),
-      getStats: () => local.getStats(),
-      search: (q) => local.search(q),
-    };
+    const failing: Repository = Object.assign(
+      Object.create(Object.getPrototypeOf(local)),
+      local,
+      { updateTicket: () => Promise.reject(new Error('write failed')) },
+    );
     const store = await freshStore(failing);
     const target = store.getState().ticketsForView('open')[0];
     const before = { ...target, tags: [...target.tags] };

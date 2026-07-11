@@ -1,4 +1,7 @@
-import type { CannedReply, Contact, Message, StatsOverview, Ticket, TicketPatch, TicketPriority } from './types';
+import type {
+  CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, StatsOverview, Ticket, TicketPatch, TicketPriority,
+} from './types';
 import type { BootstrapData, Repository } from './repository';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -66,5 +69,26 @@ export class ApiRepository implements Repository {
 
   search(q: string): Promise<{ ticketIds: string[] }> {
     return request(`/search?q=${encodeURIComponent(q)}`);
+  }
+
+  listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]> {
+    const qs = new URLSearchParams();
+    if (filter?.stage) qs.set('stage', filter.stage);
+    if (filter?.type) qs.set('type', filter.type);
+    if (filter?.contactId) qs.set('contactId', filter.contactId);
+    const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
+    return request(`/deals${suffix}`);
+  }
+
+  createDeal(input: DealCreate): Promise<Deal> {
+    return request('/deals', jsonInit('POST', input));
+  }
+
+  updateDeal(id: string, patch: DealPatch): Promise<Deal> {
+    return request(`/deals/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+
+  async deleteDeal(id: string): Promise<void> {
+    await request<{ ok: true }>(`/deals/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 }

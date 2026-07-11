@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import type { Agent, CannedReply, Contact, Counts, Message, Ticket, TicketPatch, TicketPriority, ViewId } from './types';
+import type {
+  AccountHealth, Agent, CannedReply, Contact, Counts, Deal, DealCreate, DealPatch,
+  Message, Ticket, TicketPatch, TicketPriority, ViewId,
+} from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
 import { applyTheme, readThemePref } from '../app/theme';
@@ -8,6 +11,7 @@ export interface AppState {
   ready: boolean;
   tickets: Record<string, Ticket>; contacts: Record<string, Contact>;
   agents: Record<string, Agent>; canned: CannedReply[];
+  deals: Record<string, Deal>;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -20,6 +24,12 @@ export interface AppState {
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<string>; // returns id
   createContact(input: { name: string; email: string; company?: string }): Promise<string>;
   saveCanned(c: CannedReply): Promise<void>; deleteCanned(id: string): Promise<void>;
+  createDeal(input: DealCreate): Promise<string>;               // returns id
+  updateDeal(id: string, patch: DealPatch): Promise<void>;      // optimistic + rollback
+  deleteDeal(id: string): Promise<void>;                        // optimistic + rollback
+  dealsForTicket(ticketId: string): Deal[];                     // updatedAt desc
+  dealsForContact(contactId: string): Deal[];                   // updatedAt desc
+  accounts(): AccountHealth[];                                  // grouped by company
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -80,6 +90,7 @@ export function createAppStore(repository: Repository) {
     contacts: {},
     agents: {},
     canned: [],
+    deals: {},
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -92,6 +103,7 @@ export function createAppStore(repository: Repository) {
         contacts: Object.fromEntries(data.contacts.map((c) => [c.id, c])),
         agents: Object.fromEntries(data.agents.map((a) => [a.id, a])),
         canned: data.canned,
+        deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         currentAgentId: data.currentAgentId,
       });
     },
@@ -228,6 +240,123 @@ export function createAppStore(repository: Repository) {
     async deleteCanned(id) {
       await repository.deleteCanned(id);
       set((s) => ({ canned: s.canned.filter((c) => c.id !== id) }));
+    },
+
+    async createDeal(input) {
+      const deal = await repository.createDeal(input);
+      set((s) => ({ deals: { ...s.deals, [deal.id]: deal } }));
+      return deal.id;
+    },
+
+    async updateDeal(id, patch) {
+      const prev = get().deals[id] as Deal | undefined;
+      if (!prev) throw new Error('Deal not found');
+      const now = new Date().toISOString();
+      const optimistic: Deal = { ...prev, ...patch, updatedAt: now };
+      if (patch.stage !== undefined) {
+        if (patch.stage === 'won' || patch.stage === 'lost') {
+          optimistic.closedAt = prev.closedAt ?? now;
+        } else {
+          optimistic.closedAt = null;
+        }
+      }
+      set((s) => ({ deals: { ...s.deals, [id]: optimistic } }));
+      try {
+        const deal = await repository.updateDeal(id, patch);
+        set((s) => ({ deals: { ...s.deals, [id]: deal } }));
+      } catch (err) {
+        set((s) => ({ deals: { ...s.deals, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async deleteDeal(id) {
+      const prev = get().deals[id] as Deal | undefined;
+      if (!prev) return;
+      set((s) => {
+        const next = { ...s.deals };
+        delete next[id];
+        return { deals: next };
+      });
+      try {
+        await repository.deleteDeal(id);
+      } catch (err) {
+        set((s) => ({ deals: { ...s.deals, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    dealsForTicket(ticketId) {
+      return Object.values(get().deals)
+        .filter((d) => d.ticketId === ticketId)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+
+    dealsForContact(contactId) {
+      return Object.values(get().deals)
+        .filter((d) => d.contactId === contactId)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+
+    accounts() {
+      const now = new Date().toISOString();
+      const { tickets, contacts, deals } = get();
+      const groups = new Map<string, AccountHealth>();
+
+      const ensure = (company: string): AccountHealth => {
+        let acc = groups.get(company);
+        if (acc === undefined) {
+          acc = {
+            company, contactIds: [], mrr: 0, openTickets: 0, urgentOpen: 0,
+            wonValue: 0, openPipeline: 0, openExpansion: 0, openRetention: 0, status: 'healthy',
+          };
+          groups.set(company, acc);
+        }
+        return acc;
+      };
+
+      const companyOf = new Map<string, string>(); // contactId -> company
+      for (const c of Object.values(contacts)) {
+        if (c.company === null) continue;
+        companyOf.set(c.id, c.company);
+        const acc = ensure(c.company);
+        acc.contactIds.push(c.id);
+        acc.mrr += c.mrr ?? 0;
+      }
+
+      for (const t of Object.values(tickets)) {
+        const company = companyOf.get(t.requesterId);
+        if (company === undefined) continue;
+        const snoozed = t.snoozedUntil !== null && t.snoozedUntil > now;
+        if (t.bucket === 'inbox' && !snoozed && t.status !== 'closed' && t.status !== 'solved') {
+          const acc = ensure(company);
+          acc.openTickets += 1;
+          if (t.priority === 'urgent' || t.priority === 'high') acc.urgentOpen += 1;
+        }
+      }
+
+      for (const d of Object.values(deals)) {
+        const company = companyOf.get(d.contactId);
+        if (company === undefined) continue;
+        const acc = ensure(company);
+        if (d.stage === 'won') acc.wonValue += d.value;
+        else if (d.stage === 'open') {
+          acc.openPipeline += d.value;
+          if (d.type === 'expansion') acc.openExpansion += 1;
+          if (d.type === 'retention') acc.openRetention += 1;
+        }
+      }
+
+      const rank = { at_risk: 0, expansion_ready: 1, healthy: 2 };
+      const list = [...groups.values()].map((acc) => {
+        acc.status =
+          acc.openRetention > 0 || acc.urgentOpen >= 1 ? 'at_risk'
+          : acc.openExpansion > 0 ? 'expansion_ready'
+          : 'healthy';
+        return acc;
+      });
+      list.sort((a, b) => rank[a.status] - rank[b.status] || b.mrr - a.mrr || a.company.localeCompare(b.company));
+      return list;
     },
 
     setTheme(t) {

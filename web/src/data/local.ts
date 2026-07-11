@@ -1,5 +1,9 @@
-import type { Agent, CannedReply, Contact, Message, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus } from './types';
+import type {
+  Agent, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
+} from './types';
 import type { BootstrapData, Repository } from './repository';
+import { computeRevenue } from './deal-stats';
 import seedJson from '../../../shared/seed.json';
 
 const STORAGE_KEY = 'basedesk-data-v1';
@@ -19,7 +23,11 @@ interface LocalData {
   contacts: Contact[];
   agents: Agent[];
   canned: CannedReply[];
+  deals: Deal[];
 }
+
+const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
+const DEAL_STAGES: DealStage[] = ['open', 'won', 'lost'];
 
 function defaultStorage(): StorageLike {
   try {
@@ -79,6 +87,7 @@ function seedData(): LocalData {
     contacts: seed.contacts.map((c) => ({ ...c })),
     agents: seed.agents.map((a) => ({ ...a })),
     canned: seed.canned.map((c) => ({ ...c })),
+    deals: seed.deals.map((d) => ({ ...d })),
   };
 }
 
@@ -96,6 +105,16 @@ export class LocalRepository implements Repository {
     const raw = this.storage.get(STORAGE_KEY);
     if (raw !== null) {
       this.data = JSON.parse(raw) as LocalData;
+      // Backfill v0.2 fields for blobs written by v0.1.
+      if (!Array.isArray(this.data.deals)) {
+        const seed = seedJson as unknown as LocalData;
+        const mrrByContact = new Map(seed.contacts.map((c) => [c.id, c.mrr ?? null]));
+        this.data.deals = seed.deals.map((d) => ({ ...d }));
+        for (const c of this.data.contacts) {
+          if (c.mrr === undefined) c.mrr = mrrByContact.get(c.id) ?? null;
+        }
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -112,12 +131,21 @@ export class LocalRepository implements Repository {
     return t;
   }
 
+  private deal(id: string): Deal {
+    const d = this.data.deals.find((x) => x.id === id);
+    if (!d) throw new Error('Deal not found');
+    return d;
+  }
+
   async bootstrap(): Promise<BootstrapData> {
     return {
       tickets: this.data.tickets.map((t) => ({ ...t, tags: [...t.tags] })),
       contacts: this.data.contacts.map((c) => ({ ...c })),
       agents: this.data.agents.map((a) => ({ ...a })),
       canned: this.data.canned.map((c) => ({ ...c })),
+      deals: [...this.data.deals]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map((d) => ({ ...d })),
       currentAgentId: CURRENT_AGENT_ID,
     };
   }
@@ -207,6 +235,7 @@ export class LocalRepository implements Repository {
       location: null,
       timezone: null,
       createdAt: new Date().toISOString(),
+      mrr: null,
     };
     this.data.contacts.push(contact);
     this.persist();
@@ -233,6 +262,80 @@ export class LocalRepository implements Repository {
 
   async deleteCanned(id: string): Promise<void> {
     this.data.canned = this.data.canned.filter((c) => c.id !== id);
+    this.persist();
+  }
+
+  async listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]> {
+    return this.data.deals
+      .filter((d) => (filter?.stage ? d.stage === filter.stage : true))
+      .filter((d) => (filter?.type ? d.type === filter.type : true))
+      .filter((d) => (filter?.contactId ? d.contactId === filter.contactId : true))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((d) => ({ ...d }));
+  }
+
+  async createDeal(input: DealCreate): Promise<Deal> {
+    if (input.title.trim() === '') throw new Error('title is required');
+    if (!DEAL_TYPES.includes(input.type)) throw new Error('invalid type');
+    if (!Number.isInteger(input.value) || input.value < 0) throw new Error('value must be a non-negative integer');
+    if (!this.data.contacts.some((c) => c.id === input.contactId)) throw new Error('unknown contactId');
+    if (input.ticketId != null && !this.data.tickets.some((t) => t.id === input.ticketId)) {
+      throw new Error('unknown ticketId');
+    }
+    const now = new Date().toISOString();
+    const deal: Deal = {
+      id: nextId(this.data.deals, 'd_', 3),
+      title: input.title.trim(),
+      type: input.type,
+      stage: 'open',
+      value: input.value,
+      currency: 'USD',
+      contactId: input.contactId,
+      ticketId: input.ticketId ?? null,
+      ownerId: input.ownerId ?? CURRENT_AGENT_ID,
+      note: input.note ?? '',
+      createdAt: now,
+      closedAt: null,
+      updatedAt: now,
+    };
+    this.data.deals.push(deal);
+    this.persist();
+    return { ...deal };
+  }
+
+  async updateDeal(id: string, patch: DealPatch): Promise<Deal> {
+    const d = this.deal(id);
+    const now = new Date().toISOString();
+    if (patch.title !== undefined) {
+      if (patch.title.trim() === '') throw new Error('invalid title');
+      d.title = patch.title.trim();
+    }
+    if (patch.type !== undefined) {
+      if (!DEAL_TYPES.includes(patch.type)) throw new Error('invalid type');
+      d.type = patch.type;
+    }
+    if (patch.value !== undefined) {
+      if (!Number.isInteger(patch.value) || patch.value < 0) throw new Error('invalid value');
+      d.value = patch.value;
+    }
+    if (patch.ownerId !== undefined) d.ownerId = patch.ownerId;
+    if (patch.note !== undefined) d.note = patch.note;
+    if (patch.stage !== undefined) {
+      if (!DEAL_STAGES.includes(patch.stage)) throw new Error('invalid stage');
+      d.stage = patch.stage;
+      if (patch.stage === 'won' || patch.stage === 'lost') {
+        if (d.closedAt === null) d.closedAt = now;
+      } else {
+        d.closedAt = null;
+      }
+    }
+    d.updatedAt = now;
+    this.persist();
+    return { ...d };
+  }
+
+  async deleteDeal(id: string): Promise<void> {
+    this.data.deals = this.data.deals.filter((d) => d.id !== id);
     this.persist();
   }
 
@@ -311,6 +414,7 @@ export class LocalRepository implements Repository {
       openNow,
       createdLast7Days,
       solvedLast7Days,
+      revenue: computeRevenue(this.data.deals, now),
     };
   }
 

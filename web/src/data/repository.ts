@@ -1,8 +1,11 @@
-import type { Agent, CannedReply, Contact, Message, StatsOverview, Ticket, TicketPatch, TicketPriority } from './types';
+import type {
+  Agent, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, StatsOverview, Ticket, TicketPatch, TicketPriority,
+} from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; currentAgentId: string;
+  canned: CannedReply[]; currentAgentId: string; deals: Deal[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -15,4 +18,8 @@ export interface Repository {
   deleteCanned(id: string): Promise<void>;
   getStats(): Promise<StatsOverview>;
   search(q: string): Promise<{ ticketIds: string[] }>;
+  listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]>;
+  createDeal(input: DealCreate): Promise<Deal>;
+  updateDeal(id: string, patch: DealPatch): Promise<Deal>;
+  deleteDeal(id: string): Promise<void>;
 }
