@@ -359,8 +359,11 @@ export class LocalRepository implements Repository {
     let solvedLast7Days = 0;
 
     for (const t of this.data.tickets) {
-      byPriority[t.priority] += 1;
-      byStatus[t.status] += 1;
+      // Priority/status mix is scoped to the inbox bucket, matching the server.
+      if (t.bucket === 'inbox') {
+        byPriority[t.priority] += 1;
+        byStatus[t.status] += 1;
+      }
       const createdDay = t.createdAt.slice(0, 10);
       if (createdByDay.has(createdDay)) createdByDay.set(createdDay, createdByDay.get(createdDay)! + 1);
       if (t.createdAt >= sevenDaysAgo) createdLast7Days += 1;
