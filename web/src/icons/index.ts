@@ -25,6 +25,7 @@ export { IconCircle } from './IconCircle';
 export { IconSparkle } from './IconSparkle';
 export { IconSend } from './IconSend';
 export { IconReply } from './IconReply';
+export { IconRevenue } from './IconRevenue';
 export { IconNote } from './IconNote';
 export { IconTag } from './IconTag';
 export { IconSettings } from './IconSettings';

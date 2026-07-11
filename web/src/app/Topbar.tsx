@@ -1,24 +1,18 @@
-import { useMemo } from 'react';
-import { useApp } from '../data/store';
+import { useRevenueStats } from '../data/hooks';
+import { formatMoney } from '../data/money';
 import { Kbd } from '../components/Kbd';
-import { IconCheckCircle, IconSearch } from '../icons';
+import { IconRevenue, IconSearch } from '../icons';
 import { MOD_LABEL, openPalette } from '../features/palette/shortcuts';
 
 export function Topbar() {
-  const tickets = useApp((s) => s.tickets);
-
-  const solvedThisWeek = useMemo(() => {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-    return Object.values(tickets).filter(
-      (t) => (t.status === 'solved' || t.status === 'closed') && t.updatedAt >= weekAgo,
-    ).length;
-  }, [tickets]);
+  const { revenue } = useRevenueStats();
+  const wonThisWeek = revenue?.wonLast7Days ?? 0;
 
   return (
     <header className="flex h-[52px] shrink-0 items-center justify-between pr-3">
       <div className="inline-flex h-8 items-center gap-2 rounded-full bg-green-bg px-3 text-[13px] font-medium text-green">
-        <IconCheckCircle size={15} />
-        <span className="tabular-nums">{solvedThisWeek} resolved this week</span>
+        <IconRevenue size={15} />
+        <span className="tabular-nums">{formatMoney(wonThisWeek, { compact: true })} closed this week</span>
       </div>
 
       <button
