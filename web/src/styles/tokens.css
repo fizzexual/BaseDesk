@@ -1,0 +1,67 @@
+/* BaseDesk design tokens — single source of truth for color, radius, shadow.
+   Components must consume these via Tailwind theme mappings, never raw hex. */
+
+:root {
+  --font-sans: 'Inter Variable', 'InterVariable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --bg: #f6f8f7;
+  --surface: #ffffff;
+  --surface-2: #f2f5f3;
+  --surface-3: #e9eeeb;
+  --text: #171a19;
+  --text-2: #5c6461;
+  --text-3: #7c8681;
+  --line: #e5e9e7;
+  --line-2: #d6ddd9;
+  --accent: #171a19;
+  --accent-fg: #ffffff;
+  --green: #12805c;
+  --green-bg: #e4f3ec;
+  --red: #d92d20;
+  --red-bg: #fdecea;
+  --amber: #b54708;
+  --amber-bg: #fef3e7;
+  --blue: #175cd3;
+  --blue-bg: #eaf1fd;
+  --gray-dot: #98a2a0;
+  --focus: #12805c;
+  --frame-a: #dff3e7;
+  --frame-b: #c9ead6;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  --shadow-1: 0 1px 2px rgb(23 26 25 / 0.05);
+  --shadow-2: 0 4px 16px rgb(23 26 25 / 0.1), 0 1px 3px rgb(23 26 25 / 0.06);
+}
+
+[data-theme='dark'] {
+  --bg: #0e1110;
+  --surface: #161a18;
+  --surface-2: #1d2220;
+  --surface-3: #242a27;
+  --text: #f0f3f1;
+  --text-2: #a7b0ac;
+  --text-3: #7e8883;
+  --line: #242a27;
+  --line-2: #2e3532;
+  --accent: #f0f3f1;
+  --accent-fg: #141816;
+  --green: #4ade97;
+  --green-bg: #10301f;
+  --red: #f97066;
+  --red-bg: #3a1b18;
+  --amber: #f5a860;
+  --amber-bg: #3a2712;
+  --blue: #7ab1ff;
+  --blue-bg: #14263f;
+  --gray-dot: #6e7873;
+  --focus: #4ade97;
+  --frame-a: #14231b;
+  --frame-b: #0f1a14;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+}
