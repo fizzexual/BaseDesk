@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, Agent, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, Contact, Counts, Deal,
-  DealCreate, DealPatch, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, AutomationRule,
+  CannedReply, Contact, Counts, Deal, DealCreate, DealPatch, KbArticle, Message, SlaTargets, Ticket, TicketPatch,
+  TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
@@ -16,6 +17,8 @@ export interface AppState {
   sla: SlaTargets;
   automation: AutomationRule[];
   kb: Record<string, KbArticle>;
+  aiAgents: Record<string, AiAgent>;
+  aiActions: Record<string, AiAction>;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -39,6 +42,12 @@ export interface AppState {
   createArticle(input: ArticleCreate): Promise<string>;
   updateArticle(id: string, patch: ArticlePatch): Promise<void>;
   deleteArticle(id: string): Promise<void>;
+  createAiAgent(input: AiAgentCreate): Promise<string>;
+  updateAiAgent(id: string, patch: AiAgentPatch): Promise<void>;
+  deleteAiAgent(id: string): Promise<void>;
+  runAgents(): Promise<number>;
+  approveAction(id: string): Promise<void>;
+  dismissAction(id: string): Promise<void>;
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -103,6 +112,8 @@ export function createAppStore(repository: Repository) {
     sla: DEFAULT_SLA_TARGETS,
     automation: [],
     kb: {},
+    aiAgents: {},
+    aiActions: {},
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -119,6 +130,8 @@ export function createAppStore(repository: Repository) {
         sla: data.sla,
         automation: data.automation,
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
+        aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
+        aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         currentAgentId: data.currentAgentId,
       });
     },
@@ -429,6 +442,75 @@ export function createAppStore(repository: Repository) {
         await repository.deleteArticle(id);
       } catch (err) {
         set((s) => ({ kb: { ...s.kb, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async createAiAgent(input) {
+      const agent = await repository.createAiAgent(input);
+      set((s) => ({ aiAgents: { ...s.aiAgents, [agent.id]: agent } }));
+      return agent.id;
+    },
+
+    async updateAiAgent(id, patch) {
+      const prev = get().aiAgents[id] as AiAgent | undefined;
+      if (!prev) throw new Error('Agent not found');
+      set((s) => ({ aiAgents: { ...s.aiAgents, [id]: { ...prev, ...patch } } }));
+      try {
+        const agent = await repository.updateAiAgent(id, patch);
+        set((s) => ({ aiAgents: { ...s.aiAgents, [id]: agent } }));
+      } catch (err) {
+        set((s) => ({ aiAgents: { ...s.aiAgents, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async deleteAiAgent(id) {
+      const prev = get().aiAgents[id] as AiAgent | undefined;
+      if (!prev) return;
+      set((s) => {
+        const next = { ...s.aiAgents };
+        delete next[id];
+        return { aiAgents: next };
+      });
+      try {
+        await repository.deleteAiAgent(id);
+      } catch (err) {
+        set((s) => ({ aiAgents: { ...s.aiAgents, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async runAgents() {
+      const { created } = await repository.runAgents();
+      // Refresh actions + tickets: agents may have created actions and resolved tickets.
+      const data = await repository.bootstrap();
+      set({
+        aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
+        tickets: Object.fromEntries(data.tickets.map((t) => [t.id, t])),
+      });
+      return created;
+    },
+
+    async approveAction(id) {
+      const { action, ticket, message } = await repository.approveAction(id);
+      set((s) => ({
+        aiActions: { ...s.aiActions, [action.id]: action },
+        tickets: { ...s.tickets, [ticket.id]: ticket },
+        messages: s.messages[ticket.id]
+          ? { ...s.messages, [ticket.id]: [...s.messages[ticket.id]!, message] }
+          : s.messages,
+      }));
+    },
+
+    async dismissAction(id) {
+      const prev = get().aiActions[id] as AiAction | undefined;
+      set((s) => (prev ? { aiActions: { ...s.aiActions, [id]: { ...prev, status: 'dismissed' as const } } } : {}));
+      try {
+        const { action } = await repository.dismissAction(id);
+        set((s) => ({ aiActions: { ...s.aiActions, [action.id]: action } }));
+      } catch (err) {
+        if (prev) set((s) => ({ aiActions: { ...s.aiActions, [id]: prev } }));
         throw err;
       }
     },

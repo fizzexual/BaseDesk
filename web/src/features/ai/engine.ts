@@ -3,7 +3,7 @@
 // summaries offline. `getApiKey`/`aiEnabled` are the hooks a future model provider
 // plugs into; the heuristics remain the zero-config default.
 
-import type { CannedReply, Message, TicketPriority } from '../../data/types';
+import type { CannedReply, KbArticle, Message, TicketPriority } from '../../data/types';
 
 const KEY_STORAGE = 'basedesk-ai-key';
 const ENABLED_STORAGE = 'basedesk-ai-enabled';
@@ -177,3 +177,71 @@ export const AI_MODULES: { key: string; title: string; body: string }[] = [
     body: 'One-line context on handoff, so a teammate picks up without rereading the whole thread.',
   },
 ];
+
+// --- Autonomous agent decisions (mirrors server/src/ai-engine.ts) ---
+
+/** Scores the ticket against KB articles; returns the best confident match. */
+export function deflect(text: string, kb: KbArticle[]): { articleId: string; score: number } | null {
+  const hay = text.toLowerCase();
+  let best: { articleId: string; score: number } | null = null;
+  for (const a of kb) {
+    if (a.status !== 'published') continue;
+    const terms = new Set((`${a.title} ${a.title} ${a.body}`.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []));
+    let score = 0;
+    for (const t of terms) if (hay.includes(t)) score += 1;
+    if (best === null || score > best.score) best = { articleId: a.id, score };
+  }
+  return best !== null && best.score >= 6 ? best : null;
+}
+
+export type Autonomy = 'suggest' | 'draft' | 'resolve';
+export interface AiDecision {
+  kind: 'triage' | 'draft' | 'resolve';
+  draftBody: string | null;
+  suggestedPriority: TicketPriority | null;
+  suggestedTags: string[];
+  kbArticleId: string | null;
+}
+export interface AgentContext {
+  subject: string; bodyText: string; contactName: string; agentName: string;
+  currentPriority: TicketPriority; currentTags: string[];
+  canned: CannedReply[]; kb: KbArticle[];
+}
+
+export function runAgent(
+  agent: { autonomy: Autonomy; scopeTags: string[]; scopePriorities: TicketPriority[] },
+  ctx: AgentContext,
+): AiDecision | null {
+  if (agent.scopeTags.length > 0 && !ctx.currentTags.some((t) => agent.scopeTags.includes(t))) return null;
+  if (agent.scopePriorities.length > 0 && !agent.scopePriorities.includes(ctx.currentPriority)) return null;
+
+  const triage = suggestTriage({
+    subject: ctx.subject, bodyText: ctx.bodyText, currentPriority: ctx.currentPriority, currentTags: ctx.currentTags,
+  });
+  const first = firstName(ctx.contactName);
+  const agentFirst = firstName(ctx.agentName);
+  const draft = (): AiDecision => ({
+    kind: 'draft',
+    draftBody: draftReply({
+      subject: ctx.subject, contactName: ctx.contactName, agentName: ctx.agentName,
+      lastCustomerMessage: ctx.bodyText, canned: ctx.canned,
+    }),
+    suggestedPriority: triage.priority,
+    suggestedTags: triage.tags,
+    kbArticleId: null,
+  });
+
+  if (agent.autonomy === 'suggest') {
+    if (triage.priority === null && triage.tags.length === 0) return null;
+    return { kind: 'triage', draftBody: null, suggestedPriority: triage.priority, suggestedTags: triage.tags, kbArticleId: null };
+  }
+  if (agent.autonomy === 'draft') return draft();
+
+  const hit = deflect(`${ctx.subject} ${ctx.bodyText}`, ctx.kb);
+  if (hit === null) return draft();
+  const article = ctx.kb.find((a) => a.id === hit.articleId);
+  const answer = article
+    ? `Hi ${first},\n\n${article.body}\n\nIf that does not fully cover it, reply here and a teammate will take a look.\n\nBest,\n${agentFirst}`
+    : draft().draftBody;
+  return { kind: 'resolve', draftBody: answer, suggestedPriority: triage.priority, suggestedTags: triage.tags, kbArticleId: hit.articleId };
+}

@@ -1,6 +1,7 @@
 import type {
-  ArticleCreate, ArticlePatch, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch,
-  DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply,
+  Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview,
+  Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -110,5 +111,24 @@ export class ApiRepository implements Repository {
 
   async deleteArticle(id: string): Promise<void> {
     await request<{ ok: true }>(`/kb/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  createAiAgent(input: AiAgentCreate): Promise<AiAgent> {
+    return request('/ai/agents', jsonInit('POST', input));
+  }
+  updateAiAgent(id: string, patch: AiAgentPatch): Promise<AiAgent> {
+    return request(`/ai/agents/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+  async deleteAiAgent(id: string): Promise<void> {
+    await request<{ ok: true }>(`/ai/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  runAgents(): Promise<{ created: number }> {
+    return request('/ai/run', { method: 'POST' });
+  }
+  approveAction(id: string): Promise<{ action: AiAction; ticket: Ticket; message: Message }> {
+    return request(`/ai/actions/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+  }
+  dismissAction(id: string): Promise<{ action: AiAction }> {
+    return request(`/ai/actions/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
   }
 }

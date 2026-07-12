@@ -1,12 +1,14 @@
 import type {
-  Agent, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch,
-  DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, AutomationRule, CannedReply,
+  Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview,
+  Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
+  aiAgents: AiAgent[]; aiActions: AiAction[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -28,4 +30,10 @@ export interface Repository {
   createArticle(input: ArticleCreate): Promise<KbArticle>;
   updateArticle(id: string, patch: ArticlePatch): Promise<KbArticle>;
   deleteArticle(id: string): Promise<void>;
+  createAiAgent(input: AiAgentCreate): Promise<AiAgent>;
+  updateAiAgent(id: string, patch: AiAgentPatch): Promise<AiAgent>;
+  deleteAiAgent(id: string): Promise<void>;
+  runAgents(): Promise<{ created: number }>;
+  approveAction(id: string): Promise<{ action: AiAction; ticket: Ticket; message: Message }>;
+  dismissAction(id: string): Promise<{ action: AiAction }>;
 }

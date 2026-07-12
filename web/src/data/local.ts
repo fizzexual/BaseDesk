@@ -1,12 +1,15 @@
 import type {
-  Agent, ArticleCreate, ArticlePatch, ArticleStatus, AutomationRule, CannedReply, Contact, Deal, DealCreate,
-  DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch,
-  TicketPriority, TicketStatus,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, ArticleStatus, AutomationRule,
+  CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets,
+  StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults';
+import { runAgent } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
+
+const AUTONOMY_RANK: Record<string, number> = { resolve: 3, draft: 2, suggest: 1 };
 
 const RESOLVED: TicketStatus[] = ['solved', 'closed'];
 
@@ -59,6 +62,8 @@ interface LocalData {
   sla: SlaTargets;
   automation: AutomationRule[];
   kb: KbArticle[];
+  aiAgents: AiAgent[];
+  aiActions: AiAction[];
 }
 
 function slugify(title: string): string {
@@ -130,6 +135,8 @@ function seedData(): LocalData {
     sla: DEFAULT_SLA_TARGETS,
     automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
     kb: seed.kb.map((a) => ({ ...a })),
+    aiAgents: seed.aiAgents.map((a) => ({ ...a })),
+    aiActions: seed.aiActions.map((a) => ({ ...a })),
   };
 }
 
@@ -178,6 +185,13 @@ export class LocalRepository implements Repository {
         this.data.kb = (seedJson as unknown as LocalData).kb.map((a) => ({ ...a }));
         this.persist();
       }
+      // Backfill AI agents/actions for blobs written before v0.4.
+      if (!Array.isArray(this.data.aiAgents) || !Array.isArray(this.data.aiActions)) {
+        const seed = seedJson as unknown as LocalData;
+        this.data.aiAgents = seed.aiAgents.map((a) => ({ ...a }));
+        this.data.aiActions = seed.aiActions.map((a) => ({ ...a }));
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -213,6 +227,8 @@ export class LocalRepository implements Repository {
       sla: this.data.sla,
       automation: this.data.automation.map((r) => ({ ...r })),
       kb: this.data.kb.map((a) => ({ ...a })),
+      aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
+      aiActions: this.data.aiActions.map((a) => ({ ...a })),
     };
   }
 
@@ -258,8 +274,50 @@ export class LocalRepository implements Repository {
     };
     this.data.tickets.push(ticket);
     this.data.messages.push(message);
+    this.runAgentsOnTicket(ticket, input.body);
     this.persist();
     return { ticket: { ...ticket, tags: [...ticket.tags] }, message: { ...message } };
+  }
+
+  /** Mirrors the server: highest-autonomy enabled agent acts on a new ticket. */
+  private runAgentsOnTicket(ticket: Ticket, firstBody: string): AiAction | null {
+    const agents = this.data.aiAgents
+      .filter((a) => a.enabled)
+      .sort((a, b) => AUTONOMY_RANK[b.autonomy]! - AUTONOMY_RANK[a.autonomy]!);
+    if (agents.length === 0) return null;
+    const contact = this.data.contacts.find((c) => c.id === ticket.requesterId);
+    for (const agent of agents) {
+      const decision = runAgent(agent, {
+        subject: ticket.subject, bodyText: firstBody,
+        contactName: contact?.name ?? 'there', agentName: agent.name,
+        currentPriority: ticket.priority, currentTags: ticket.tags,
+        canned: this.data.canned, kb: this.data.kb,
+      });
+      if (decision === null) continue;
+      const now = new Date().toISOString();
+      const action: AiAction = {
+        id: nextId(this.data.aiActions, 'act_', 3), agentId: agent.id, ticketId: ticket.id,
+        kind: decision.kind, status: decision.kind === 'resolve' ? 'sent' : 'pending',
+        draftBody: decision.draftBody, suggestedPriority: decision.suggestedPriority,
+        suggestedTags: decision.suggestedTags, kbArticleId: decision.kbArticleId,
+        createdAt: now, resolvedAt: decision.kind === 'resolve' ? now : null,
+      };
+      this.data.aiActions.push(action);
+      if (decision.kind === 'resolve' && decision.draftBody !== null) {
+        this.data.messages.push({
+          id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'agent',
+          authorId: CURRENT_AGENT_ID, kind: 'reply', body: decision.draftBody, at: now,
+        });
+        ticket.status = 'solved';
+        ticket.resolvedAt = now;
+        ticket.updatedAt = now;
+        ticket.lastMessageAt = now;
+        ticket.lastMessagePreview = preview(decision.draftBody);
+        if (ticket.firstRespondedAt === null) ticket.firstRespondedAt = now;
+      }
+      return action;
+    }
+    return null;
   }
 
   async updateTicket(id: string, patch: TicketPatch): Promise<Ticket> {
@@ -469,6 +527,86 @@ export class LocalRepository implements Repository {
   async deleteArticle(id: string): Promise<void> {
     this.data.kb = this.data.kb.filter((a) => a.id !== id);
     this.persist();
+  }
+
+  async createAiAgent(input: AiAgentCreate): Promise<AiAgent> {
+    const agent: AiAgent = {
+      id: nextId(this.data.aiAgents, 'ai_', 1),
+      name: input.name.trim(),
+      avatarHue: djb2(input.name.trim()) % 360,
+      enabled: true,
+      autonomy: input.autonomy,
+      scopeTags: input.scopeTags ?? [],
+      scopePriorities: input.scopePriorities ?? [],
+      createdAt: new Date().toISOString(),
+    };
+    this.data.aiAgents.push(agent);
+    this.persist();
+    return { ...agent };
+  }
+
+  async updateAiAgent(id: string, patch: AiAgentPatch): Promise<AiAgent> {
+    const a = this.data.aiAgents.find((x) => x.id === id);
+    if (!a) throw new Error('Agent not found');
+    if (patch.name !== undefined) a.name = patch.name.trim();
+    if (patch.enabled !== undefined) a.enabled = patch.enabled;
+    if (patch.autonomy !== undefined) a.autonomy = patch.autonomy;
+    if (patch.scopeTags !== undefined) a.scopeTags = patch.scopeTags;
+    if (patch.scopePriorities !== undefined) a.scopePriorities = patch.scopePriorities;
+    this.persist();
+    return { ...a };
+  }
+
+  async deleteAiAgent(id: string): Promise<void> {
+    this.data.aiAgents = this.data.aiAgents.filter((a) => a.id !== id);
+    this.persist();
+  }
+
+  async runAgents(): Promise<{ created: number }> {
+    const actioned = new Set(this.data.aiActions.map((a) => a.ticketId));
+    let created = 0;
+    for (const t of this.data.tickets) {
+      if (t.bucket !== 'inbox' || (t.status !== 'open' && t.status !== 'pending')) continue;
+      if (actioned.has(t.id)) continue;
+      const firstContact = this.data.messages
+        .filter((m) => m.ticketId === t.id)
+        .sort((a, b) => a.at.localeCompare(b.at))
+        .find((m) => m.authorKind === 'contact');
+      if (this.runAgentsOnTicket(t, firstContact?.body ?? '') !== null) created += 1;
+    }
+    this.persist();
+    return { created };
+  }
+
+  async approveAction(id: string): Promise<{ action: AiAction; ticket: Ticket; message: Message }> {
+    const action = this.data.aiActions.find((a) => a.id === id);
+    if (!action) throw new Error('Action not found');
+    if (action.kind !== 'draft' || action.status !== 'pending') throw new Error('not an approvable draft');
+    const t = this.ticket(action.ticketId);
+    const now = new Date().toISOString();
+    const message: Message = {
+      id: nextId(this.data.messages, 'm_', 5), ticketId: t.id, authorKind: 'agent',
+      authorId: CURRENT_AGENT_ID, kind: 'reply', body: action.draftBody ?? '', at: now,
+    };
+    this.data.messages.push(message);
+    if (t.status === 'open') t.status = 'pending';
+    if (t.firstRespondedAt === null) t.firstRespondedAt = now;
+    t.updatedAt = now;
+    t.lastMessageAt = now;
+    t.lastMessagePreview = preview(action.draftBody ?? '');
+    action.status = 'approved';
+    action.resolvedAt = now;
+    this.persist();
+    return { action: { ...action }, ticket: { ...t, tags: [...t.tags] }, message: { ...message } };
+  }
+
+  async dismissAction(id: string): Promise<{ action: AiAction }> {
+    const action = this.data.aiActions.find((a) => a.id === id);
+    if (!action) throw new Error('Action not found');
+    action.status = 'dismissed';
+    action.resolvedAt = new Date().toISOString();
+    this.persist();
+    return { action: { ...action } };
   }
 
   async getStats(): Promise<StatsOverview> {
