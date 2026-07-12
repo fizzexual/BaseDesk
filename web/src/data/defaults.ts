@@ -6,6 +6,7 @@ export const DEFAULT_AI_PROVIDER: AiProvider = {
   baseUrl: 'https://api.deepseek.com/v1',
   model: 'deepseek-chat',
   temperature: 0.4,
+  reasoning: false,
   hasKey: false,
 };
 

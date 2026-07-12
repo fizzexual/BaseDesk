@@ -606,6 +606,7 @@ export class LocalRepository implements Repository {
       baseUrl: input.baseUrl && input.baseUrl.trim() !== '' ? input.baseUrl.trim() : cur.baseUrl,
       model: input.model && input.model.trim() !== '' ? input.model.trim() : cur.model,
       temperature: typeof input.temperature === 'number' ? Math.min(2, Math.max(0, input.temperature)) : cur.temperature,
+      reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : cur.reasoning,
       hasKey: typeof input.apiKey === 'string' ? input.apiKey.trim() !== '' : cur.hasKey,
     };
     this.data.aiProvider = next;

@@ -99,6 +99,7 @@ export interface AiProvider {
   baseUrl: string;
   model: string;
   temperature: number;
+  reasoning: boolean;
   hasKey: boolean;
 }
 /** Provider fields to update. `apiKey` omitted keeps the stored key; '' clears it. */
@@ -107,6 +108,7 @@ export type AiProviderSave = {
   baseUrl?: string;
   model?: string;
   temperature?: number;
+  reasoning?: boolean;
   apiKey?: string;
 };
 export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string; empty?: boolean }
