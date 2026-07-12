@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { useApp } from '../data/store';
 import { Toaster } from '../components/Toast';
 import { IconLogo } from '../icons';
+import { PortalApp } from '../portal/PortalApp';
 import { Shell } from './Shell';
 import { InboxPage } from '../features/inbox/InboxPage';
 import { TicketPage } from '../features/ticket/TicketPage';
@@ -49,33 +50,45 @@ function Boot({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AgentApp() {
+  return (
+    <Boot>
+      <Routes>
+        <Route element={<Shell />}>
+          <Route index element={<Navigate to="/view/all" replace />} />
+          <Route path="/view/:viewId" element={<InboxPage />} />
+          <Route path="/ticket/:id" element={<TicketPage />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/contacts/:id" element={<ContactPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/revenue" element={<RevenuePage />} />
+          <Route path="/revenue/:tab" element={<RevenuePage />} />
+          <Route path="/ai" element={<AiPage />} />
+          <Route path="/ai/drafts" element={<DraftsPage />} />
+          <Route path="/ai/resolved" element={<ResolvedPage />} />
+          <Route path="/kb" element={<KbPage />} />
+          <Route path="/kb/:id" element={<KbPage />} />
+          <Route path="/channels" element={<ChannelsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/:tab" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/view/all" replace />} />
+        </Route>
+      </Routes>
+      <Toaster />
+    </Boot>
+  );
+}
+
+/** The customer portal at /portal/* is its own app — no agent store, no agent shell. */
+function Root() {
+  const isPortal = useLocation().pathname.startsWith('/portal');
+  return isPortal ? <PortalApp /> : <AgentApp />;
+}
+
 export function App() {
   return (
     <BrowserRouter>
-      <Boot>
-        <Routes>
-          <Route element={<Shell />}>
-            <Route index element={<Navigate to="/view/all" replace />} />
-            <Route path="/view/:viewId" element={<InboxPage />} />
-            <Route path="/ticket/:id" element={<TicketPage />} />
-            <Route path="/contacts" element={<ContactsPage />} />
-            <Route path="/contacts/:id" element={<ContactPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/revenue" element={<RevenuePage />} />
-            <Route path="/revenue/:tab" element={<RevenuePage />} />
-            <Route path="/ai" element={<AiPage />} />
-            <Route path="/ai/drafts" element={<DraftsPage />} />
-            <Route path="/ai/resolved" element={<ResolvedPage />} />
-            <Route path="/kb" element={<KbPage />} />
-            <Route path="/kb/:id" element={<KbPage />} />
-            <Route path="/channels" element={<ChannelsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/:tab" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/view/all" replace />} />
-          </Route>
-        </Routes>
-        <Toaster />
-      </Boot>
+      <Root />
     </BrowserRouter>
   );
 }
