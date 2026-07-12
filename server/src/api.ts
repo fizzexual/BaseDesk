@@ -1,18 +1,47 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { getContact, getDeal, getMessages, getTicket, openDb, rowToTicket, type TicketRow } from './db.js';
+import { getContact, getDeal, getMessages, getSetting, getTicket, openDb, rowToTicket, setSetting, type TicketRow } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
+import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults.js';
 import type {
-  Agent, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType, Message,
-  Ticket, TicketPatch, TicketPriority, ViewId,
+  Agent, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType, Message,
+  SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types.js';
 
 const VERSION = '0.1.0';
 
 const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
 const DEAL_STAGES: DealStage[] = ['open', 'won', 'lost'];
+const RESOLVED_STATUSES = ['solved', 'closed'];
+
+/** Applies enabled automation rules to a just-created ticket, in order. */
+function applyAutomation(
+  rules: AutomationRule[],
+  ticket: { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null },
+  body: string,
+): void {
+  const subject = ticket.subject.toLowerCase();
+  const bodyLc = body.toLowerCase();
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const v = rule.condition.value.toLowerCase();
+    const matches =
+      rule.condition.type === 'subject_contains' ? subject.includes(v)
+      : rule.condition.type === 'body_contains' ? bodyLc.includes(v)
+      : rule.condition.type === 'priority_is' ? ticket.priority === rule.condition.value
+      : false;
+    if (!matches) continue;
+    if (rule.action.type === 'set_priority' && PRIORITIES.includes(rule.action.value as TicketPriority)) {
+      ticket.priority = rule.action.value as TicketPriority;
+    } else if (rule.action.type === 'add_tag') {
+      if (!ticket.tags.includes(rule.action.value)) ticket.tags.push(rule.action.value);
+    } else if (rule.action.type === 'assign') {
+      ticket.assigneeId = rule.action.value;
+    }
+  }
+}
 
 const VIEW_IDS: ViewId[] = [
   'all', 'unassigned', 'mine', 'snoozed',
@@ -82,6 +111,25 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
 
+  // Ensure SLA + automation settings exist (fresh install or migrated pre-v0.3 DB).
+  if (getSetting(db, 'sla') === null) setSetting(db, 'sla', JSON.stringify(DEFAULT_SLA_TARGETS));
+  if (getSetting(db, 'automation') === null) setSetting(db, 'automation', JSON.stringify(DEFAULT_AUTOMATION));
+
+  const slaTargets = (): SlaTargets => {
+    try {
+      return JSON.parse(getSetting(db, 'sla') ?? '') as SlaTargets;
+    } catch {
+      return DEFAULT_SLA_TARGETS;
+    }
+  };
+  const automationRules = (): AutomationRule[] => {
+    try {
+      return JSON.parse(getSetting(db, 'automation') ?? '') as AutomationRule[];
+    } catch {
+      return DEFAULT_AUTOMATION;
+    }
+  };
+
   const currentAgentId = (): string => {
     const row = db.prepare("SELECT id FROM agents WHERE role = 'admin' ORDER BY rowid LIMIT 1").get() as
       | { id: string }
@@ -101,7 +149,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
     const canned = db.prepare('SELECT * FROM canned_replies ORDER BY rowid').all() as unknown as CannedReply[];
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
-    const data: BootstrapData = { tickets, contacts, agents, canned, deals, currentAgentId: currentAgentId() };
+    const data: BootstrapData = {
+      tickets, contacts, agents, canned, deals,
+      currentAgentId: currentAgentId(),
+      sla: slaTargets(),
+      automation: automationRules(),
+    };
     return c.json(data);
   });
 
@@ -160,22 +213,27 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
 
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
+    // Automation rules may adjust priority/tags/assignee at creation time.
+    const shaped = { subject: subject.trim(), priority: priority as TicketPriority, tags: [] as string[], assigneeId: null as string | null };
+    applyAutomation(automationRules(), shaped, body);
     const ticket: Ticket = {
       id: newId('t_'),
       number: maxRow.maxNumber + 1,
-      subject: subject.trim(),
+      subject: shaped.subject,
       status: 'open',
-      priority: priority as TicketPriority,
+      priority: shaped.priority,
       bucket: 'inbox',
       requesterId,
-      assigneeId: null,
-      tags: [],
+      assigneeId: shaped.assigneeId,
+      tags: shaped.tags,
       channel: 'web',
       createdAt: now,
       updatedAt: now,
       snoozedUntil: null,
       lastMessageAt: now,
       lastMessagePreview: preview(body),
+      firstRespondedAt: null,
+      resolvedAt: null,
     };
     const message: Message = {
       id: newId('m_'),
@@ -192,12 +250,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.prepare(
         `INSERT INTO tickets (
           id, number, subject, status, priority, bucket, requesterId, assigneeId,
-          tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
+          firstRespondedAt, resolvedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         ticket.id, ticket.number, ticket.subject, ticket.status, ticket.priority, ticket.bucket,
         ticket.requesterId, ticket.assigneeId, JSON.stringify(ticket.tags), ticket.channel,
         ticket.createdAt, ticket.updatedAt, ticket.snoozedUntil, ticket.lastMessageAt, ticket.lastMessagePreview,
+        ticket.firstRespondedAt, ticket.resolvedAt,
       );
       db.prepare(
         'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -240,6 +300,16 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       params.push(key === 'tags' ? JSON.stringify(value ?? []) : (value as string | null));
     }
     const now = new Date().toISOString();
+    // Maintain resolvedAt for the SLA resolution clock on status transitions.
+    if (patch.status !== undefined) {
+      if (RESOLVED_STATUSES.includes(patch.status) && existing.resolvedAt === null) {
+        sets.push('resolvedAt = ?');
+        params.push(now);
+      } else if (!RESOLVED_STATUSES.includes(patch.status) && existing.resolvedAt !== null) {
+        sets.push('resolvedAt = ?');
+        params.push(null);
+      }
+    }
     sets.push('updatedAt = ?');
     params.push(now);
     db.prepare(`UPDATE tickets SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
@@ -279,6 +349,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     };
     const nextStatus = kind === 'reply' && ticket.status === 'open' ? 'pending' : ticket.status;
     const nextPreview = kind === 'reply' ? preview(body) : ticket.lastMessagePreview;
+    // The first agent reply stamps the SLA first-response clock.
+    const nextFirstResponded = kind === 'reply' && ticket.firstRespondedAt === null ? now : ticket.firstRespondedAt;
 
     db.exec('BEGIN');
     try {
@@ -286,8 +358,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
       db.prepare(
-        'UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?',
-      ).run(nextStatus, now, now, nextPreview, id);
+        'UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?',
+      ).run(nextStatus, now, now, nextPreview, nextFirstResponded, id);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -511,6 +583,51 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getDeal(db, id) === null) return c.json({ error: `deal not found: ${id}` }, 404);
     db.prepare('DELETE FROM deals WHERE id = ?').run(id);
     return c.json({ ok: true });
+  });
+
+  app.put('/api/settings/sla', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input !== 'object' || input === null) return c.json({ error: 'invalid SLA targets' }, 400);
+    for (const p of PRIORITIES) {
+      const t = (input as Record<string, unknown>)[p] as { firstResponseMins?: unknown; resolutionMins?: unknown } | undefined;
+      if (
+        t === undefined ||
+        typeof t.firstResponseMins !== 'number' || t.firstResponseMins < 0 ||
+        typeof t.resolutionMins !== 'number' || t.resolutionMins < 0
+      ) {
+        return c.json({ error: `invalid target for ${p}` }, 400);
+      }
+    }
+    setSetting(db, 'sla', JSON.stringify(input));
+    return c.json(input);
+  });
+
+  app.put('/api/settings/automation', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (!Array.isArray(input)) return c.json({ error: 'automation must be an array' }, 400);
+    const CONDITIONS = ['subject_contains', 'body_contains', 'priority_is'];
+    const ACTIONS = ['set_priority', 'add_tag', 'assign'];
+    for (const r of input as AutomationRule[]) {
+      if (
+        typeof r?.id !== 'string' || typeof r?.name !== 'string' || typeof r?.enabled !== 'boolean' ||
+        !CONDITIONS.includes(r?.condition?.type) || typeof r?.condition?.value !== 'string' ||
+        !ACTIONS.includes(r?.action?.type) || typeof r?.action?.value !== 'string'
+      ) {
+        return c.json({ error: 'invalid automation rule' }, 400);
+      }
+    }
+    setSetting(db, 'automation', JSON.stringify(input));
+    return c.json(input);
   });
 
   app.get('/api/stats', (c) => c.json(computeStats(db, new Date())));

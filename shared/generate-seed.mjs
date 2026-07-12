@@ -557,6 +557,8 @@ ticketSlots.forEach((slot, index) => {
 
   const lastReply = [...msgs].reverse().find((m) => m.kind === 'reply');
   const lastAt = msgs[msgs.length - 1].at;
+  const firstAgentReply = msgs.find((m) => m.authorKind === 'agent' && m.kind === 'reply');
+  const resolved = slot.status === 'solved' || slot.status === 'closed';
   tickets.push({
     id,
     number: 1024 + index,
@@ -573,6 +575,8 @@ ticketSlots.forEach((slot, index) => {
     snoozedUntil: slot.snooze ? iso(NOW_MS + ri(20, 720) * HOUR + ri(0, 59) * MIN) : null,
     lastMessageAt: lastAt,
     lastMessagePreview: preview(lastReply.body),
+    firstRespondedAt: firstAgentReply ? firstAgentReply.at : null,
+    resolvedAt: resolved ? lastAt : null,
   });
 });
 

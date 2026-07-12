@@ -46,7 +46,9 @@ export function openDb(dataDir: string): DatabaseSync {
       updatedAt TEXT NOT NULL,
       snoozedUntil TEXT,
       lastMessageAt TEXT NOT NULL,
-      lastMessagePreview TEXT NOT NULL
+      lastMessagePreview TEXT NOT NULL,
+      firstRespondedAt TEXT,
+      resolvedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -77,6 +79,10 @@ export function openDb(dataDir: string): DatabaseSync {
       closedAt TEXT,
       updatedAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_messages_ticket_at ON messages(ticketId, at);
@@ -90,7 +96,27 @@ export function openDb(dataDir: string): DatabaseSync {
     db.exec('ALTER TABLE contacts ADD COLUMN mrr INTEGER');
   }
 
+  // Migration for databases created before v0.3 (tickets predate the SLA columns).
+  const ticketCols = db.prepare('PRAGMA table_info(tickets)').all() as { name: string }[];
+  if (!ticketCols.some((c) => c.name === 'firstRespondedAt')) {
+    db.exec('ALTER TABLE tickets ADD COLUMN firstRespondedAt TEXT');
+  }
+  if (!ticketCols.some((c) => c.name === 'resolvedAt')) {
+    db.exec('ALTER TABLE tickets ADD COLUMN resolvedAt TEXT');
+  }
+
   return db;
+}
+
+export function getSetting(db: DatabaseSync, key: string): string | null {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(db: DatabaseSync, key: string, value: string): void {
+  db.prepare(
+    'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+  ).run(key, value);
 }
 
 export function getTicket(db: DatabaseSync, id: string): Ticket | null {

@@ -247,7 +247,9 @@
       "updatedAt": "2026-06-13T15:05:32.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-13T15:05:32.000Z",
-      "lastMessagePreview": "Set up as discussed, and yes — watchers cover the double-notification case. The first week"
+      "lastMessagePreview": "Set up as discussed, and yes — watchers cover the double-notification case. The first week",
+      "firstRespondedAt": "2026-06-13T15:05:32.000Z",
+      "resolvedAt": "2026-06-13T15:05:32.000Z"
     },
     {
       "id": "t_002",
@@ -266,7 +268,9 @@
       "updatedAt": "2026-06-16T02:02:48.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-16T02:02:48.000Z",
-      "lastMessagePreview": "Upgraded this morning and SSO is configured. Thanks for laying it out clearly."
+      "lastMessagePreview": "Upgraded this morning and SSO is configured. Thanks for laying it out clearly.",
+      "firstRespondedAt": "2026-06-14T19:51:03.000Z",
+      "resolvedAt": "2026-06-16T02:02:48.000Z"
     },
     {
       "id": "t_003",
@@ -285,7 +289,9 @@
       "updatedAt": "2026-06-14T16:01:04.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-14T16:01:04.000Z",
-      "lastMessagePreview": "You are unlocked and the old authenticator is revoked. Everything on the account looks unt"
+      "lastMessagePreview": "You are unlocked and the old authenticator is revoked. Everything on the account looks unt",
+      "firstRespondedAt": "2026-06-14T16:01:04.000Z",
+      "resolvedAt": "2026-06-14T16:01:04.000Z"
     },
     {
       "id": "t_004",
@@ -302,7 +308,9 @@
       "updatedAt": "2026-06-14T17:26:01.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-14T17:26:01.000Z",
-      "lastMessagePreview": "Refund received. All good on my end."
+      "lastMessagePreview": "Refund received. All good on my end.",
+      "firstRespondedAt": "2026-06-14T11:37:34.000Z",
+      "resolvedAt": "2026-06-14T17:26:01.000Z"
     },
     {
       "id": "t_005",
@@ -321,7 +329,9 @@
       "updatedAt": "2026-06-15T00:55:00.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-15T00:55:00.000Z",
-      "lastMessagePreview": "Confirmed working now. Order went through."
+      "lastMessagePreview": "Confirmed working now. Order went through.",
+      "firstRespondedAt": "2026-06-14T12:16:04.000Z",
+      "resolvedAt": "2026-06-15T00:55:00.000Z"
     },
     {
       "id": "t_006",
@@ -340,7 +350,9 @@
       "updatedAt": "2026-06-15T05:25:32.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-15T05:25:32.000Z",
-      "lastMessagePreview": "Cancellation is confirmed for the period end and the export is in your inbox. Your workspa"
+      "lastMessagePreview": "Cancellation is confirmed for the period end and the export is in your inbox. Your workspa",
+      "firstRespondedAt": "2026-06-14T19:33:46.000Z",
+      "resolvedAt": "2026-06-15T05:25:32.000Z"
     },
     {
       "id": "t_007",
@@ -359,7 +371,9 @@
       "updatedAt": "2026-06-16T05:31:41.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-16T05:31:41.000Z",
-      "lastMessagePreview": "All green on our side now. Appreciated."
+      "lastMessagePreview": "All green on our side now. Appreciated.",
+      "firstRespondedAt": "2026-06-15T11:40:13.000Z",
+      "resolvedAt": "2026-06-16T05:31:41.000Z"
     },
     {
       "id": "t_008",
@@ -378,7 +392,9 @@
       "updatedAt": "2026-06-16T16:46:35.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-16T16:46:35.000Z",
-      "lastMessagePreview": "Refund received. All good on my end."
+      "lastMessagePreview": "Refund received. All good on my end.",
+      "firstRespondedAt": "2026-06-15T21:08:49.000Z",
+      "resolvedAt": "2026-06-16T16:46:35.000Z"
     },
     {
       "id": "t_009",
@@ -397,7 +413,9 @@
       "updatedAt": "2026-06-16T13:29:30.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-16T13:29:30.000Z",
-      "lastMessagePreview": "Cancellation is confirmed for the period end and the export is in your inbox. Your workspa"
+      "lastMessagePreview": "Cancellation is confirmed for the period end and the export is in your inbox. Your workspa",
+      "firstRespondedAt": "2026-06-15T19:56:46.000Z",
+      "resolvedAt": "2026-06-16T13:29:30.000Z"
     },
     {
       "id": "t_010",
@@ -417,7 +435,9 @@
       "updatedAt": "2026-06-16T13:03:41.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-16T13:03:41.000Z",
-      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo"
+      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo",
+      "firstRespondedAt": "2026-06-16T03:06:16.000Z",
+      "resolvedAt": "2026-06-16T13:03:41.000Z"
     },
     {
       "id": "t_011",
@@ -436,7 +456,9 @@
       "updatedAt": "2026-06-18T13:08:52.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-18T13:08:52.000Z",
-      "lastMessagePreview": "The money is back on my card. Thanks for sorting it quickly."
+      "lastMessagePreview": "The money is back on my card. Thanks for sorting it quickly.",
+      "firstRespondedAt": "2026-06-16T05:14:31.000Z",
+      "resolvedAt": "2026-06-18T13:08:52.000Z"
     },
     {
       "id": "t_012",
@@ -453,7 +475,9 @@
       "updatedAt": "2026-06-15T20:42:52.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-15T20:42:52.000Z",
-      "lastMessagePreview": "Hello, we help brands like yours reach ten times more customers through our influencer net"
+      "lastMessagePreview": "Hello, we help brands like yours reach ten times more customers through our influencer net",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-06-15T20:42:52.000Z"
     },
     {
       "id": "t_013",
@@ -472,7 +496,9 @@
       "updatedAt": "2026-06-17T19:03:01.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-17T19:03:01.000Z",
-      "lastMessagePreview": "Appreciate the smooth exit. Take care."
+      "lastMessagePreview": "Appreciate the smooth exit. Take care.",
+      "firstRespondedAt": "2026-06-16T15:34:33.000Z",
+      "resolvedAt": "2026-06-17T19:03:01.000Z"
     },
     {
       "id": "t_014",
@@ -491,7 +517,9 @@
       "updatedAt": "2026-06-19T12:44:08.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-19T12:44:08.000Z",
-      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time."
+      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time.",
+      "firstRespondedAt": "2026-06-17T10:12:56.000Z",
+      "resolvedAt": "2026-06-19T12:44:08.000Z"
     },
     {
       "id": "t_015",
@@ -510,7 +538,9 @@
       "updatedAt": "2026-06-17T07:42:59.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-17T07:42:59.000Z",
-      "lastMessagePreview": "The tier config is fixed and we added a regression check so this rollout mistake cannot re"
+      "lastMessagePreview": "The tier config is fixed and we added a regression check so this rollout mistake cannot re",
+      "firstRespondedAt": "2026-06-17T07:42:59.000Z",
+      "resolvedAt": "2026-06-17T07:42:59.000Z"
     },
     {
       "id": "t_016",
@@ -530,7 +560,9 @@
       "updatedAt": "2026-06-18T03:56:19.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-18T03:56:19.000Z",
-      "lastMessagePreview": "Refund issued in full for order 46263, reference on its way by email. Sorry again for the "
+      "lastMessagePreview": "Refund issued in full for order 46263, reference on its way by email. Sorry again for the ",
+      "firstRespondedAt": "2026-06-17T06:41:18.000Z",
+      "resolvedAt": "2026-06-18T03:56:19.000Z"
     },
     {
       "id": "t_017",
@@ -549,7 +581,9 @@
       "updatedAt": "2026-06-17T16:10:58.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-17T16:10:58.000Z",
-      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki"
+      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki",
+      "firstRespondedAt": "2026-06-17T03:58:44.000Z",
+      "resolvedAt": "2026-06-17T16:10:58.000Z"
     },
     {
       "id": "t_018",
@@ -566,7 +600,9 @@
       "updatedAt": "2026-06-18T04:42:39.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-18T04:42:39.000Z",
-      "lastMessagePreview": "Sounds like you are fully up and running. I will close this, but reply any time and it reo"
+      "lastMessagePreview": "Sounds like you are fully up and running. I will close this, but reply any time and it reo",
+      "firstRespondedAt": "2026-06-17T16:29:12.000Z",
+      "resolvedAt": "2026-06-18T04:42:39.000Z"
     },
     {
       "id": "t_019",
@@ -583,7 +619,9 @@
       "updatedAt": "2026-06-17T11:20:06.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-17T11:20:06.000Z",
-      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged"
+      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged",
+      "firstRespondedAt": "2026-06-17T10:03:07.000Z",
+      "resolvedAt": "2026-06-17T11:20:06.000Z"
     },
     {
       "id": "t_020",
@@ -602,7 +640,9 @@
       "updatedAt": "2026-06-19T16:14:25.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-19T16:14:25.000Z",
-      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki"
+      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki",
+      "firstRespondedAt": "2026-06-18T09:39:00.000Z",
+      "resolvedAt": "2026-06-19T16:14:25.000Z"
     },
     {
       "id": "t_021",
@@ -621,7 +661,9 @@
       "updatedAt": "2026-06-18T06:13:33.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-18T06:13:33.000Z",
-      "lastMessagePreview": "Refund issued in full for order 43485, reference on its way by email. Sorry again for the "
+      "lastMessagePreview": "Refund issued in full for order 43485, reference on its way by email. Sorry again for the ",
+      "firstRespondedAt": "2026-06-17T22:26:09.000Z",
+      "resolvedAt": "2026-06-18T06:13:33.000Z"
     },
     {
       "id": "t_022",
@@ -638,7 +680,9 @@
       "updatedAt": "2026-06-19T06:16:09.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-19T06:16:09.000Z",
-      "lastMessagePreview": "You are unlocked and the old authenticator is revoked. Everything on the account looks unt"
+      "lastMessagePreview": "You are unlocked and the old authenticator is revoked. Everything on the account looks unt",
+      "firstRespondedAt": "2026-06-18T17:56:02.000Z",
+      "resolvedAt": "2026-06-19T06:16:09.000Z"
     },
     {
       "id": "t_023",
@@ -657,7 +701,9 @@
       "updatedAt": "2026-06-18T10:17:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-18T10:17:46.000Z",
-      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo"
+      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo",
+      "firstRespondedAt": "2026-06-18T10:17:46.000Z",
+      "resolvedAt": "2026-06-18T10:17:46.000Z"
     },
     {
       "id": "t_024",
@@ -677,7 +723,9 @@
       "updatedAt": "2026-06-20T17:49:20.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T17:49:20.000Z",
-      "lastMessagePreview": "Nightly sync completed clean. Thanks."
+      "lastMessagePreview": "Nightly sync completed clean. Thanks.",
+      "firstRespondedAt": "2026-06-19T10:28:21.000Z",
+      "resolvedAt": "2026-06-20T17:49:20.000Z"
     },
     {
       "id": "t_025",
@@ -696,7 +744,9 @@
       "updatedAt": "2026-06-20T06:23:19.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T06:23:19.000Z",
-      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki"
+      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki",
+      "firstRespondedAt": "2026-06-19T14:40:47.000Z",
+      "resolvedAt": "2026-06-20T06:23:19.000Z"
     },
     {
       "id": "t_026",
@@ -715,7 +765,9 @@
       "updatedAt": "2026-06-20T12:21:27.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T12:21:27.000Z",
-      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side."
+      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side.",
+      "firstRespondedAt": "2026-06-19T20:50:18.000Z",
+      "resolvedAt": "2026-06-20T12:21:27.000Z"
     },
     {
       "id": "t_027",
@@ -734,7 +786,9 @@
       "updatedAt": "2026-06-21T18:06:35.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-21T18:06:35.000Z",
-      "lastMessagePreview": "All reconciled on our side now. Thank you."
+      "lastMessagePreview": "All reconciled on our side now. Thank you.",
+      "firstRespondedAt": "2026-06-19T23:29:52.000Z",
+      "resolvedAt": "2026-06-21T18:06:35.000Z"
     },
     {
       "id": "t_028",
@@ -753,7 +807,9 @@
       "updatedAt": "2026-06-20T11:41:35.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T11:41:35.000Z",
-      "lastMessagePreview": "All good here. Thanks for the pointers."
+      "lastMessagePreview": "All good here. Thanks for the pointers.",
+      "firstRespondedAt": "2026-06-19T17:07:26.000Z",
+      "resolvedAt": "2026-06-20T11:41:35.000Z"
     },
     {
       "id": "t_029",
@@ -770,7 +826,9 @@
       "updatedAt": "2026-06-20T14:27:07.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T14:27:07.000Z",
-      "lastMessagePreview": "Refund issued in full for order 43609, reference on its way by email. Sorry again for the "
+      "lastMessagePreview": "Refund issued in full for order 43609, reference on its way by email. Sorry again for the ",
+      "firstRespondedAt": "2026-06-20T00:49:49.000Z",
+      "resolvedAt": "2026-06-20T14:27:07.000Z"
     },
     {
       "id": "t_030",
@@ -789,7 +847,9 @@
       "updatedAt": "2026-06-20T19:29:08.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-20T19:29:08.000Z",
-      "lastMessagePreview": "Replacements arrived intact. Appreciate you making it painless."
+      "lastMessagePreview": "Replacements arrived intact. Appreciate you making it painless.",
+      "firstRespondedAt": "2026-06-20T04:03:13.000Z",
+      "resolvedAt": "2026-06-20T19:29:08.000Z"
     },
     {
       "id": "t_031",
@@ -808,7 +868,9 @@
       "updatedAt": "2026-06-21T21:30:21.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-21T21:30:21.000Z",
-      "lastMessagePreview": "Great, we will watch the roadmap. Thanks for the straight answer."
+      "lastMessagePreview": "Great, we will watch the roadmap. Thanks for the straight answer.",
+      "firstRespondedAt": "2026-06-20T19:04:52.000Z",
+      "resolvedAt": "2026-06-21T21:30:21.000Z"
     },
     {
       "id": "t_032",
@@ -827,7 +889,9 @@
       "updatedAt": "2026-06-21T17:48:28.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-21T17:48:28.000Z",
-      "lastMessagePreview": "Replacements for order 44326 shipped this afternoon with extra padding; tracking is on its"
+      "lastMessagePreview": "Replacements for order 44326 shipped this afternoon with extra padding; tracking is on its",
+      "firstRespondedAt": "2026-06-21T17:48:28.000Z",
+      "resolvedAt": "2026-06-21T17:48:28.000Z"
     },
     {
       "id": "t_033",
@@ -844,7 +908,9 @@
       "updatedAt": "2026-06-22T00:09:43.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-22T00:09:43.000Z",
-      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo"
+      "lastMessagePreview": "The patched release is live and we verified it against a payload sample matching yours. Yo",
+      "firstRespondedAt": "2026-06-21T18:37:39.000Z",
+      "resolvedAt": "2026-06-22T00:09:43.000Z"
     },
     {
       "id": "t_034",
@@ -863,7 +929,9 @@
       "updatedAt": "2026-06-22T01:22:36.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-22T01:22:36.000Z",
-      "lastMessagePreview": "Order 45135 never shipped and I have since bought the item locally. Please cancel it and r"
+      "lastMessagePreview": "Order 45135 never shipped and I have since bought the item locally. Please cancel it and r",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-06-22T01:22:36.000Z"
     },
     {
       "id": "t_035",
@@ -882,7 +950,9 @@
       "updatedAt": "2026-06-25T22:45:54.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T22:45:54.000Z",
-      "lastMessagePreview": "We are up and running. The team picked it up in an afternoon."
+      "lastMessagePreview": "We are up and running. The team picked it up in an afternoon.",
+      "firstRespondedAt": "2026-06-23T17:44:18.000Z",
+      "resolvedAt": "2026-06-25T22:45:54.000Z"
     },
     {
       "id": "t_036",
@@ -901,7 +971,9 @@
       "updatedAt": "2026-06-22T12:07:12.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-22T12:07:12.000Z",
-      "lastMessagePreview": "Yes — features unlock the moment the upgrade completes. I have also noted a 14-day grace p"
+      "lastMessagePreview": "Yes — features unlock the moment the upgrade completes. I have also noted a 14-day grace p",
+      "firstRespondedAt": "2026-06-22T12:07:12.000Z",
+      "resolvedAt": "2026-06-22T12:07:12.000Z"
     },
     {
       "id": "t_037",
@@ -918,7 +990,9 @@
       "updatedAt": "2026-06-22T03:31:40.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-22T03:31:40.000Z",
-      "lastMessagePreview": "Your website is missing out on high-quality backlinks from DA 70+ domains. We offer guaran"
+      "lastMessagePreview": "Your website is missing out on high-quality backlinks from DA 70+ domains. We offer guaran",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-06-22T03:31:40.000Z"
     },
     {
       "id": "t_038",
@@ -937,7 +1011,9 @@
       "updatedAt": "2026-06-25T13:11:59.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T13:11:59.000Z",
-      "lastMessagePreview": "Saw the release notes. That covers our main pain point."
+      "lastMessagePreview": "Saw the release notes. That covers our main pain point.",
+      "firstRespondedAt": "2026-06-23T12:17:44.000Z",
+      "resolvedAt": "2026-06-25T13:11:59.000Z"
     },
     {
       "id": "t_039",
@@ -956,7 +1032,9 @@
       "updatedAt": "2026-06-22T20:13:57.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-22T20:13:57.000Z",
-      "lastMessagePreview": "Quick one — the estimated delivery for order 30660 came and went yesterday. Is it lost or "
+      "lastMessagePreview": "Quick one — the estimated delivery for order 30660 came and went yesterday. Is it lost or ",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-06-22T20:13:57.000Z"
     },
     {
       "id": "t_040",
@@ -975,7 +1053,9 @@
       "updatedAt": "2026-06-25T12:49:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T12:49:46.000Z",
-      "lastMessagePreview": "Back in and re-enrolled. Thanks for the careful handling."
+      "lastMessagePreview": "Back in and re-enrolled. Thanks for the careful handling.",
+      "firstRespondedAt": "2026-06-23T20:32:29.000Z",
+      "resolvedAt": "2026-06-25T12:49:46.000Z"
     },
     {
       "id": "t_041",
@@ -994,7 +1074,9 @@
       "updatedAt": "2026-06-25T19:52:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T19:52:46.000Z",
-      "lastMessagePreview": "Thanks. We added a temporary null check on our side so the worker stays up."
+      "lastMessagePreview": "Thanks. We added a temporary null check on our side so the worker stays up.",
+      "firstRespondedAt": "2026-06-24T17:55:46.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_042",
@@ -1013,7 +1095,9 @@
       "updatedAt": "2026-06-26T15:14:13.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-26T15:14:13.000Z",
-      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side."
+      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side.",
+      "firstRespondedAt": "2026-06-25T04:27:45.000Z",
+      "resolvedAt": "2026-06-26T15:14:13.000Z"
     },
     {
       "id": "t_043",
@@ -1032,7 +1116,9 @@
       "updatedAt": "2026-06-26T06:10:37.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-26T06:10:37.000Z",
-      "lastMessagePreview": "Limits are restored to your plan quota and verified against your live traffic. The postmor"
+      "lastMessagePreview": "Limits are restored to your plan quota and verified against your live traffic. The postmor",
+      "firstRespondedAt": "2026-06-25T09:21:59.000Z",
+      "resolvedAt": "2026-06-26T06:10:37.000Z"
     },
     {
       "id": "t_044",
@@ -1049,7 +1135,9 @@
       "updatedAt": "2026-06-25T05:49:27.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T05:49:27.000Z",
-      "lastMessagePreview": "Hello, we help brands like yours reach ten times more customers through our influencer net"
+      "lastMessagePreview": "Hello, we help brands like yours reach ten times more customers through our influencer net",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-06-25T05:49:27.000Z"
     },
     {
       "id": "t_045",
@@ -1068,7 +1156,9 @@
       "updatedAt": "2026-06-25T21:36:52.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-25T21:36:52.000Z",
-      "lastMessagePreview": "All answered above, and I have sent a one-page comparison to your billing email for the fi"
+      "lastMessagePreview": "All answered above, and I have sent a one-page comparison to your billing email for the fi",
+      "firstRespondedAt": "2026-06-25T14:55:22.000Z",
+      "resolvedAt": "2026-06-25T21:36:52.000Z"
     },
     {
       "id": "t_046",
@@ -1085,7 +1175,9 @@
       "updatedAt": "2026-06-27T20:33:04.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-27T20:33:04.000Z",
-      "lastMessagePreview": "The money is back on my card. Thanks for sorting it quickly."
+      "lastMessagePreview": "The money is back on my card. Thanks for sorting it quickly.",
+      "firstRespondedAt": "2026-06-26T15:07:53.000Z",
+      "resolvedAt": "2026-06-27T20:33:04.000Z"
     },
     {
       "id": "t_047",
@@ -1104,7 +1196,9 @@
       "updatedAt": "2026-06-27T03:48:43.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-27T03:48:43.000Z",
-      "lastMessagePreview": "Accountant is satisfied, which is the highest bar there is. Thanks."
+      "lastMessagePreview": "Accountant is satisfied, which is the highest bar there is. Thanks.",
+      "firstRespondedAt": "2026-06-26T11:36:59.000Z",
+      "resolvedAt": "2026-06-27T03:48:43.000Z"
     },
     {
       "id": "t_048",
@@ -1121,7 +1215,9 @@
       "updatedAt": "2026-06-29T03:13:55.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-29T03:13:55.000Z",
-      "lastMessagePreview": "Got it today. Appreciate the help."
+      "lastMessagePreview": "Got it today. Appreciate the help.",
+      "firstRespondedAt": "2026-06-28T08:41:47.000Z",
+      "resolvedAt": "2026-06-29T03:13:55.000Z"
     },
     {
       "id": "t_049",
@@ -1140,7 +1236,9 @@
       "updatedAt": "2026-06-28T12:04:19.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-28T12:04:19.000Z",
-      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki"
+      "lastMessagePreview": "The package was delivered today according to the carrier scan. Sorry about the slow tracki",
+      "firstRespondedAt": "2026-06-28T12:04:19.000Z",
+      "resolvedAt": "2026-06-28T12:04:19.000Z"
     },
     {
       "id": "t_050",
@@ -1157,7 +1255,9 @@
       "updatedAt": "2026-06-29T00:25:21.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-29T00:25:21.000Z",
-      "lastMessagePreview": "All set — final invoice is settled and the account winds down on the renewal date. Thanks "
+      "lastMessagePreview": "All set — final invoice is settled and the account winds down on the renewal date. Thanks ",
+      "firstRespondedAt": "2026-06-28T16:17:27.000Z",
+      "resolvedAt": "2026-06-29T00:25:21.000Z"
     },
     {
       "id": "t_051",
@@ -1174,7 +1274,9 @@
       "updatedAt": "2026-06-29T19:27:47.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-29T19:27:47.000Z",
-      "lastMessagePreview": "Fixed going forward, verified against a preview of the July invoice. Your accountant shoul"
+      "lastMessagePreview": "Fixed going forward, verified against a preview of the July invoice. Your accountant shoul",
+      "firstRespondedAt": "2026-06-29T02:35:39.000Z",
+      "resolvedAt": "2026-06-29T19:27:47.000Z"
     },
     {
       "id": "t_052",
@@ -1193,7 +1295,9 @@
       "updatedAt": "2026-06-30T09:46:05.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T09:46:05.000Z",
-      "lastMessagePreview": "All answered above, and I have sent a one-page comparison to your billing email for the fi"
+      "lastMessagePreview": "All answered above, and I have sent a one-page comparison to your billing email for the fi",
+      "firstRespondedAt": "2026-06-29T06:30:47.000Z",
+      "resolvedAt": "2026-06-30T09:46:05.000Z"
     },
     {
       "id": "t_053",
@@ -1212,7 +1316,9 @@
       "updatedAt": "2026-06-29T21:29:26.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-29T21:29:26.000Z",
-      "lastMessagePreview": "Sounds like you are fully up and running. I will close this, but reply any time and it reo"
+      "lastMessagePreview": "Sounds like you are fully up and running. I will close this, but reply any time and it reo",
+      "firstRespondedAt": "2026-06-29T13:25:31.000Z",
+      "resolvedAt": "2026-06-29T21:29:26.000Z"
     },
     {
       "id": "t_054",
@@ -1232,7 +1338,9 @@
       "updatedAt": "2026-06-30T23:56:14.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T23:56:14.000Z",
-      "lastMessagePreview": "Appreciate the smooth exit. Take care."
+      "lastMessagePreview": "Appreciate the smooth exit. Take care.",
+      "firstRespondedAt": "2026-06-29T23:26:21.000Z",
+      "resolvedAt": "2026-06-30T23:56:14.000Z"
     },
     {
       "id": "t_055",
@@ -1251,7 +1359,9 @@
       "updatedAt": "2026-06-30T11:53:25.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T11:53:25.000Z",
-      "lastMessagePreview": "Hi Chris, you are right — a limits rollout yesterday put your account on the wrong tier. I"
+      "lastMessagePreview": "Hi Chris, you are right — a limits rollout yesterday put your account on the wrong tier. I",
+      "firstRespondedAt": "2026-06-30T05:05:56.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_056",
@@ -1270,7 +1380,9 @@
       "updatedAt": "2026-06-30T11:11:08.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T11:11:08.000Z",
-      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged"
+      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged",
+      "firstRespondedAt": "2026-06-30T11:11:08.000Z",
+      "resolvedAt": "2026-06-30T11:11:08.000Z"
     },
     {
       "id": "t_057",
@@ -1289,7 +1401,9 @@
       "updatedAt": "2026-06-30T18:50:02.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T18:50:02.000Z",
-      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time."
+      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time.",
+      "firstRespondedAt": "2026-06-30T06:52:27.000Z",
+      "resolvedAt": "2026-06-30T18:50:02.000Z"
     },
     {
       "id": "t_058",
@@ -1306,7 +1420,9 @@
       "updatedAt": "2026-07-01T07:03:10.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-01T07:03:10.000Z",
-      "lastMessagePreview": "All reconciled on our side now. Thank you."
+      "lastMessagePreview": "All reconciled on our side now. Thank you.",
+      "firstRespondedAt": "2026-06-30T15:44:15.000Z",
+      "resolvedAt": "2026-07-01T07:03:10.000Z"
     },
     {
       "id": "t_059",
@@ -1325,7 +1441,9 @@
       "updatedAt": "2026-06-30T23:35:54.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-06-30T23:35:54.000Z",
-      "lastMessagePreview": "Hi Derek, I checked with the warehouse and order 41544 left the dock yesterday, so the tra"
+      "lastMessagePreview": "Hi Derek, I checked with the warehouse and order 41544 left the dock yesterday, so the tra",
+      "firstRespondedAt": "2026-06-30T23:35:54.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_060",
@@ -1344,7 +1462,9 @@
       "updatedAt": "2026-07-02T19:53:01.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-02T19:53:01.000Z",
-      "lastMessagePreview": "Great, we will watch the roadmap. Thanks for the straight answer."
+      "lastMessagePreview": "Great, we will watch the roadmap. Thanks for the straight answer.",
+      "firstRespondedAt": "2026-07-01T20:13:42.000Z",
+      "resolvedAt": "2026-07-02T19:53:01.000Z"
     },
     {
       "id": "t_061",
@@ -1363,7 +1483,9 @@
       "updatedAt": "2026-07-02T13:01:16.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-02T13:01:16.000Z",
-      "lastMessagePreview": "All reconciled on our side now. Thank you."
+      "lastMessagePreview": "All reconciled on our side now. Thank you.",
+      "firstRespondedAt": "2026-07-01T08:11:59.000Z",
+      "resolvedAt": "2026-07-02T13:01:16.000Z"
     },
     {
       "id": "t_062",
@@ -1380,7 +1502,9 @@
       "updatedAt": "2026-07-01T13:08:26.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-01T13:08:26.000Z",
-      "lastMessagePreview": "Hi Sofia, thanks for flagging this. I have asked the carrier for a trace on order 33928 an"
+      "lastMessagePreview": "Hi Sofia, thanks for flagging this. I have asked the carrier for a trace on order 33928 an",
+      "firstRespondedAt": "2026-07-01T02:49:41.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_063",
@@ -1399,7 +1523,9 @@
       "updatedAt": "2026-07-03T03:11:25.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-03T03:11:25.000Z",
-      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side."
+      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side.",
+      "firstRespondedAt": "2026-07-01T17:44:41.000Z",
+      "resolvedAt": "2026-07-03T03:11:25.000Z"
     },
     {
       "id": "t_064",
@@ -1419,7 +1545,9 @@
       "updatedAt": "2026-07-02T07:03:22.000Z",
       "snoozedUntil": "2026-07-13T20:32:00.000Z",
       "lastMessageAt": "2026-07-02T07:03:22.000Z",
-      "lastMessagePreview": "Since updating your Node SDK to 2.4.1 our worker crashes whenever a ticket has no assignee"
+      "lastMessagePreview": "Since updating your Node SDK to 2.4.1 our worker crashes whenever a ticket has no assignee",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_065",
@@ -1439,7 +1567,9 @@
       "updatedAt": "2026-07-02T09:12:33.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-02T09:12:33.000Z",
-      "lastMessagePreview": "Version 2.4.2 is published with the null-assignee fix and a test covering it. Thanks for t"
+      "lastMessagePreview": "Version 2.4.2 is published with the null-assignee fix and a test covering it. Thanks for t",
+      "firstRespondedAt": "2026-07-02T09:12:33.000Z",
+      "resolvedAt": "2026-07-02T09:12:33.000Z"
     },
     {
       "id": "t_066",
@@ -1458,7 +1588,9 @@
       "updatedAt": "2026-07-03T00:59:40.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-03T00:59:40.000Z",
-      "lastMessagePreview": "Hi Elena, understood, and sorry to see you go. Cancellation is scheduled; nothing is delet"
+      "lastMessagePreview": "Hi Elena, understood, and sorry to see you go. Cancellation is scheduled; nothing is delet",
+      "firstRespondedAt": "2026-07-02T16:44:42.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_067",
@@ -1475,7 +1607,9 @@
       "updatedAt": "2026-07-02T17:49:18.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-02T17:49:18.000Z",
-      "lastMessagePreview": "Order 37369 arrived today with the box crushed on one side. The ceramic pieces inside are "
+      "lastMessagePreview": "Order 37369 arrived today with the box crushed on one side. The ceramic pieces inside are ",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_068",
@@ -1494,7 +1628,9 @@
       "updatedAt": "2026-07-03T18:14:23.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-03T18:14:23.000Z",
-      "lastMessagePreview": "Since updating your Node SDK to 2.4.1 our worker crashes whenever a ticket has no assignee"
+      "lastMessagePreview": "Since updating your Node SDK to 2.4.1 our worker crashes whenever a ticket has no assignee",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-07-03T18:14:23.000Z"
     },
     {
       "id": "t_069",
@@ -1513,7 +1649,9 @@
       "updatedAt": "2026-07-04T20:38:35.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T20:38:35.000Z",
-      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time."
+      "lastMessagePreview": "All sorted, thanks. Backup codes saved somewhere sensible this time.",
+      "firstRespondedAt": "2026-07-04T00:44:37.000Z",
+      "resolvedAt": "2026-07-04T20:38:35.000Z"
     },
     {
       "id": "t_070",
@@ -1532,7 +1670,9 @@
       "updatedAt": "2026-07-03T23:58:57.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-03T23:58:57.000Z",
-      "lastMessagePreview": "Just set up the workspace for our team of three. How do you suggest splitting views so we "
+      "lastMessagePreview": "Just set up the workspace for our team of three. How do you suggest splitting views so we ",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_071",
@@ -1551,7 +1691,9 @@
       "updatedAt": "2026-07-06T05:32:36.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T05:32:36.000Z",
-      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side."
+      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side.",
+      "firstRespondedAt": "2026-07-03T23:18:25.000Z",
+      "resolvedAt": "2026-07-06T05:32:36.000Z"
     },
     {
       "id": "t_072",
@@ -1570,7 +1712,9 @@
       "updatedAt": "2026-07-04T00:11:37.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T00:11:37.000Z",
-      "lastMessagePreview": "We are moving over from a shared Gmail inbox. Is there a recommended way to bring old conv"
+      "lastMessagePreview": "We are moving over from a shared Gmail inbox. Is there a recommended way to bring old conv",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_073",
@@ -1589,7 +1733,9 @@
       "updatedAt": "2026-07-04T00:46:32.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T00:46:32.000Z",
-      "lastMessagePreview": "Just set up the workspace for our team of three. How do you suggest splitting views so we "
+      "lastMessagePreview": "Just set up the workspace for our team of three. How do you suggest splitting views so we ",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_074",
@@ -1609,7 +1755,9 @@
       "updatedAt": "2026-07-04T05:51:35.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T05:51:35.000Z",
-      "lastMessagePreview": "I would like a refund for order 32330. The size runs small and the return portal says my w"
+      "lastMessagePreview": "I would like a refund for order 32330. The size runs small and the return portal says my w",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_075",
@@ -1628,7 +1776,9 @@
       "updatedAt": "2026-07-05T02:11:59.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T02:11:59.000Z",
-      "lastMessagePreview": "Thanks, that is clear. Last thing — can we mix monthly and annual seats?"
+      "lastMessagePreview": "Thanks, that is clear. Last thing — can we mix monthly and annual seats?",
+      "firstRespondedAt": "2026-07-04T19:41:56.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_076",
@@ -1648,7 +1798,9 @@
       "updatedAt": "2026-07-05T19:51:16.000Z",
       "snoozedUntil": "2026-07-20T06:14:00.000Z",
       "lastMessageAt": "2026-07-05T19:51:16.000Z",
-      "lastMessagePreview": "Hi Yuki, done — the subscription ends on the renewal date with no further charges. Your da"
+      "lastMessagePreview": "Hi Yuki, done — the subscription ends on the renewal date with no further charges. Your da",
+      "firstRespondedAt": "2026-07-05T00:15:46.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_077",
@@ -1667,7 +1819,9 @@
       "updatedAt": "2026-07-04T09:24:28.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T09:24:28.000Z",
-      "lastMessagePreview": "Thanks. I will keep an eye on my statement and confirm when it shows up."
+      "lastMessagePreview": "Thanks. I will keep an eye on my statement and confirm when it shows up.",
+      "firstRespondedAt": "2026-07-04T08:04:10.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_078",
@@ -1686,7 +1840,9 @@
       "updatedAt": "2026-07-05T12:28:40.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T12:28:40.000Z",
-      "lastMessagePreview": "All wrapped up cleanly. Thanks for not making it a maze."
+      "lastMessagePreview": "All wrapped up cleanly. Thanks for not making it a maze.",
+      "firstRespondedAt": "2026-07-04T19:33:02.000Z",
+      "resolvedAt": "2026-07-05T12:28:40.000Z"
     },
     {
       "id": "t_079",
@@ -1705,7 +1861,9 @@
       "updatedAt": "2026-07-05T10:31:06.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T10:31:06.000Z",
-      "lastMessagePreview": "Hi Chris, apologies for the state of that delivery. Photos received and that is plenty for"
+      "lastMessagePreview": "Hi Chris, apologies for the state of that delivery. Photos received and that is plenty for",
+      "firstRespondedAt": "2026-07-05T10:31:06.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_080",
@@ -1725,7 +1883,9 @@
       "updatedAt": "2026-07-05T05:40:11.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T05:40:11.000Z",
-      "lastMessagePreview": "Refund issued in full for order 30090, reference on its way by email. Sorry again for the "
+      "lastMessagePreview": "Refund issued in full for order 30090, reference on its way by email. Sorry again for the ",
+      "firstRespondedAt": "2026-07-05T05:40:11.000Z",
+      "resolvedAt": "2026-07-05T05:40:11.000Z"
     },
     {
       "id": "t_081",
@@ -1744,7 +1904,9 @@
       "updatedAt": "2026-07-07T04:54:36.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-07T04:54:36.000Z",
-      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side."
+      "lastMessagePreview": "Upgraded and the worker has been stable for 24 hours. Closing from our side.",
+      "firstRespondedAt": "2026-07-05T07:42:11.000Z",
+      "resolvedAt": "2026-07-07T04:54:36.000Z"
     },
     {
       "id": "t_082",
@@ -1763,7 +1925,9 @@
       "updatedAt": "2026-07-05T12:36:03.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T12:36:03.000Z",
-      "lastMessagePreview": "Hi Lukas, no problem. I have approved the return for order 45402; once the carrier scans t"
+      "lastMessagePreview": "Hi Lukas, no problem. I have approved the return for order 45402; once the carrier scans t",
+      "firstRespondedAt": "2026-07-05T04:18:41.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_083",
@@ -1782,7 +1946,9 @@
       "updatedAt": "2026-07-06T10:20:10.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T10:20:10.000Z",
-      "lastMessagePreview": "Staying on 2.4.0 for now. Ping this thread when 2.4.2 is out and we will verify against st"
+      "lastMessagePreview": "Staying on 2.4.0 for now. Ping this thread when 2.4.2 is out and we will verify against st",
+      "firstRespondedAt": "2026-07-05T14:31:30.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_084",
@@ -1801,7 +1967,9 @@
       "updatedAt": "2026-07-05T18:48:57.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T18:48:57.000Z",
-      "lastMessagePreview": "Good to hear. Any rough idea of timeline, even just a quarter?"
+      "lastMessagePreview": "Good to hear. Any rough idea of timeline, even just a quarter?",
+      "firstRespondedAt": "2026-07-05T07:29:14.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_085",
@@ -1820,7 +1988,9 @@
       "updatedAt": "2026-07-06T12:57:16.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T12:57:16.000Z",
-      "lastMessagePreview": "Confirmed fixed on staging and production. Nice turnaround."
+      "lastMessagePreview": "Confirmed fixed on staging and production. Nice turnaround.",
+      "firstRespondedAt": "2026-07-05T11:34:23.000Z",
+      "resolvedAt": "2026-07-06T12:57:16.000Z"
     },
     {
       "id": "t_086",
@@ -1839,7 +2009,9 @@
       "updatedAt": "2026-07-05T11:03:50.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T11:03:50.000Z",
-      "lastMessagePreview": "This is now tracked publicly on our roadmap page under Reporting. I will nudge this thread"
+      "lastMessagePreview": "This is now tracked publicly on our roadmap page under Reporting. I will nudge this thread",
+      "firstRespondedAt": "2026-07-05T06:13:17.000Z",
+      "resolvedAt": "2026-07-05T11:03:50.000Z"
     },
     {
       "id": "t_087",
@@ -1858,7 +2030,9 @@
       "updatedAt": "2026-07-04T23:43:37.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-04T23:43:37.000Z",
-      "lastMessagePreview": "Your checkout throws \"something went wrong\" at the payment step. I am on Safari 18 on a Ma"
+      "lastMessagePreview": "Your checkout throws \"something went wrong\" at the payment step. I am on Safari 18 on a Ma",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_088",
@@ -1875,7 +2049,9 @@
       "updatedAt": "2026-07-05T14:28:25.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T14:28:25.000Z",
-      "lastMessagePreview": "Hi, I placed order 42156 last week and the tracking page still shows \"label created\". Coul"
+      "lastMessagePreview": "Hi, I placed order 42156 last week and the tracking page still shows \"label created\". Coul",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_089",
@@ -1894,7 +2070,9 @@
       "updatedAt": "2026-07-05T17:20:28.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T17:20:28.000Z",
-      "lastMessagePreview": "Accountant is satisfied, which is the highest bar there is. Thanks."
+      "lastMessagePreview": "Accountant is satisfied, which is the highest bar there is. Thanks.",
+      "firstRespondedAt": "2026-07-05T12:24:34.000Z",
+      "resolvedAt": "2026-07-05T17:20:28.000Z"
     },
     {
       "id": "t_090",
@@ -1913,7 +2091,9 @@
       "updatedAt": "2026-07-05T19:25:32.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-05T19:25:32.000Z",
-      "lastMessagePreview": "Hi Marcus, thanks for flagging this. I have asked the carrier for a trace on order 43327 a"
+      "lastMessagePreview": "Hi Marcus, thanks for flagging this. I have asked the carrier for a trace on order 43327 a",
+      "firstRespondedAt": "2026-07-05T19:25:32.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_091",
@@ -1932,7 +2112,9 @@
       "updatedAt": "2026-07-06T05:09:26.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T05:09:26.000Z",
-      "lastMessagePreview": "Refund issued in full for order 40214, reference on its way by email. Sorry again for the "
+      "lastMessagePreview": "Refund issued in full for order 40214, reference on its way by email. Sorry again for the ",
+      "firstRespondedAt": "2026-07-06T05:09:26.000Z",
+      "resolvedAt": "2026-07-06T05:09:26.000Z"
     },
     {
       "id": "t_092",
@@ -1949,7 +2131,9 @@
       "updatedAt": "2026-07-07T22:19:16.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-07T22:19:16.000Z",
-      "lastMessagePreview": "Identity confirmed, and I have reset 2FA on the account. You will be prompted to enroll a "
+      "lastMessagePreview": "Identity confirmed, and I have reset 2FA on the account. You will be prompted to enroll a ",
+      "firstRespondedAt": "2026-07-06T07:27:05.000Z",
+      "resolvedAt": "2026-07-07T22:19:16.000Z"
     },
     {
       "id": "t_093",
@@ -1968,7 +2152,9 @@
       "updatedAt": "2026-07-06T10:45:19.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T10:45:19.000Z",
-      "lastMessagePreview": "That worked, I am back in. I will add fresh backup codes right away."
+      "lastMessagePreview": "That worked, I am back in. I will add fresh backup codes right away.",
+      "firstRespondedAt": "2026-07-06T00:11:55.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_094",
@@ -1987,7 +2173,9 @@
       "updatedAt": "2026-07-06T15:54:11.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T15:54:11.000Z",
-      "lastMessagePreview": "Since around 09:00 UTC our integration gets HTTP 429 on roughly a third of calls to /v1/ti"
+      "lastMessagePreview": "Since around 09:00 UTC our integration gets HTTP 429 on roughly a third of calls to /v1/ti",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_095",
@@ -2006,7 +2194,9 @@
       "updatedAt": "2026-07-06T19:31:10.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T19:31:10.000Z",
-      "lastMessagePreview": "Hi Marcus, no problem. I have approved the return for order 32142; once the carrier scans "
+      "lastMessagePreview": "Hi Marcus, no problem. I have approved the return for order 32142; once the carrier scans ",
+      "firstRespondedAt": "2026-07-06T05:57:54.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_096",
@@ -2025,7 +2215,9 @@
       "updatedAt": "2026-07-06T00:00:16.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T00:00:16.000Z",
-      "lastMessagePreview": "I would like a refund for order 38850. The size runs small and the return portal says my w"
+      "lastMessagePreview": "I would like a refund for order 38850. The size runs small and the return portal says my w",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_097",
@@ -2044,7 +2236,9 @@
       "updatedAt": "2026-07-07T00:42:13.000Z",
       "snoozedUntil": "2026-08-05T15:50:00.000Z",
       "lastMessageAt": "2026-07-07T00:42:13.000Z",
-      "lastMessagePreview": "Hi Yuki, Business is $18 per seat and includes SSO, audit logs and priority support; Team "
+      "lastMessagePreview": "Hi Yuki, Business is $18 per seat and includes SSO, audit logs and priority support; Team ",
+      "firstRespondedAt": "2026-07-06T14:09:49.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_098",
@@ -2063,7 +2257,9 @@
       "updatedAt": "2026-07-06T21:17:41.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-06T21:17:41.000Z",
-      "lastMessagePreview": "Credit note received. Please make sure the next cycle does not repeat this."
+      "lastMessagePreview": "Credit note received. Please make sure the next cycle does not repeat this.",
+      "firstRespondedAt": "2026-07-06T08:29:15.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_099",
@@ -2082,7 +2278,9 @@
       "updatedAt": "2026-07-07T11:30:16.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-07T11:30:16.000Z",
-      "lastMessagePreview": "Hi Priscilla, Business is $18 per seat and includes SSO, audit logs and priority support; "
+      "lastMessagePreview": "Hi Priscilla, Business is $18 per seat and includes SSO, audit logs and priority support; ",
+      "firstRespondedAt": "2026-07-07T01:06:50.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_100",
@@ -2101,7 +2299,9 @@
       "updatedAt": "2026-07-08T04:00:08.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T04:00:08.000Z",
-      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged"
+      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged",
+      "firstRespondedAt": "2026-07-07T01:46:26.000Z",
+      "resolvedAt": "2026-07-08T04:00:08.000Z"
     },
     {
       "id": "t_101",
@@ -2120,7 +2320,9 @@
       "updatedAt": "2026-07-08T16:15:48.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T16:15:48.000Z",
-      "lastMessagePreview": "Hi Elena, understood, and sorry to see you go. Cancellation is scheduled; nothing is delet"
+      "lastMessagePreview": "Hi Elena, understood, and sorry to see you go. Cancellation is scheduled; nothing is delet",
+      "firstRespondedAt": "2026-07-08T00:11:15.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_102",
@@ -2139,7 +2341,9 @@
       "updatedAt": "2026-07-08T19:08:48.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T19:08:48.000Z",
-      "lastMessagePreview": "Hi Derek, that is a regression in 2.4.1 — normalizeTicket assumes assignee is always an ob"
+      "lastMessagePreview": "Hi Derek, that is a regression in 2.4.1 — normalizeTicket assumes assignee is always an ob",
+      "firstRespondedAt": "2026-07-08T01:17:13.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_103",
@@ -2158,7 +2362,9 @@
       "updatedAt": "2026-07-07T18:36:22.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-07T18:36:22.000Z",
-      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged"
+      "lastMessagePreview": "Yes — future invoices inherit the corrected profile automatically, and the wrongly charged",
+      "firstRespondedAt": "2026-07-07T18:36:22.000Z",
+      "resolvedAt": "2026-07-07T18:36:22.000Z"
     },
     {
       "id": "t_104",
@@ -2177,7 +2383,9 @@
       "updatedAt": "2026-07-07T19:49:42.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-07T19:49:42.000Z",
-      "lastMessagePreview": "Hi Diego, you are right — a limits rollout yesterday put your account on the wrong tier. I"
+      "lastMessagePreview": "Hi Diego, you are right — a limits rollout yesterday put your account on the wrong tier. I",
+      "firstRespondedAt": "2026-07-07T19:49:42.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_105",
@@ -2196,7 +2404,9 @@
       "updatedAt": "2026-07-10T04:22:20.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-10T04:22:20.000Z",
-      "lastMessagePreview": "Back in and re-enrolled. Thanks for the careful handling."
+      "lastMessagePreview": "Back in and re-enrolled. Thanks for the careful handling.",
+      "firstRespondedAt": "2026-07-07T20:17:41.000Z",
+      "resolvedAt": "2026-07-10T04:22:20.000Z"
     },
     {
       "id": "t_106",
@@ -2215,7 +2425,9 @@
       "updatedAt": "2026-07-09T03:53:32.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-09T03:53:32.000Z",
-      "lastMessagePreview": "Any news on this? I am away from Thursday, so timing is getting tight."
+      "lastMessagePreview": "Any news on this? I am away from Thursday, so timing is getting tight.",
+      "firstRespondedAt": "2026-07-08T17:29:10.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_107",
@@ -2234,7 +2446,9 @@
       "updatedAt": "2026-07-08T04:01:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T04:01:46.000Z",
-      "lastMessagePreview": "Our accountant flagged that the June invoice does not show our VAT number, which we entere"
+      "lastMessagePreview": "Our accountant flagged that the June invoice does not show our VAT number, which we entere",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_108",
@@ -2251,7 +2465,9 @@
       "updatedAt": "2026-07-08T01:41:49.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T01:41:49.000Z",
-      "lastMessagePreview": "This is the final notice regarding your unclaimed business listing. Confirm your details w"
+      "lastMessagePreview": "This is the final notice regarding your unclaimed business listing. Confirm your details w",
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-07-08T01:41:49.000Z"
     },
     {
       "id": "t_109",
@@ -2271,7 +2487,9 @@
       "updatedAt": "2026-07-08T17:12:21.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T17:12:21.000Z",
-      "lastMessagePreview": "Thanks. We added a temporary null check on our side so the worker stays up."
+      "lastMessagePreview": "Thanks. We added a temporary null check on our side so the worker stays up.",
+      "firstRespondedAt": "2026-07-08T12:55:29.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_110",
@@ -2290,7 +2508,9 @@
       "updatedAt": "2026-07-08T20:08:25.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T20:08:25.000Z",
-      "lastMessagePreview": "Hi Lukas, I checked with the warehouse and order 36390 left the dock yesterday, so the tra"
+      "lastMessagePreview": "Hi Lukas, I checked with the warehouse and order 36390 left the dock yesterday, so the tra",
+      "firstRespondedAt": "2026-07-08T20:08:25.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_111",
@@ -2309,7 +2529,9 @@
       "updatedAt": "2026-07-08T12:12:56.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-08T12:12:56.000Z",
-      "lastMessagePreview": "Good news — the carrier confirmed delivery of order 37043 this morning. Sorry it took the "
+      "lastMessagePreview": "Good news — the carrier confirmed delivery of order 37043 this morning. Sorry it took the ",
+      "firstRespondedAt": "2026-07-08T12:12:56.000Z",
+      "resolvedAt": "2026-07-08T12:12:56.000Z"
     },
     {
       "id": "t_112",
@@ -2328,7 +2550,9 @@
       "updatedAt": "2026-07-09T13:00:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-09T13:00:46.000Z",
-      "lastMessagePreview": "Hi Lukas, I checked with the warehouse and order 49051 left the dock yesterday, so the tra"
+      "lastMessagePreview": "Hi Lukas, I checked with the warehouse and order 49051 left the dock yesterday, so the tra",
+      "firstRespondedAt": "2026-07-08T17:49:49.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_113",
@@ -2348,7 +2572,9 @@
       "updatedAt": "2026-07-10T00:15:14.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-10T00:15:14.000Z",
-      "lastMessagePreview": "Hi Ravi, no problem. I have approved the return for order 31271; once the carrier scans th"
+      "lastMessagePreview": "Hi Ravi, no problem. I have approved the return for order 31271; once the carrier scans th",
+      "firstRespondedAt": "2026-07-09T01:12:35.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_114",
@@ -2367,7 +2593,9 @@
       "updatedAt": "2026-07-08T16:15:59.000Z",
       "snoozedUntil": "2026-07-29T12:17:00.000Z",
       "lastMessageAt": "2026-07-08T16:15:59.000Z",
-      "lastMessagePreview": "It would save us a weekly chore if reports could export themselves to CSV on a schedule — "
+      "lastMessagePreview": "It would save us a weekly chore if reports could export themselves to CSV on a schedule — ",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_115",
@@ -2387,7 +2615,9 @@
       "updatedAt": "2026-07-09T20:39:39.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-09T20:39:39.000Z",
-      "lastMessagePreview": "We were charged VAT on the last invoice even though our EU VAT ID is on file and validated"
+      "lastMessagePreview": "We were charged VAT on the last invoice even though our EU VAT ID is on file and validated",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_116",
@@ -2407,7 +2637,9 @@
       "updatedAt": "2026-07-09T23:50:49.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-09T23:50:49.000Z",
-      "lastMessagePreview": "All set — final invoice is settled and the account winds down on the renewal date. Thanks "
+      "lastMessagePreview": "All set — final invoice is settled and the account winds down on the renewal date. Thanks ",
+      "firstRespondedAt": "2026-07-09T13:35:55.000Z",
+      "resolvedAt": "2026-07-09T23:50:49.000Z"
     },
     {
       "id": "t_117",
@@ -2426,7 +2658,9 @@
       "updatedAt": "2026-07-10T14:40:56.000Z",
       "snoozedUntil": "2026-08-01T01:58:00.000Z",
       "lastMessageAt": "2026-07-10T14:40:56.000Z",
-      "lastMessagePreview": "Hi Hannah, apologies for the state of that delivery. Photos received and that is plenty fo"
+      "lastMessagePreview": "Hi Hannah, apologies for the state of that delivery. Photos received and that is plenty fo",
+      "firstRespondedAt": "2026-07-09T21:38:11.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_118",
@@ -2446,7 +2680,9 @@
       "updatedAt": "2026-07-11T03:26:37.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-11T03:26:37.000Z",
-      "lastMessagePreview": "All wrapped up cleanly. Thanks for not making it a maze."
+      "lastMessagePreview": "All wrapped up cleanly. Thanks for not making it a maze.",
+      "firstRespondedAt": "2026-07-09T15:51:22.000Z",
+      "resolvedAt": "2026-07-11T03:26:37.000Z"
     },
     {
       "id": "t_119",
@@ -2465,7 +2701,9 @@
       "updatedAt": "2026-07-09T10:19:31.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-09T10:19:31.000Z",
-      "lastMessagePreview": "Order 31201 arrived today with the box crushed on one side. The ceramic pieces inside are "
+      "lastMessagePreview": "Order 31201 arrived today with the box crushed on one side. The ceramic pieces inside are ",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_120",
@@ -2484,7 +2722,9 @@
       "updatedAt": "2026-07-11T04:46:03.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-11T04:46:03.000Z",
-      "lastMessagePreview": "Thanks Jonas. The tracking finally updated this morning, so it looks like it is moving aga"
+      "lastMessagePreview": "Thanks Jonas. The tracking finally updated this morning, so it looks like it is moving aga",
+      "firstRespondedAt": "2026-07-10T11:03:51.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_121",
@@ -2504,7 +2744,9 @@
       "updatedAt": "2026-07-10T08:36:46.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-10T08:36:46.000Z",
-      "lastMessagePreview": "Hi Yuki, noted and logged. No promises on timing, but requests with a concrete workflow at"
+      "lastMessagePreview": "Hi Yuki, noted and logged. No promises on timing, but requests with a concrete workflow at",
+      "firstRespondedAt": "2026-07-10T08:36:46.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_122",
@@ -2523,7 +2765,9 @@
       "updatedAt": "2026-07-10T14:42:12.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-10T14:42:12.000Z",
-      "lastMessagePreview": "I got a new phone and did not move my authenticator app over, so I cannot produce a 2FA co"
+      "lastMessagePreview": "I got a new phone and did not move my authenticator app over, so I cannot produce a 2FA co",
+      "firstRespondedAt": null,
+      "resolvedAt": null
     },
     {
       "id": "t_123",
@@ -2542,7 +2786,9 @@
       "updatedAt": "2026-07-11T09:34:15.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-11T09:34:15.000Z",
-      "lastMessagePreview": "Hi Tom, you are right and I can see why. The validation ran after the invoice was cut. I a"
+      "lastMessagePreview": "Hi Tom, you are right and I can see why. The validation ran after the invoice was cut. I a",
+      "firstRespondedAt": "2026-07-11T09:34:15.000Z",
+      "resolvedAt": null
     },
     {
       "id": "t_124",
@@ -2562,7 +2808,9 @@
       "updatedAt": "2026-07-11T10:33:27.000Z",
       "snoozedUntil": null,
       "lastMessageAt": "2026-07-11T10:33:27.000Z",
-      "lastMessagePreview": "Thanks, that is clear. Last thing — can we mix monthly and annual seats?"
+      "lastMessagePreview": "Thanks, that is clear. Last thing — can we mix monthly and annual seats?",
+      "firstRespondedAt": "2026-07-11T07:15:23.000Z",
+      "resolvedAt": null
     }
   ],
   "messages": [

@@ -32,8 +32,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
   const insertTicket = db.prepare(
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
-      tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
+      firstRespondedAt, resolvedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertMessage = db.prepare(
     'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -55,7 +56,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
       insertTicket.run(
         t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
         JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil,
-        t.lastMessageAt, t.lastMessagePreview,
+        t.lastMessageAt, t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt,
       );
     }
     for (const m of seed.messages) {
