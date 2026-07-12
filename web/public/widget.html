@@ -5,111 +5,228 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BaseDesk chat</title>
     <style>
-      :root { color-scheme: light dark; }
-      * { box-sizing: border-box; }
-      body { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #f6f8f7; color: #171a19; }
-      .wrap { max-width: 420px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; background: #fff; }
-      header { padding: 14px 16px; border-bottom: 1px solid #e5e9e7; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-      header .dot { width: 8px; height: 8px; border-radius: 999px; background: #12805c; }
-      #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-      .msg { max-width: 82%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
-      .them { align-self: flex-start; background: #f2f5f3; border-top-left-radius: 4px; }
-      .me { align-self: flex-end; background: #171a19; color: #fff; border-top-right-radius: 4px; }
-      .meta { font-size: 12px; color: #7c8681; }
-      form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #e5e9e7; }
-      input, textarea { font: inherit; }
-      #identity { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-      #identity input, #msg { border: 1px solid #d6ddd9; border-radius: 10px; padding: 10px 12px; font-size: 14px; width: 100%; }
-      button { background: #171a19; color: #fff; border: 0; border-radius: 10px; padding: 0 16px; font-weight: 600; cursor: pointer; }
-      .hint { font-size: 12px; color: #7c8681; padding: 0 16px 12px; }
-      @media (prefers-color-scheme: dark) {
-        body { background: #0e1110; color: #f0f3f1; }
-        .wrap { background: #161a18; }
-        header, form { border-color: #242a27; }
-        .them { background: #1d2220; }
-        .me { background: #f0f3f1; color: #141816; }
-        #identity input, #msg { background: #0e1110; border-color: #2e3532; color: #f0f3f1; }
-        button { background: #f0f3f1; color: #141816; }
+      :root {
+        --accent: #12805c;
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --line: #e7ece9;
+        --ink: #171a19;
+        --ink-2: #5c6461;
+        --them: #f1f5f3;
+        color-scheme: light dark;
       }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #14100f00; --panel: #161a18; --line: #262c29; --ink: #f0f3f1; --ink-2: #9aa4a0; --them: #1e2320; }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: var(--panel); color: var(--ink);
+        display: flex; flex-direction: column; overflow: hidden;
+      }
+
+      header {
+        display: flex; align-items: center; gap: 11px;
+        padding: 14px 14px 13px; border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .avatar {
+        width: 38px; height: 38px; border-radius: 50%; flex: 0 0 auto;
+        background: var(--accent); color: #fff;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .head-text { min-width: 0; flex: 1; }
+      .head-title { font-weight: 650; font-size: 15px; line-height: 1.2; }
+      .head-sub { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+      .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #22a06b; }
+      .icon-btn {
+        width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent;
+        color: var(--ink-2); cursor: pointer; display: none; align-items: center; justify-content: center;
+      }
+      .icon-btn:hover { background: var(--them); color: var(--ink); }
+      body.embed .icon-btn { display: flex; }
+
+      #log {
+        flex: 1; min-height: 0; overflow-y: auto;
+        padding: 16px; display: flex; flex-direction: column; gap: 9px;
+        background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--panel)), var(--panel) 120px);
+      }
+      .msg {
+        max-width: 84%; padding: 9px 13px; border-radius: 16px; font-size: 14px;
+        line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+        animation: pop .22s cubic-bezier(.2, .8, .3, 1);
+      }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      .them { align-self: flex-start; background: var(--them); color: var(--ink); border-bottom-left-radius: 5px; }
+      .me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+      .card {
+        align-self: stretch; border: 1px solid var(--line); border-radius: 14px; padding: 13px;
+        display: flex; flex-direction: column; gap: 8px; background: var(--panel);
+      }
+      .card label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+      .field {
+        border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+        font-size: 14px; width: 100%; font: inherit; background: var(--bg); color: var(--ink);
+        outline: none;
+      }
+      .field:focus { border-color: var(--accent); }
+      textarea.field { resize: vertical; min-height: 62px; }
+
+      .btn {
+        background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+        padding: 10px 14px; font-weight: 600; font-size: 14px; cursor: pointer;
+      }
+      .btn:disabled { opacity: .5; cursor: default; }
+
+      footer {
+        display: flex; gap: 8px; padding: 11px 12px; border-top: 1px solid var(--line);
+        background: var(--panel);
+      }
+      #msg {
+        flex: 1; border: 1px solid var(--line); border-radius: 999px; padding: 10px 15px;
+        font-size: 14px; font: inherit; background: var(--bg); color: var(--ink); outline: none;
+      }
+      #msg:focus { border-color: var(--accent); }
+      #send {
+        flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent);
+        color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      }
+      #send:disabled { opacity: .5; cursor: default; }
+      .brand { text-align: center; font-size: 11px; color: var(--ink-2); padding: 0 0 8px; }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header><span class="dot"></span> Support</header>
-      <div id="identity">
-        <div class="meta">Start a conversation — we will reply here.</div>
-        <input id="name" placeholder="Your name" />
-        <input id="email" placeholder="Your email" type="email" />
-        <textarea id="first" placeholder="How can we help?" rows="3"></textarea>
-        <button id="start" type="button">Start chat</button>
-      </div>
-      <div id="log" hidden></div>
-      <p class="hint" id="hint" hidden>Connected — replies appear above as your team responds.</p>
-      <form id="composer" hidden>
-        <input id="msg" placeholder="Message…" autocomplete="off" />
-        <button type="submit">Send</button>
-      </form>
-    </div>
-    <script>
-      // Channel + token come from the embed snippet (?channel=&token=). Defaults target the seeded webchat channel.
-      const params = new URLSearchParams(location.search);
-      const channel = params.get('channel') || 'ch_1';
-      const token = params.get('token') || 'tok_webchat_3f9a2c81';
-      const base = params.get('base') || '';
-      let email = '';
-      let seen = 0;
+    <header>
+      <span class="avatar" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+      </span>
+      <span class="head-text">
+        <span class="head-title" id="title">Support</span>
+        <span class="head-sub"><span class="status-dot"></span> Typically replies in a few minutes</span>
+      </span>
+      <button class="icon-btn" id="minimize" type="button" aria-label="Minimize chat">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </header>
 
-      const el = (id) => document.getElementById(id);
+    <div id="log">
+      <div class="msg them">👋 Hi there! How can we help today?</div>
+      <div class="card" id="identity">
+        <label for="email">Your email</label>
+        <input class="field" id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+        <input class="field" id="name" placeholder="Your name (optional)" autocomplete="name" />
+        <textarea class="field" id="first" placeholder="How can we help?" rows="3"></textarea>
+        <button class="btn" id="start" type="button">Start chat</button>
+      </div>
+    </div>
+
+    <footer hidden id="composer">
+      <input id="msg" placeholder="Write a message…" autocomplete="off" />
+      <button id="send" type="submit" aria-label="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </button>
+    </footer>
+    <div class="brand" hidden id="brand">Powered by BaseDesk</div>
+
+    <script>
+      var params = new URLSearchParams(location.search);
+      var channel = params.get('channel') || 'ch_1';
+      var token = params.get('token') || 'tok_webchat_3f9a2c81';
+      var base = params.get('base') || '';
+      var embed = params.get('embed') === '1';
+      var accent = params.get('accent');
+      if (accent) document.documentElement.style.setProperty('--accent', accent);
+      if (embed) document.body.classList.add('embed');
+
+      var email = '';
+      var seen = 0;
+      var visible = !embed; // in embed mode we learn "opened" from the parent
+
+      var el = function (id) { return document.getElementById(id); };
+      var log = el('log');
+
       function bubble(text, mine) {
-        const d = document.createElement('div');
+        var d = document.createElement('div');
         d.className = 'msg ' + (mine ? 'me' : 'them');
         d.textContent = text;
-        el('log').appendChild(d);
-        el('log').scrollTop = el('log').scrollHeight;
+        log.appendChild(d);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      // A soft two-note chime when an agent replies.
+      function chime() {
+        try {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          [660, 880].forEach(function (f, i) {
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.frequency.value = f; o.type = 'sine';
+            o.connect(g); g.connect(ctx.destination);
+            var t = ctx.currentTime + i * 0.12;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+            o.start(t); o.stop(t + 0.24);
+          });
+        } catch (e) { /* no audio */ }
       }
 
       async function poll() {
         try {
-          const res = await fetch(`${base}/api/channels/${channel}/thread?token=${encodeURIComponent(token)}&contact=${encodeURIComponent(email)}`);
+          var res = await fetch(base + '/api/channels/' + channel + '/thread?token=' + encodeURIComponent(token) + '&contact=' + encodeURIComponent(email));
           if (!res.ok) return;
-          const msgs = await res.json();
-          for (let i = seen; i < msgs.length; i++) {
-            const m = msgs[i];
-            if (m.authorKind === 'agent') bubble(m.body, false);
+          var msgs = await res.json();
+          for (var i = seen; i < msgs.length; i++) {
+            if (msgs[i].authorKind === 'agent') {
+              bubble(msgs[i].body, false);
+              chime();
+              if (!visible) { try { parent.postMessage({ type: 'basedesk:unread' }, '*'); } catch (e) {} }
+            }
           }
           seen = msgs.length;
-        } catch { /* keep polling */ }
+        } catch (e) { /* keep polling */ }
       }
 
-      el('start').addEventListener('click', async () => {
-        const name = el('name').value.trim();
-        email = el('email').value.trim();
-        const body = el('first').value.trim();
-        if (!email || !body) return;
-        await fetch(`${base}/api/channels/${channel}/inbound?token=${encodeURIComponent(token)}`, {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ from: { name, email }, body }),
+      async function send(body, name) {
+        var payload = { from: { email: email }, body: body };
+        if (name) payload.from.name = name;
+        await fetch(base + '/api/channels/' + channel + '/inbound?token=' + encodeURIComponent(token), {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
         });
-        el('identity').hidden = true;
-        el('log').hidden = false;
-        el('hint').hidden = false;
-        el('composer').hidden = false;
+      }
+
+      el('start').addEventListener('click', async function () {
+        // Read the fields BEFORE removing the identity card below.
+        email = el('email').value.trim();
+        var name = el('name').value.trim();
+        var body = el('first').value.trim();
+        if (!email || !body) { (email ? el('first') : el('email')).focus(); return; }
+        el('start').disabled = true;
+        el('identity').remove();
         bubble(body, true);
-        seen = 1; // the opener we just sent is the first message
+        el('composer').hidden = false;
+        el('brand').hidden = false;
+        el('msg').focus();
+        seen = 1; // the opener we just sent
+        try { await send(body, name); } catch (e) {}
         setInterval(poll, 3000);
         poll();
       });
 
-      el('composer').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const body = el('msg').value.trim();
+      el('composer').addEventListener('submit', function (e) { e.preventDefault(); });
+      function sendCurrent() {
+        var body = el('msg').value.trim();
         if (!body) return;
         el('msg').value = '';
         bubble(body, true);
-        await fetch(`${base}/api/channels/${channel}/inbound?token=${encodeURIComponent(token)}`, {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ from: { email }, body }),
-        });
+        send(body, false).catch(function () {});
+      }
+      el('send').addEventListener('click', sendCurrent);
+      el('msg').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sendCurrent(); } });
+
+      el('minimize').addEventListener('click', function () { try { parent.postMessage({ type: 'basedesk:close' }, '*'); } catch (e) {} });
+      window.addEventListener('message', function (e) {
+        if (e.data && e.data.type === 'basedesk:opened') visible = true;
       });
     </script>
   </body>

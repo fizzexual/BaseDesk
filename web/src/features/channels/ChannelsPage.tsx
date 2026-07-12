@@ -21,8 +21,9 @@ function widgetUrl(channel: ChannelConn): string {
   return `${window.location.origin}/widget.html?channel=${channel.id}&token=${channel.inboundToken}`;
 }
 
+/** One-line launcher snippet: injects the floating bubble + chat panel on any site. */
 function embedCode(channel: ChannelConn): string {
-  return `<iframe src="${widgetUrl(channel)}" style="border:0;width:100%;height:520px"></iframe>`;
+  return `<script src="${window.location.origin}/widget.js" data-channel="${channel.id}" data-token="${channel.inboundToken}" defer></script>`;
 }
 
 async function copy(text: string, message: string) {
