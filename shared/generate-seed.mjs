@@ -45,7 +45,7 @@ const agents = [
   { id: 'a_2', name: 'Priya Nair', email: 'priya@basedesk.test', role: 'agent' },
   { id: 'a_3', name: 'Jonas Weber', email: 'jonas@basedesk.test', role: 'agent' },
   { id: 'a_4', name: 'Mel Ortiz', email: 'mel@basedesk.test', role: 'agent' },
-].map((a) => ({ id: a.id, name: a.name, email: a.email, avatarHue: hashHue(a.email), role: a.role }));
+].map((a) => ({ id: a.id, name: a.name, email: a.email, avatarHue: hashHue(a.email), role: a.role, status: 'active', inviteToken: null, signature: '' }));
 
 // ---------------------------------------------------------------- contacts
 const contactSeed = [

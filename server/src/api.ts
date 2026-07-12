@@ -7,11 +7,12 @@ import {
 } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
-import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults.js';
+import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
 import { runAgent, type AgentContext, type Autonomy } from './ai-engine.js';
 import type {
-  AiAction, Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Channel, ChannelType, Contact, Deal,
-  DealStage, DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AiAction, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule, BootstrapData, CannedReply,
+  Channel, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch,
+  TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -27,30 +28,37 @@ const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
 const DEAL_STAGES: DealStage[] = ['open', 'won', 'lost'];
 const RESOLVED_STATUSES = ['solved', 'closed'];
 
-/** Applies enabled automation rules to a just-created ticket, in order. */
-function applyAutomation(
-  rules: AutomationRule[],
-  ticket: { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null },
-  body: string,
-): void {
-  const subject = ticket.subject.toLowerCase();
-  const bodyLc = body.toLowerCase();
+interface AutoMut { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null; status: TicketStatus }
+interface AutoCtx { subjectLc: string; bodyLc: string; fromLc: string; channelType: string }
+
+function evalCondition(cond: AutomationCondition, mut: AutoMut, ctx: AutoCtx): boolean {
+  const v = cond.value.toLowerCase();
+  switch (cond.type) {
+    case 'subject_contains': return ctx.subjectLc.includes(v);
+    case 'body_contains': return ctx.bodyLc.includes(v);
+    case 'priority_is': return mut.priority === cond.value;
+    case 'channel_is': return ctx.channelType === cond.value;
+    case 'from_contains': return ctx.fromLc.includes(v);
+    default: return false;
+  }
+}
+
+function applyAutoAction(action: AutomationAction, mut: AutoMut): void {
+  if (action.type === 'set_priority' && PRIORITIES.includes(action.value as TicketPriority)) mut.priority = action.value as TicketPriority;
+  else if (action.type === 'add_tag') { if (!mut.tags.includes(action.value)) mut.tags.push(action.value); }
+  else if (action.type === 'assign') mut.assigneeId = action.value;
+  else if (action.type === 'set_status' && STATUSES.includes(action.value as TicketStatus)) mut.status = action.value as TicketStatus;
+}
+
+/** Runs enabled automation rules over a ticket mutation, in order. */
+function runAutomation(rules: AutomationRule[], mut: AutoMut, ctx: AutoCtx, phase: 'create' | 'update'): void {
   for (const rule of rules) {
     if (!rule.enabled) continue;
-    const v = rule.condition.value.toLowerCase();
-    const matches =
-      rule.condition.type === 'subject_contains' ? subject.includes(v)
-      : rule.condition.type === 'body_contains' ? bodyLc.includes(v)
-      : rule.condition.type === 'priority_is' ? ticket.priority === rule.condition.value
-      : false;
-    if (!matches) continue;
-    if (rule.action.type === 'set_priority' && PRIORITIES.includes(rule.action.value as TicketPriority)) {
-      ticket.priority = rule.action.value as TicketPriority;
-    } else if (rule.action.type === 'add_tag') {
-      if (!ticket.tags.includes(rule.action.value)) ticket.tags.push(rule.action.value);
-    } else if (rule.action.type === 'assign') {
-      ticket.assigneeId = rule.action.value;
-    }
+    if (phase === 'update' && rule.runOn !== 'create_update') continue;
+    if (rule.conditions.length === 0) continue;
+    const results = rule.conditions.map((cnd) => evalCondition(cnd, mut, ctx));
+    const ok = rule.match === 'any' ? results.some(Boolean) : results.every(Boolean);
+    if (ok) for (const action of rule.actions) applyAutoAction(action, mut);
   }
 }
 
@@ -140,9 +148,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
 
-  // Ensure SLA + automation settings exist (fresh install or migrated pre-v0.3 DB).
+  // Ensure settings exist (fresh install or migrated pre-v0.3/v0.4 DB).
   if (getSetting(db, 'sla') === null) setSetting(db, 'sla', JSON.stringify(DEFAULT_SLA_TARGETS));
   if (getSetting(db, 'automation') === null) setSetting(db, 'automation', JSON.stringify(DEFAULT_AUTOMATION));
+  if (getSetting(db, 'sla_hours') === null) setSetting(db, 'sla_hours', JSON.stringify(DEFAULT_SLA_HOURS));
 
   const slaTargets = (): SlaTargets => {
     try {
@@ -153,9 +162,16 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   };
   const automationRules = (): AutomationRule[] => {
     try {
-      return JSON.parse(getSetting(db, 'automation') ?? '') as AutomationRule[];
+      return normalizeAutomation(JSON.parse(getSetting(db, 'automation') ?? ''));
     } catch {
       return DEFAULT_AUTOMATION;
+    }
+  };
+  const slaHours = () => {
+    try {
+      return JSON.parse(getSetting(db, 'sla_hours') ?? '') as unknown;
+    } catch {
+      return DEFAULT_SLA_HOURS;
     }
   };
 
@@ -235,6 +251,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
       channels: getChannels(db),
+      slaHours: slaHours() as BootstrapData['slaHours'],
     };
     return c.json(data);
   });
@@ -294,14 +311,21 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
 
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
-    // Automation rules may adjust priority/tags/assignee at creation time.
-    const shaped = { subject: subject.trim(), priority: priority as TicketPriority, tags: [] as string[], assigneeId: null as string | null };
-    applyAutomation(automationRules(), shaped, body);
+    // Automation rules may adjust priority/tags/assignee/status at creation time.
+    const requester = getContact(db, requesterId);
+    const shaped: AutoMut = {
+      subject: subject.trim(), priority: priority as TicketPriority, tags: [], assigneeId: null, status: 'open',
+    };
+    runAutomation(automationRules(), shaped, {
+      subjectLc: shaped.subject.toLowerCase(), bodyLc: body.toLowerCase(),
+      fromLc: requester ? `${requester.name} ${requester.email}`.toLowerCase() : '',
+      channelType: 'web',
+    }, 'create');
     const ticket: Ticket = {
       id: newId('t_'),
       number: maxRow.maxNumber + 1,
       subject: shaped.subject,
-      status: 'open',
+      status: shaped.status,
       priority: shaped.priority,
       bucket: 'inbox',
       requesterId,
@@ -688,19 +712,110 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
     if (!Array.isArray(input)) return c.json({ error: 'automation must be an array' }, 400);
-    const CONDITIONS = ['subject_contains', 'body_contains', 'priority_is'];
-    const ACTIONS = ['set_priority', 'add_tag', 'assign'];
+    const CONDITIONS = ['subject_contains', 'body_contains', 'priority_is', 'channel_is', 'from_contains'];
+    const ACTIONS = ['set_priority', 'add_tag', 'assign', 'set_status'];
     for (const r of input as AutomationRule[]) {
       if (
         typeof r?.id !== 'string' || typeof r?.name !== 'string' || typeof r?.enabled !== 'boolean' ||
-        !CONDITIONS.includes(r?.condition?.type) || typeof r?.condition?.value !== 'string' ||
-        !ACTIONS.includes(r?.action?.type) || typeof r?.action?.value !== 'string'
+        (r?.match !== 'all' && r?.match !== 'any') ||
+        (r?.runOn !== 'create' && r?.runOn !== 'create_update') ||
+        !Array.isArray(r?.conditions) || !Array.isArray(r?.actions)
       ) {
         return c.json({ error: 'invalid automation rule' }, 400);
+      }
+      for (const cnd of r.conditions) {
+        if (!CONDITIONS.includes(cnd?.type) || typeof cnd?.value !== 'string') return c.json({ error: 'invalid condition' }, 400);
+      }
+      for (const act of r.actions) {
+        if (!ACTIONS.includes(act?.type) || typeof act?.value !== 'string') return c.json({ error: 'invalid action' }, 400);
       }
     }
     setSetting(db, 'automation', JSON.stringify(input));
     return c.json(input);
+  });
+
+  app.put('/api/settings/sla-hours', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const h = input as Record<string, unknown>;
+    if (
+      typeof h?.enabled !== 'boolean' || typeof h?.timezone !== 'string' ||
+      !Array.isArray(h?.days) || !h.days.every((d) => typeof d === 'number' && d >= 0 && d <= 6) ||
+      typeof h?.start !== 'string' || !/^\d{2}:\d{2}$/.test(h.start) ||
+      typeof h?.end !== 'string' || !/^\d{2}:\d{2}$/.test(h.end)
+    ) {
+      return c.json({ error: 'invalid business hours' }, 400);
+    }
+    setSetting(db, 'sla_hours', JSON.stringify(input));
+    return c.json(input);
+  });
+
+  app.post('/api/agents', async (c) => {
+    let input: { name?: unknown; email?: unknown; role?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { name, email, role } = input;
+    if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    if (typeof email !== 'string' || email.trim() === '') return c.json({ error: 'email is required' }, 400);
+    const agent: Agent = {
+      id: newId('a_'), name: name.trim(), email: email.trim(), avatarHue: djb2(email.trim()) % 360,
+      role: role === 'admin' ? 'admin' : 'agent', status: 'invited',
+      inviteToken: `inv_${randomUUID().replace(/-/g, '').slice(0, 16)}`, signature: '',
+    };
+    db.prepare('INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(agent.id, agent.name, agent.email, agent.avatarHue, agent.role, agent.status, agent.inviteToken, agent.signature);
+    return c.json(agent);
+  });
+
+  app.patch('/api/agents/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as Agent | undefined;
+    if (existing === undefined) return c.json({ error: `agent not found: ${id}` }, 404);
+    let patch: { name?: unknown; role?: unknown; signature?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: string[] = [];
+    if ('name' in patch) {
+      if (typeof patch.name !== 'string' || patch.name.trim() === '') return c.json({ error: 'invalid name' }, 400);
+      sets.push('name = ?');
+      params.push(patch.name.trim());
+    }
+    if ('role' in patch) {
+      if (patch.role !== 'admin' && patch.role !== 'agent') return c.json({ error: 'invalid role' }, 400);
+      sets.push('role = ?');
+      params.push(patch.role);
+    }
+    if ('signature' in patch) {
+      if (typeof patch.signature !== 'string') return c.json({ error: 'invalid signature' }, 400);
+      sets.push('signature = ?');
+      params.push(patch.signature);
+    }
+    if (sets.length === 0) return c.json(existing);
+    db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(db.prepare('SELECT * FROM agents WHERE id = ?').get(id));
+  });
+
+  app.delete('/api/agents/:id', (c) => {
+    const id = c.req.param('id');
+    const existing = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as Agent | undefined;
+    if (existing === undefined) return c.json({ error: `agent not found: ${id}` }, 404);
+    const admins = db.prepare("SELECT COUNT(*) AS n FROM agents WHERE role = 'admin' AND status = 'active'").get() as { n: number };
+    if (existing.role === 'admin' && existing.status === 'active' && admins.n <= 1) {
+      return c.json({ error: 'cannot remove the last admin' }, 400);
+    }
+    db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+    return c.json({ ok: true });
   });
 
   app.get('/api/kb', (c) => {

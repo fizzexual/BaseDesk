@@ -18,7 +18,10 @@ export function openDb(dataDir: string): DatabaseSync {
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       avatarHue INTEGER NOT NULL,
-      role TEXT NOT NULL
+      role TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      inviteToken TEXT,
+      signature TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS contacts (
       id TEXT PRIMARY KEY,
@@ -151,6 +154,10 @@ export function openDb(dataDir: string): DatabaseSync {
   if (!ticketCols.some((c) => c.name === 'channelId')) {
     db.exec('ALTER TABLE tickets ADD COLUMN channelId TEXT');
   }
+  const agentCols = db.prepare('PRAGMA table_info(agents)').all() as { name: string }[];
+  if (!agentCols.some((c) => c.name === 'status')) db.exec("ALTER TABLE agents ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  if (!agentCols.some((c) => c.name === 'inviteToken')) db.exec('ALTER TABLE agents ADD COLUMN inviteToken TEXT');
+  if (!agentCols.some((c) => c.name === 'signature')) db.exec("ALTER TABLE agents ADD COLUMN signature TEXT NOT NULL DEFAULT ''");
 
   return db;
 }

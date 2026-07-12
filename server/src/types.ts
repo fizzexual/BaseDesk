@@ -28,14 +28,26 @@ export interface ChannelConn {
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
 export type SlaTargets = Record<TicketPriority, SlaTarget>;
 
-export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is';
-export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign';
+export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is' | 'channel_is' | 'from_contains';
+export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign' | 'set_status';
+export interface AutomationCondition { type: AutomationConditionType; value: string }
+export interface AutomationAction { type: AutomationActionType; value: string }
 export interface AutomationRule {
   id: string;
   name: string;
   enabled: boolean;
-  condition: { type: AutomationConditionType; value: string };
-  action: { type: AutomationActionType; value: string };
+  match: 'all' | 'any';
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  runOn: 'create' | 'create_update';
+}
+
+export interface SlaHours {
+  enabled: boolean;
+  timezone: string;      // IANA tz, e.g. 'America/New_York'
+  days: number[];        // 0=Sun .. 6=Sat
+  start: string;         // 'HH:MM'
+  end: string;           // 'HH:MM'
 }
 
 export type ArticleStatus = 'draft' | 'published';
@@ -79,7 +91,11 @@ export interface Contact {
   avatarHue: number; location: string | null; timezone: string | null; createdAt: string;
   mrr: number | null;
 }
-export interface Agent { id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent'; }
+export type AgentStatus = 'active' | 'invited';
+export interface Agent {
+  id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent';
+  status: AgentStatus; inviteToken: string | null; signature: string;
+}
 export interface CannedReply { id: string; title: string; body: string; }
 
 export type DealType = 'expansion' | 'retention' | 'inbound';
@@ -129,4 +145,5 @@ export interface BootstrapData {
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
+  slaHours: SlaHours;
 }

@@ -5,28 +5,40 @@
       "name": "Sam Reed",
       "email": "sam@basedesk.test",
       "avatarHue": 333,
-      "role": "admin"
+      "role": "admin",
+      "status": "active",
+      "inviteToken": null,
+      "signature": ""
     },
     {
       "id": "a_2",
       "name": "Priya Nair",
       "email": "priya@basedesk.test",
       "avatarHue": 301,
-      "role": "agent"
+      "role": "agent",
+      "status": "active",
+      "inviteToken": null,
+      "signature": ""
     },
     {
       "id": "a_3",
       "name": "Jonas Weber",
       "email": "jonas@basedesk.test",
       "avatarHue": 9,
-      "role": "agent"
+      "role": "agent",
+      "status": "active",
+      "inviteToken": null,
+      "signature": ""
     },
     {
       "id": "a_4",
       "name": "Mel Ortiz",
       "email": "mel@basedesk.test",
       "avatarHue": 306,
-      "role": "agent"
+      "role": "agent",
+      "status": "active",
+      "inviteToken": null,
+      "signature": ""
     }
   ],
   "contacts": [

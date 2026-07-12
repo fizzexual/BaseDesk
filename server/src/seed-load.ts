@@ -28,7 +28,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
   const seed = JSON.parse(readFileSync(seedPath, 'utf8')) as SeedData;
 
   const insertAgent = db.prepare(
-    'INSERT INTO agents (id, name, email, avatarHue, role) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   );
   const insertContact = db.prepare(
     'INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -67,7 +67,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
 
   db.exec('BEGIN');
   try {
-    for (const a of seed.agents) insertAgent.run(a.id, a.name, a.email, a.avatarHue, a.role);
+    for (const a of seed.agents) insertAgent.run(a.id, a.name, a.email, a.avatarHue, a.role, a.status, a.inviteToken, a.signature);
     for (const c of seed.contacts) {
       insertContact.run(c.id, c.name, c.email, c.company, c.avatarHue, c.location, c.timezone, c.createdAt, c.mrr);
     }
