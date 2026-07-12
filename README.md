@@ -41,6 +41,14 @@ Knowledge base — a categorized help center with a reader and editor:
 
 ![Knowledge base](docs/screenshots/kb-light.png)
 
+| AI agents — autonomous triage, drafting & auto-resolve | Channels — a multi-source inbox |
+| --- | --- |
+| ![AI agents](docs/screenshots/ai-agents-light.png) | ![Channels](docs/screenshots/channels-light.png) |
+
+Team — invite teammates with roles and shareable links:
+
+![Team settings](docs/screenshots/settings-team-light.png)
+
 <details>
 <summary>Dark theme</summary>
 
