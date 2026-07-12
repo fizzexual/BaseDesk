@@ -83,9 +83,10 @@ npm run typecheck  # strict TS, both workspaces
 
 ## The agent workspace
 
-- **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts
+- **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts — switchable between a compact **list** and a **card** layout
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
+- **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, bring-your-own model provider optional
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
 - **Reports**: created vs solved, priority mix, status distribution, per-agent load, first-reply/resolution medians
@@ -97,14 +98,14 @@ The web app talks to a plain REST API you can use directly — see the route tab
 
 ## Roadmap
 
-- [x] **Support → Revenue** — deals, pipeline, account health, revenue reporting *(shipped in v0.2)*
+- [x] **Support → Revenue** — deals, pipeline, account health, revenue reporting *(v0.2)*
+- [x] **AI copilot** — drafts, triage, summaries; rule-based and offline today, model-provider hook for later *(v0.2)*
+- [ ] Automation rules + SLA engine (business hours, holidays, timezones)
+- [ ] Knowledge base
 - [ ] Auth & team management
 - [ ] Transparency portal — customer portal + status page + roadmap/feedback voting
 - [ ] Email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) — bulletproof threading or nothing
-- [ ] Automation rules + SLA engine (business hours, holidays, timezones)
 - [ ] Slack shared-channel support, then chat widget & WhatsApp
-- [ ] AI copilot (BYO API key) — drafts, triage, summaries; always human-reviewed
-- [ ] Knowledge base
 - [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
 - [ ] Single-binary packaging
 
