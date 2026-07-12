@@ -92,6 +92,24 @@ export function summarizeThread(input: {
   return parts.join(' ');
 }
 
+/**
+ * Ranks published KB articles by term overlap with the ticket text and returns
+ * the most relevant few, so the model is given the right material to answer from.
+ * Articles with no overlap are dropped (an empty result means "nothing relevant").
+ */
+export function rankKb(text: string, kb: KbArticle[], limit = 4): KbArticle[] {
+  const hay = lc(text);
+  const scored: { article: KbArticle; score: number }[] = [];
+  for (const a of kb) {
+    if (a.status !== 'published') continue;
+    const terms = new Set((lc(`${a.title} ${a.title} ${a.body}`).match(/[a-z0-9]{4,}/g) ?? []));
+    let score = 0;
+    for (const t of terms) if (hay.includes(t)) score += 1;
+    if (score > 0) scored.push({ article: a, score });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit).map((s) => s.article);
+}
+
 /** Scores the ticket against KB articles; returns the best confident match. */
 export function deflect(text: string, kb: KbArticle[]): { articleId: string; score: number } | null {
   const hay = lc(text);

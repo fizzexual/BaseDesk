@@ -10,7 +10,7 @@ import { hashPassword, signSession, verifyPassword, verifySession } from './auth
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
-import { draftReply, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
+import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
@@ -223,7 +223,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       let body = decision.draftBody;
       let kbArticleId = decision.kbArticleId;
       if (useModel && agent.autonomy !== 'suggest') {
-        const draftCtx = { subject: ticket.subject, contactName, agentName: agent.name, signature: '', thread, canned, kb };
+        const rankedKb = rankKb(`${ticket.subject} ${firstBody}`, kb, 5);
+        const draftCtx = { subject: ticket.subject, contactName, agentName: agent.name, signature: '', thread, canned, kb: rankedKb };
         if (agent.autonomy === 'resolve') {
           const solved = await resolveAI(cfg, draftCtx);
           if (solved !== null) {
@@ -1088,11 +1089,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const contact = getContact(db, ticket.requesterId);
     const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(currentAgentId()) as Agent | undefined;
     const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
-    const kb = db.prepare("SELECT * FROM kb_articles WHERE status = 'published'").all() as unknown as KbArticle[];
+    const allKb = db.prepare("SELECT * FROM kb_articles WHERE status = 'published'").all() as unknown as KbArticle[];
     const thread = threadOf(ticket.id);
     const contactName = contact?.name ?? 'there';
     const agentName = agent?.name ?? 'there';
     const lastCustomer = [...thread].reverse().find((m) => m.role === 'customer')?.body ?? '';
+    // Give the model only the articles relevant to this ticket — it answers from these alone.
+    const kb = rankKb(`${ticket.subject} ${lastCustomer}`, allKb, 5);
     const fallback = draftReply({ subject: ticket.subject, contactName, agentName, lastCustomerMessage: lastCustomer, canned });
     const result = await draftReplyAI(
       getAiProviderConfig(db),

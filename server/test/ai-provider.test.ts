@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/api.js';
+import { rankKb } from '../src/ai-engine.js';
+import type { KbArticle } from '../src/types.js';
 
 function makeApp() {
   return createApp(mkdtempSync(path.join(tmpdir(), 'bd-ai-'))).app;
@@ -182,6 +184,39 @@ describe('copilot with a model provider', () => {
 
     expect(standard).toBeGreaterThan(0);
     expect(reasoning).toBeGreaterThan(standard * 2);
+  });
+});
+
+describe('knowledge-base grounding', () => {
+  const article = (over: Partial<KbArticle>): KbArticle => ({
+    id: 'a', title: '', slug: '', category: 'General', body: '', status: 'published', createdAt: '', updatedAt: '', ...over,
+  });
+
+  it('rankKb returns the most relevant published articles, dropping drafts and non-matches', () => {
+    const kb = [
+      article({ id: 'pw', title: 'Reset your password', body: 'Use the reset link to change your password.' }),
+      article({ id: 'bill', title: 'Download invoices', body: 'Find invoices under billing.' }),
+      article({ id: 'draft', title: 'Password reset internal', body: 'password reset steps', status: 'draft' }),
+    ];
+    const ranked = rankKb('I need to reset my password', kb, 3);
+    expect(ranked[0].id).toBe('pw');
+    expect(ranked.every((a) => a.status === 'published')).toBe(true); // the draft is excluded
+  });
+
+  it('sends the model a knowledge-base-only prompt', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    let captured: { messages: { role: string; content: string }[] } | null = null;
+    const url = await mockProvider((body) => {
+      captured = body;
+      return completion('Answer from the KB.');
+    });
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+    await app.request('/api/ai/draft', json('POST', { ticketId }));
+
+    const text = JSON.stringify(captured!.messages).toLowerCase();
+    expect(text).toContain('knowledge base');
+    expect(text).toContain('only the knowledge base');
   });
 });
 

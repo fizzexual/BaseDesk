@@ -55,33 +55,26 @@ function renderThread(thread: ThreadMsg[], limit = 12): string {
   return recent.map((m) => `${m.role === 'customer' ? 'Customer' : 'Agent'}: ${clip(m.body, 900)}`).join('\n');
 }
 
-function renderReference(kb: { title: string; body: string }[], canned: { title: string; body: string }[]): string {
-  const parts: string[] = [];
-  if (kb.length > 0) {
-    parts.push(
-      'Knowledge base articles you may rely on (facts here are approved and true):\n' +
-        kb.slice(0, 4).map((a, i) => `[KB${i + 1}] ${a.title}\n${clip(a.body, 700)}`).join('\n\n'),
-    );
-  }
-  if (canned.length > 0) {
-    parts.push(
-      'Approved canned replies (reuse or adapt the wording/tone):\n' +
-        canned.slice(0, 6).map((c, i) => `[C${i + 1}] ${c.title}: ${clip(c.body, 400)}`).join('\n'),
-    );
-  }
-  return parts.join('\n\n');
-}
-
-/** A reply the agent can send as-is. Grounded, warm, and free of invented facts. */
+/**
+ * A reply the agent can send as-is, answered STRICTLY from the knowledge base.
+ * If the articles don't cover the question, the model must not guess.
+ */
 export function draftMessages(ctx: DraftCtx): ChatMessage[] {
-  const reference = renderReference(ctx.kb, ctx.canned);
+  const hasKb = ctx.kb.length > 0;
+  const kb = hasKb
+    ? ctx.kb.slice(0, 5).map((a, i) => `[KB${i + 1}] ${a.title}\n${clip(a.body, 800)}`).join('\n\n')
+    : '(no relevant articles found)';
+  const canned = ctx.canned.length > 0
+    ? '\n\nApproved reply templates you may borrow wording/tone from (do NOT treat as new facts):\n' +
+      ctx.canned.slice(0, 4).map((c, i) => `[T${i + 1}] ${c.title}: ${clip(c.body, 300)}`).join('\n')
+    : '';
   const system = [
-    `You are ${ctx.agentName}, a customer-support agent replying to a customer on behalf of your company.`,
-    'Write the reply the agent will send. Follow these rules exactly:',
-    '- Ground every factual claim in the conversation or the reference material below. Never invent order numbers, dates, prices, refund amounts, account details, or policies.',
-    "- If the customer's request needs information you do not have, say what you will do next or ask one focused question — do not fabricate an answer.",
-    '- Be warm, concise, and specific to their situation. No corporate filler, no over-apologising.',
-    "- Match the customer's language and level of formality.",
+    `You are ${ctx.agentName}, a customer-support agent replying on behalf of your company.`,
+    'Answer using ONLY the knowledge base articles provided below. Follow these rules exactly:',
+    '- Every fact, step, policy, price, or instruction in your reply MUST come from the knowledge base articles. Do not use outside/general knowledge.',
+    '- If the articles do not answer the question, do NOT guess or invent anything. Instead write a brief, honest reply saying you will check with the team and follow up, or ask one focused clarifying question.',
+    '- Never invent order numbers, dates, prices, refund amounts, account details, URLs, or policies that are not in the articles.',
+    '- Be warm and concise, and match the customer\'s language.',
     '- Output ONLY the message body — no subject line, no "Draft:", no notes to yourself, no markdown headings.',
     ctx.signature.trim() !== ''
       ? `- End with exactly this signature on its own lines:\n${ctx.signature.trim()}`
@@ -94,9 +87,12 @@ export function draftMessages(ctx: DraftCtx): ChatMessage[] {
     '',
     'Conversation so far:',
     renderThread(ctx.thread),
-    reference ? `\n${reference}` : '',
     '',
-    'Write the next reply to the customer.',
+    'Knowledge base (your only source of facts):',
+    kb,
+    canned,
+    '',
+    'Write the next reply to the customer, using only the knowledge base above.',
   ].join('\n');
 
   return [
