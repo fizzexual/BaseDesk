@@ -32,6 +32,7 @@ import { useShortcuts } from '../palette/shortcuts';
 import { Conversation } from './Conversation';
 import { Composer } from './Composer';
 import { ContextPanel } from './ContextPanel';
+import { TriageBar } from './TriageBar';
 
 const ICON_BUTTON =
   'inline-flex h-8 w-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text';
@@ -363,6 +364,7 @@ export function TicketPage() {
           </div>
         </header>
         <TagsRow ticket={ticket} onPatch={patch} />
+        <TriageBar key={ticket.id} ticket={ticket} />
         <Conversation ticket={ticket} />
         <Composer ticket={ticket} />
       </div>

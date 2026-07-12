@@ -8,6 +8,7 @@ import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import { IconNote, IconReply, IconSend, IconSparkle } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
+import { aiEnabled, draftReply } from '../ai/engine';
 
 type Mode = 'reply' | 'note';
 
@@ -22,6 +23,8 @@ function firstName(contact: Contact | undefined): string {
 export function Composer({ ticket }: { ticket: Ticket }) {
   const contact = useApp((s) => s.contacts[ticket.requesterId]) as Contact | undefined;
   const canned = useApp((s) => s.canned);
+  const agents = useApp((s) => s.agents);
+  const currentAgentId = useApp((s) => s.currentAgentId);
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -64,11 +67,16 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   }
 
   function draftWithAi() {
-    const subject = ticket.subject.toLowerCase().replace(/[\s.!?…]+$/, '');
-    const draft =
-      `Hi ${firstName(contact)},\n\nThanks for reaching out about ${subject}. ` +
-      '[AI drafting arrives in v0.2 — bring your own key.]';
-    setBody((prev) => (prev.trim() === '' ? draft : `${prev}\n\n${draft}`));
+    const msgs = useApp.getState().messages[ticket.id] ?? [];
+    const lastCustomer = [...msgs].reverse().find((m) => m.authorKind === 'contact');
+    const draft = draftReply({
+      subject: ticket.subject,
+      contactName: contact?.name ?? '',
+      agentName: agents[currentAgentId]?.name ?? '',
+      lastCustomerMessage: lastCustomer?.body ?? '',
+      canned,
+    });
+    setBody(draft);
     focusTextarea();
   }
 
@@ -136,10 +144,12 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           }
           items={cannedItems}
         />
-        <Button variant="ghost" size="sm" onClick={draftWithAi}>
-          <IconSparkle size={14} />
-          Draft with AI
-        </Button>
+        {aiEnabled() && (
+          <Button variant="ghost" size="sm" onClick={draftWithAi}>
+            <IconSparkle size={14} />
+            Draft with AI
+          </Button>
+        )}
         <div className="flex-1" />
         <Button size="sm" disabled={body.trim() === ''} onClick={send}>
           <IconSend size={14} />

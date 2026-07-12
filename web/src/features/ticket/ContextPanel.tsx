@@ -9,8 +9,9 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { DealStageBadge, DealTypeBadge } from '../../components/DealBadges';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
-import { IconChevronDown, IconPlus } from '../../icons';
+import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
+import { aiEnabled, summarizeThread } from '../ai/engine';
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -113,6 +114,12 @@ function RevenueAwarePanel({
   const deals = useDealsForContact(ticket.requesterId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Deal | undefined>(undefined);
+  const [summary, setSummary] = useState<string | null>(null);
+
+  function summarize() {
+    const msgs = useApp.getState().messages[ticket.id] ?? [];
+    setSummary(summarizeThread({ contactName: contact.name, messages: msgs }));
+  }
 
   function openNew() {
     setEditing(undefined);
@@ -139,6 +146,22 @@ function RevenueAwarePanel({
           {localTime !== null && <DetailRow label="Local time" value={localTime} />}
         </div>
       </section>
+      {aiEnabled() && (
+        <section className="border-t border-line p-4">
+          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">
+            Summary
+          </h3>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+            onClick={summarize}
+          >
+            <IconSparkle size={14} />
+            Summarize thread
+          </button>
+          {summary !== null && <p className="mt-2 text-[13px] text-text-2">{summary}</p>}
+        </section>
+      )}
       <section className="border-t border-line p-4">
         <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">
           Recent tickets
