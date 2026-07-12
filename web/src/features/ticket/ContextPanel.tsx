@@ -11,7 +11,7 @@ import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
 import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
-import { aiEnabled, summarizeThread } from '../ai/engine';
+import { aiEnabled } from '../ai/engine';
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -114,11 +114,21 @@ function RevenueAwarePanel({
   const deals = useDealsForContact(ticket.requesterId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Deal | undefined>(undefined);
+  const aiSummarize = useApp((s) => s.aiSummarize);
   const [summary, setSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
 
-  function summarize() {
-    const msgs = useApp.getState().messages[ticket.id] ?? [];
-    setSummary(summarizeThread({ contactName: contact.name, messages: msgs }));
+  async function summarize() {
+    if (summarizing) return;
+    setSummarizing(true);
+    try {
+      const { summary: text } = await aiSummarize(ticket.id);
+      setSummary(text);
+    } catch {
+      setSummary('Could not summarise this thread.');
+    } finally {
+      setSummarizing(false);
+    }
   }
 
   function openNew() {
@@ -153,11 +163,12 @@ function RevenueAwarePanel({
           </h3>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
-            onClick={summarize}
+            disabled={summarizing}
+            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-60"
+            onClick={() => void summarize()}
           >
             <IconSparkle size={14} />
-            Summarize thread
+            {summarizing ? 'Summarizing…' : 'Summarize thread'}
           </button>
           {summary !== null && <p className="mt-2 text-[13px] text-text-2">{summary}</p>}
         </section>

@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { Message, Ticket, TicketPriority } from '../../data/types';
+import type { CopilotTriage, Ticket, TicketPriority } from '../../data/types';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/Toast';
 import { IconCheck, IconSparkle, IconX } from '../../icons';
-import { aiEnabled, suggestTriage } from '../ai/engine';
+import { aiEnabled } from '../ai/engine';
 
 const PRIORITY_LABELS: Record<TicketPriority, string> = {
   urgent: 'Urgent',
@@ -14,32 +14,38 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
 };
 
 export function TriageBar({ ticket }: { ticket: Ticket }) {
-  const messages = useApp((s) => s.messages[ticket.id]) as Message[] | undefined;
+  const aiTriage = useApp((s) => s.aiTriage);
+  const [suggestion, setSuggestion] = useState<CopilotTriage | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const fetchedFor = useRef<string | null>(null);
 
-  const suggestion = useMemo(
-    () =>
-      suggestTriage({
-        subject: ticket.subject,
-        bodyText: (messages ?? []).map((m) => m.body).join(' '),
-        currentPriority: ticket.priority,
-        currentTags: ticket.tags,
-      }),
-    [ticket.subject, ticket.priority, ticket.tags, messages],
-  );
+  useEffect(() => {
+    if (!aiEnabled() || fetchedFor.current === ticket.id) return;
+    fetchedFor.current = ticket.id;
+    setSuggestion(null);
+    setDismissed(false);
+    let cancelled = false;
+    aiTriage(ticket.id)
+      .then((s) => {
+        if (!cancelled) setSuggestion(s);
+      })
+      .catch(() => {
+        /* leave the bar hidden on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket.id, aiTriage]);
 
-  if (!aiEnabled() || dismissed) return null;
+  if (!aiEnabled() || dismissed || suggestion === null) return null;
   if (suggestion.priority === null && suggestion.tags.length === 0) return null;
 
   const clauses: string[] = [];
-  if (suggestion.priority !== null) {
-    clauses.push(`set priority to ${PRIORITY_LABELS[suggestion.priority]}`);
-  }
-  if (suggestion.tags.length > 0) {
-    clauses.push(`add tags ${suggestion.tags.join(', ')}`);
-  }
+  if (suggestion.priority !== null) clauses.push(`set priority to ${PRIORITY_LABELS[suggestion.priority]}`);
+  if (suggestion.tags.length > 0) clauses.push(`add tags ${suggestion.tags.join(', ')}`);
 
   function apply() {
+    if (suggestion === null) return;
     useApp
       .getState()
       .patchTicket(ticket.id, {

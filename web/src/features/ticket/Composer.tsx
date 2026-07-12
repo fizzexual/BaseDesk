@@ -8,7 +8,7 @@ import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import { IconNote, IconReply, IconSend, IconSparkle } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
-import { aiEnabled, draftReply } from '../ai/engine';
+import { aiEnabled } from '../ai/engine';
 
 type Mode = 'reply' | 'note';
 
@@ -23,10 +23,10 @@ function firstName(contact: Contact | undefined): string {
 export function Composer({ ticket }: { ticket: Ticket }) {
   const contact = useApp((s) => s.contacts[ticket.requesterId]) as Contact | undefined;
   const canned = useApp((s) => s.canned);
-  const agents = useApp((s) => s.agents);
-  const currentAgentId = useApp((s) => s.currentAgentId);
+  const aiDraft = useApp((s) => s.aiDraft);
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
+  const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function autogrow() {
@@ -66,18 +66,19 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     });
   }
 
-  function draftWithAi() {
-    const msgs = useApp.getState().messages[ticket.id] ?? [];
-    const lastCustomer = [...msgs].reverse().find((m) => m.authorKind === 'contact');
-    const draft = draftReply({
-      subject: ticket.subject,
-      contactName: contact?.name ?? '',
-      agentName: agents[currentAgentId]?.name ?? '',
-      lastCustomerMessage: lastCustomer?.body ?? '',
-      canned,
-    });
-    setBody(draft);
-    focusTextarea();
+  async function draftWithAi() {
+    if (drafting) return;
+    setDrafting(true);
+    try {
+      const { body: draft, source } = await aiDraft(ticket.id);
+      setBody(draft);
+      focusTextarea();
+      if (source === 'rules') toast('Drafted with the built-in engine — add a model in Settings → AI');
+    } catch {
+      toast('Could not draft a reply');
+    } finally {
+      setDrafting(false);
+    }
   }
 
   function send() {
@@ -145,9 +146,9 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           items={cannedItems}
         />
         {aiEnabled() && (
-          <Button variant="ghost" size="sm" onClick={draftWithAi}>
+          <Button variant="ghost" size="sm" onClick={() => void draftWithAi()} disabled={drafting}>
             <IconSparkle size={14} />
-            Draft with AI
+            {drafting ? 'Drafting…' : 'Draft with AI'}
           </Button>
         )}
         <div className="flex-1" />
