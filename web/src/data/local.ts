@@ -165,7 +165,7 @@ function seedData(): LocalData {
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
     agents: seed.agents.map((a) => ({ ...a })),
-    canned: seed.canned.map((c) => ({ ...c })),
+    canned: seed.canned.map((c) => ({ ...c, actions: c.actions ?? null })),
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
     slaHours: { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days] },
@@ -258,6 +258,10 @@ export class LocalRepository implements Repository {
       if (!Array.isArray(this.data.savedViews)) {
         this.data.savedViews = [];
         this.persist();
+      }
+      // Older demo data predates macro actions; default them to a plain reply.
+      for (const c of this.data.canned) {
+        if (c.actions === undefined) c.actions = null;
       }
       // Backfill business-hours SLA + richer agent fields, and migrate v0.3
       // single-condition automation to the v0.4 multi-condition shape.
@@ -536,9 +540,11 @@ export class LocalRepository implements Repository {
 
   async saveCanned(c: CannedReply): Promise<CannedReply> {
     const existing = c.id ? this.data.canned.find((x) => x.id === c.id) : undefined;
+    const actions = c.actions ?? null;
     if (existing) {
       existing.title = c.title;
       existing.body = c.body;
+      existing.actions = actions;
       this.persist();
       return { ...existing };
     }
@@ -546,6 +552,7 @@ export class LocalRepository implements Repository {
       id: c.id || nextId(this.data.canned, 'cr_', 1),
       title: c.title,
       body: c.body,
+      actions,
     };
     this.data.canned.push(created);
     this.persist();

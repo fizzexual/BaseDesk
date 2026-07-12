@@ -192,7 +192,14 @@ export interface Agent {
 }
 export type AgentInvite = { name: string; email: string; role: 'admin' | 'agent' };
 export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature'>>;
-export interface CannedReply { id: string; title: string; body: string; }
+/** Ticket mutations a canned reply applies when inserted, making it a macro. */
+export interface MacroActions {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  assignToMe?: boolean;
+  addTags?: string[];
+}
+export interface CannedReply { id: string; title: string; body: string; actions: MacroActions | null; }
 
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';

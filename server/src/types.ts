@@ -192,7 +192,18 @@ export interface Agent {
   id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent';
   status: AgentStatus; inviteToken: string | null; signature: string;
 }
-export interface CannedReply { id: string; title: string; body: string; }
+/**
+ * Optional ticket mutations a canned reply applies when inserted, turning it
+ * into a macro. Any subset may be present; an empty/absent object is a plain
+ * canned reply.
+ */
+export interface MacroActions {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  assignToMe?: boolean;
+  addTags?: string[];
+}
+export interface CannedReply { id: string; title: string; body: string; actions: MacroActions | null; }
 
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';

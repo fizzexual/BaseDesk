@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { AiSource, Attachment, Contact, Ticket, TokenUsage } from '../../data/types';
+import type { AiSource, Attachment, CannedReply, Contact, Ticket, TicketPatch, TokenUsage } from '../../data/types';
 import { formatBytes } from '../../data/attachments';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
@@ -27,6 +27,7 @@ function firstName(contact: Contact | undefined): string {
 export function Composer({ ticket }: { ticket: Ticket }) {
   const contact = useApp((s) => s.contacts[ticket.requesterId]) as Contact | undefined;
   const canned = useApp((s) => s.canned);
+  const currentAgentId = useApp((s) => s.currentAgentId);
   const aiDraft = useApp((s) => s.aiDraft);
   const uploadAttachment = useApp((s) => s.uploadAttachment);
   const composerPrefill = useApp((s) => s.composerPrefill);
@@ -86,6 +87,41 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     });
   }
 
+  // Insert a canned reply's body and, if it's a macro, apply its ticket actions
+  // in one shot — skipping any change that's already true so the toast is honest.
+  function applyCanned(c: CannedReply) {
+    insertAtCursor(c.body);
+    const a = c.actions;
+    if (a === null || a === undefined) return;
+    const patch: TicketPatch = {};
+    const summary: string[] = [];
+    if (a.status !== undefined && a.status !== ticket.status) {
+      patch.status = a.status;
+      summary.push(a.status.replace('_', ' '));
+    }
+    if (a.priority !== undefined && a.priority !== ticket.priority) {
+      patch.priority = a.priority;
+      summary.push(`${a.priority} priority`);
+    }
+    if (a.assignToMe === true && ticket.assigneeId !== currentAgentId) {
+      patch.assigneeId = currentAgentId;
+      summary.push('assigned to you');
+    }
+    if (a.addTags !== undefined && a.addTags.length > 0) {
+      const merged = Array.from(new Set([...ticket.tags, ...a.addTags]));
+      if (merged.length !== ticket.tags.length) {
+        patch.tags = merged;
+        summary.push(a.addTags.map((t) => `#${t}`).join(' '));
+      }
+    }
+    if (summary.length === 0) return;
+    useApp
+      .getState()
+      .patchTicket(ticket.id, patch)
+      .then(() => toast(`Macro applied — ${summary.join(', ')}`))
+      .catch(() => toast('Could not apply the macro actions'));
+  }
+
   async function draftWithAi() {
     if (drafting) return;
     setDrafting(true);
@@ -142,7 +178,12 @@ export function Composer({ ticket }: { ticket: Ticket }) {
 
   const cannedItems: MenuItem[] =
     canned.length > 0
-      ? canned.map((c) => ({ label: c.title, onSelect: () => insertAtCursor(c.body) }))
+      ? canned.map((c) => ({
+          label: c.title,
+          // A macro (has actions) gets a spark so agents know it does more than insert text.
+          icon: c.actions ? <IconSparkle size={14} className="text-accent" /> : undefined,
+          onSelect: () => applyCanned(c),
+        }))
       : [{ label: 'No canned replies yet', disabled: true, onSelect: () => {} }];
 
   // A closed ticket is read-only for everyone — reopen it to write.

@@ -11,8 +11,8 @@ const kb: KbArticle[] = [
 ];
 
 const canned: CannedReply[] = [
-  { id: 'cr_1', title: 'Refund policy', body: 'Refunds are available within 30 days for unused items.' },
-  { id: 'cr_2', title: 'API rate limits', body: 'The API allows 600 requests per minute per token.' },
+  { id: 'cr_1', title: 'Refund policy', body: 'Refunds are available within 30 days for unused items.', actions: null },
+  { id: 'cr_2', title: 'API rate limits', body: 'The API allows 600 requests per minute per token.', actions: null },
 ];
 
 describe('suggestTriage', () => {

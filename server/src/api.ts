@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getChannel, getChannels, getContact,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
   getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, setSavedViews,
   insertAiAction, insertAttachment, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
@@ -23,7 +23,7 @@ import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
-  CustomFieldType, Deal, DealStage, DealType, KbArticle, Message,
+  CustomFieldType, Deal, DealStage, DealType, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
@@ -83,6 +83,25 @@ const VIEW_IDS: ViewId[] = [
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
 const STATUSES = ['open', 'pending', 'on_hold', 'solved', 'closed'];
 const BUCKETS = ['inbox', 'archive', 'spam', 'trash'];
+
+/**
+ * Validate an untrusted macro-actions payload, keeping only known-good fields.
+ * Returns null when nothing usable remains, so a macro with no actions is
+ * stored as a plain canned reply.
+ */
+function normalizeMacroActions(raw: unknown): MacroActions | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const a = raw as Record<string, unknown>;
+  const out: MacroActions = {};
+  if (typeof a.status === 'string' && STATUSES.includes(a.status)) out.status = a.status as TicketStatus;
+  if (typeof a.priority === 'string' && PRIORITIES.includes(a.priority as TicketPriority)) out.priority = a.priority as TicketPriority;
+  if (a.assignToMe === true) out.assignToMe = true;
+  if (Array.isArray(a.addTags)) {
+    const tags = [...new Set(a.addTags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim()))];
+    if (tags.length > 0) out.addTags = tags;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
 const PATCH_KEYS = ['status', 'priority', 'assigneeId', 'tags', 'bucket', 'snoozedUntil', 'subject', 'customFields'] as const;
 
 function newId(prefix: string): string {
@@ -260,7 +279,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       .sort((a, b) => AUTONOMY_RANK[b.autonomy] - AUTONOMY_RANK[a.autonomy]);
     if (agents.length === 0) return null;
     const contact = getContact(db, ticket.requesterId);
-    const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
+    const canned = getCannedReplies(db);
     const kb = db.prepare('SELECT * FROM kb_articles').all() as unknown as KbArticle[];
     const cfg = getAiProviderConfig(db);
     const useModel = providerReady(cfg);
@@ -344,7 +363,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       .map(rowToTicket);
     const contacts = db.prepare('SELECT * FROM contacts ORDER BY rowid').all() as unknown as Contact[];
     const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
-    const canned = db.prepare('SELECT * FROM canned_replies ORDER BY rowid').all() as unknown as CannedReply[];
+    const canned = getCannedReplies(db);
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
@@ -732,7 +751,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   });
 
   app.post('/api/canned', async (c) => {
-    let input: { title?: unknown; body?: unknown };
+    let input: { title?: unknown; body?: unknown; actions?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -741,16 +760,19 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const { title, body } = input;
     if (typeof title !== 'string' || title.trim() === '') return c.json({ error: 'title is required' }, 400);
     if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
-    const canned: CannedReply = { id: newId('cr_'), title, body };
-    db.prepare('INSERT INTO canned_replies (id, title, body) VALUES (?, ?, ?)').run(canned.id, canned.title, canned.body);
+    const actions = normalizeMacroActions(input.actions);
+    const canned: CannedReply = { id: newId('cr_'), title, body, actions };
+    db.prepare('INSERT INTO canned_replies (id, title, body, actions) VALUES (?, ?, ?, ?)').run(
+      canned.id, canned.title, canned.body, actions === null ? null : JSON.stringify(actions),
+    );
     return c.json(canned);
   });
 
   app.put('/api/canned/:id', async (c) => {
     const id = c.req.param('id');
-    const existing = db.prepare('SELECT * FROM canned_replies WHERE id = ?').get(id) as CannedReply | undefined;
+    const existing = db.prepare('SELECT id FROM canned_replies WHERE id = ?').get(id) as { id: string } | undefined;
     if (existing === undefined) return c.json({ error: `canned reply not found: ${id}` }, 404);
-    let input: { title?: unknown; body?: unknown };
+    let input: { title?: unknown; body?: unknown; actions?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -759,8 +781,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const { title, body } = input;
     if (typeof title !== 'string' || title.trim() === '') return c.json({ error: 'title is required' }, 400);
     if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
-    db.prepare('UPDATE canned_replies SET title = ?, body = ? WHERE id = ?').run(title, body, id);
-    return c.json({ id, title, body } satisfies CannedReply);
+    const actions = normalizeMacroActions(input.actions);
+    db.prepare('UPDATE canned_replies SET title = ?, body = ?, actions = ? WHERE id = ?').run(
+      title, body, actions === null ? null : JSON.stringify(actions), id,
+    );
+    return c.json({ id, title, body, actions } satisfies CannedReply);
   });
 
   app.delete('/api/canned/:id', (c) => {
@@ -1336,7 +1361,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
     const contact = getContact(db, ticket.requesterId);
     const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(currentAgentId()) as Agent | undefined;
-    const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
+    const canned = getCannedReplies(db);
     const allKb = db.prepare("SELECT * FROM kb_articles WHERE status = 'published'").all() as unknown as KbArticle[];
     const thread = threadOf(ticket.id);
     const contactName = contact?.name ?? 'there';

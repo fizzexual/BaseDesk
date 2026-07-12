@@ -72,7 +72,7 @@ export class ApiRepository implements Repository {
   }
 
   saveCanned(c: CannedReply): Promise<CannedReply> {
-    const body = { title: c.title, body: c.body };
+    const body = { title: c.title, body: c.body, actions: c.actions };
     return c.id
       ? request(`/canned/${encodeURIComponent(c.id)}`, jsonInit('PUT', body))
       : request('/canned', jsonInit('POST', body));

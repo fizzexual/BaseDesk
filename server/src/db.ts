@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -216,7 +216,37 @@ export function openDb(dataDir: string): DatabaseSync {
   if (!messageCols.some((c) => c.name === 'deletedAt')) db.exec('ALTER TABLE messages ADD COLUMN deletedAt TEXT');
   if (!messageCols.some((c) => c.name === 'deletedBy')) db.exec('ALTER TABLE messages ADD COLUMN deletedBy TEXT');
 
+  const cannedCols = db.prepare('PRAGMA table_info(canned_replies)').all() as { name: string }[];
+  if (!cannedCols.some((c) => c.name === 'actions')) db.exec('ALTER TABLE canned_replies ADD COLUMN actions TEXT');
+
   return db;
+}
+
+/**
+ * Read every canned reply, decoding the `actions` JSON column into a
+ * {@link MacroActions} object (or null for a plain reply). Centralised so the
+ * three read sites (bootstrap + two AI-context builders) stay consistent.
+ */
+export function getCannedReplies(db: DatabaseSync): CannedReply[] {
+  const rows = db
+    .prepare('SELECT id, title, body, actions FROM canned_replies ORDER BY rowid')
+    .all() as { id: string; title: string; body: string; actions: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    body: r.body,
+    actions: parseMacroActions(r.actions),
+  }));
+}
+
+function parseMacroActions(raw: string | null): MacroActions | null {
+  if (raw === null || raw === '') return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as MacroActions) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function getSetting(db: DatabaseSync, key: string): string | null {

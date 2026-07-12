@@ -43,7 +43,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
   const insertMessage = db.prepare(
     'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
-  const insertCanned = db.prepare('INSERT INTO canned_replies (id, title, body) VALUES (?, ?, ?)');
+  const insertCanned = db.prepare('INSERT INTO canned_replies (id, title, body, actions) VALUES (?, ?, ?, ?)');
   const insertDeal = db.prepare(
     `INSERT INTO deals (
       id, title, type, stage, value, currency, contactId, ticketId, ownerId, note, createdAt, closedAt, updatedAt
@@ -81,7 +81,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const m of seed.messages) {
       insertMessage.run(m.id, m.ticketId, m.authorKind, m.authorId, m.kind, m.body, m.at);
     }
-    for (const cr of seed.canned) insertCanned.run(cr.id, cr.title, cr.body);
+    for (const cr of seed.canned) insertCanned.run(cr.id, cr.title, cr.body, cr.actions ? JSON.stringify(cr.actions) : null);
     for (const d of seed.deals) {
       insertDeal.run(
         d.id, d.title, d.type, d.stage, d.value, d.currency, d.contactId, d.ticketId,
