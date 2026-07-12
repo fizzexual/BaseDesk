@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Ticket, TicketPatch, TicketStatus } from '../../data/types';
+import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { PriorityPill } from '../../components/PriorityPill';
 import { StatusBadge } from '../../components/StatusBadge';
+import { SlaBadge } from '../../components/SlaBadge';
 import { EmptyState } from '../../components/EmptyState';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
@@ -220,6 +222,7 @@ export function TicketPage() {
   const navigate = useNavigate();
   const ticket = useApp((s) => s.tickets[id]) as Ticket | undefined;
   const agents = useApp((s) => s.agents);
+  const slaTargets = useApp((s) => s.sla);
   const exists = ticket !== undefined;
 
   useEffect(() => {
@@ -316,6 +319,7 @@ export function TicketPage() {
           <span className="shrink-0 text-[13px] text-text-3 tabular-nums">#{ticket.number}</span>
           <SubjectTitle ticket={ticket} onRename={(subject) => patch({ subject })} />
           <div className="flex shrink-0 items-center gap-2">
+            <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now())} className="mr-1" />
             <Menu
               triggerLabel="Change status"
               triggerClassName="rounded-full transition-opacity hover:opacity-80"

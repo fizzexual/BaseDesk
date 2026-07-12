@@ -1,13 +1,26 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
-import type { Contact, Ticket, TicketPriority } from '../../data/types';
+import type { Contact, Ticket, TicketPriority, TicketSla } from '../../data/types';
+import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { PriorityPill } from '../../components/PriorityPill';
+import { SlaBadge } from '../../components/SlaBadge';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import { IconNote } from '../../icons';
+
+/**
+ * Only surface SLA in the list for the most actionable case — an unanswered
+ * ticket whose first-response clock is amber or red. Responded tickets keep
+ * their resolution SLA in the ticket header, not the list, so rows stay calm.
+ */
+export function alertSla(sla: TicketSla | null): TicketSla | null {
+  return sla !== null && sla.clock === 'first_response' && (sla.state === 'breached' || sla.state === 'due_soon')
+    ? sla
+    : null;
+}
 
 const GRID_FULL = 'grid-cols-[minmax(220px,1.2fr)_minmax(0,2.4fr)_150px_90px]';
 const GRID_NO_CUSTOMER = 'grid-cols-[minmax(0,2.4fr)_150px_90px]';
@@ -25,7 +38,9 @@ export function TicketTable({
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
   const patchTicket = useApp((s) => s.patchTicket);
+  const slaTargets = useApp((s) => s.sla);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const nowMs = Date.now();
 
   useEffect(() => {
     if (selectedId !== null) {
@@ -105,8 +120,9 @@ export function TicketTable({
             <div onClick={(e) => e.stopPropagation()}>
               <PriorityPill priority={t.priority} onSelect={(p) => setPriority(t, p)} />
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-col items-end gap-0.5">
               <TimeAgo iso={t.lastMessageAt} />
+              <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs))} />
             </div>
           </div>
         );

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { repo } from '../../data';
 import { useApp } from '../../data/store';
+import { slaAttainment } from '../../data/sla';
 import { formatMoney } from '../../data/money';
 import type { DealType, StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
@@ -78,6 +79,9 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 export function ReportsPage() {
   const agents = useApp((s) => s.agents);
+  const tickets = useApp((s) => s.tickets);
+  const slaTargets = useApp((s) => s.sla);
+  const sla = useMemo(() => slaAttainment(Object.values(tickets), slaTargets), [tickets, slaTargets]);
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -151,6 +155,17 @@ export function ReportsPage() {
             <StatCard label="Solved (7d)" value={nf.format(stats.solvedLast7Days)} />
             <StatCard label="Median first reply" value={fmtFirstReply(stats.medianFirstReplyMinutes)} />
             <StatCard label="Median resolution" value={fmtResolution(stats.medianResolutionHours)} />
+          </div>
+
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <StatCard
+              label={`First-response SLA met (${nf.format(sla.firstResponseSample)} tickets)`}
+              value={`${Math.round(sla.firstResponsePct * 100)}%`}
+            />
+            <StatCard
+              label={`Resolution SLA met (${nf.format(sla.resolutionSample)} tickets)`}
+              value={`${Math.round(sla.resolutionPct * 100)}%`}
+            />
           </div>
 
           <div className="grid min-w-0 grid-cols-2 gap-4">

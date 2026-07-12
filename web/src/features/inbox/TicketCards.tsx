@@ -2,11 +2,14 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority } from '../../data/types';
+import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { PriorityPill } from '../../components/PriorityPill';
+import { SlaBadge } from '../../components/SlaBadge';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
+import { alertSla } from './TicketTable';
 
 export function TicketCards({
   tickets,
@@ -18,7 +21,9 @@ export function TicketCards({
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
   const patchTicket = useApp((s) => s.patchTicket);
+  const slaTargets = useApp((s) => s.sla);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const nowMs = Date.now();
 
   useEffect(() => {
     if (selectedId !== null) cardRefs.current.get(selectedId)?.scrollIntoView({ block: 'nearest' });
@@ -64,7 +69,10 @@ export function TicketCards({
                 <div className="truncate text-[14px] font-medium">{contact?.name ?? 'Unknown contact'}</div>
                 <div className="truncate text-[13px] text-text-3">{contact?.email ?? ''}</div>
               </div>
-              <TimeAgo iso={t.lastMessageAt} />
+              <div className="flex flex-col items-end gap-0.5">
+                <TimeAgo iso={t.lastMessageAt} />
+                <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs))} />
+              </div>
             </div>
 
             <div className="mt-2.5 truncate text-[14px] font-medium">{t.subject}</div>
