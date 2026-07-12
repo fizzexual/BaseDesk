@@ -5,7 +5,8 @@
       "name": "basedesk",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 4010
+      "port": 4010,
+      "autoPort": false
     }
   ]
 }
