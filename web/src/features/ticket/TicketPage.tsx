@@ -4,6 +4,7 @@ import { useApp } from '../../data/store';
 import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
+import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { PriorityPill } from '../../components/PriorityPill';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -21,6 +22,7 @@ import {
   IconClock,
   IconDots,
   IconInbox,
+  IconMerge,
   IconPause,
   IconPlus,
   IconSnooze,
@@ -37,6 +39,7 @@ import { Composer } from './Composer';
 import { ContextPanel } from './ContextPanel';
 import { TriageBar } from './TriageBar';
 import { DraftBanner } from './DraftBanner';
+import { MergeDialog } from './MergeDialog';
 
 const ICON_BUTTON =
   'inline-flex h-8 w-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text';
@@ -223,11 +226,13 @@ export function TicketPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const ticket = useApp((s) => s.tickets[id]) as Ticket | undefined;
+  const tickets = useApp((s) => s.tickets);
   const agents = useApp((s) => s.agents);
   const slaTargets = useApp((s) => s.sla);
   const slaHours = useApp((s) => s.slaHours);
   const channels = useApp((s) => s.channels);
   const exists = ticket !== undefined;
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   useEffect(() => {
     if (exists) void useApp.getState().loadMessages(id).catch(() => {});
@@ -314,6 +319,14 @@ export function TicketPage() {
             onSelect: () => patch({ bucket: 'inbox' }),
           },
         ];
+  // A merged ticket is a tombstone; nothing left to merge.
+  if (ticket.mergedIntoId === null) {
+    kebabItems.push(
+      { separator: true },
+      { label: 'Merge into…', icon: <IconMerge size={14} />, onSelect: () => setMergeOpen(true) },
+    );
+  }
+  const mergedTarget = ticket.mergedIntoId !== null ? tickets[ticket.mergedIntoId] : undefined;
 
   return (
     <div className="flex h-full min-h-0">
@@ -387,10 +400,30 @@ export function TicketPage() {
         <TagsRow ticket={ticket} onPatch={patch} />
         <TriageBar key={ticket.id} ticket={ticket} />
         <Conversation ticket={ticket} />
-        <DraftBanner ticket={ticket} />
-        <Composer ticket={ticket} />
+        {ticket.mergedIntoId !== null ? (
+          <div className="shrink-0 border-t border-line p-3">
+            <div className="flex items-center gap-3 rounded-md bg-surface-2 px-3 py-2.5 text-[13px]">
+              <IconMerge size={15} className="shrink-0 text-text-3" />
+              <span className="text-text-2">
+                This ticket was merged{mergedTarget ? ` into #${mergedTarget.number}` : ''} and is read-only.
+              </span>
+              <div className="flex-1" />
+              {mergedTarget && (
+                <Button variant="subtle" size="sm" onClick={() => navigate(`/ticket/${mergedTarget.id}`)}>
+                  Open #{mergedTarget.number}
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <DraftBanner ticket={ticket} />
+            <Composer ticket={ticket} />
+          </>
+        )}
       </div>
       <ContextPanel ticket={ticket} />
+      {mergeOpen && <MergeDialog source={ticket} onClose={() => setMergeOpen(false)} />}
     </div>
   );
 }

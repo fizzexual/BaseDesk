@@ -162,7 +162,7 @@ function nextId(items: { id: string }[], prefix: string, width: number): string 
 function seedData(): LocalData {
   const seed = seedJson as unknown as LocalData;
   return {
-    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], customFields: { ...(t.customFields ?? {}) } })),
+    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, customFields: { ...(t.customFields ?? {}) } })),
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
     agents: seed.agents.map((a) => ({ ...a })),
@@ -273,6 +273,10 @@ export class LocalRepository implements Repository {
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
+      }
+      // Older demo tickets predate merge; default the pointer to null.
+      for (const t of this.data.tickets) {
+        if (t.mergedIntoId === undefined) t.mergedIntoId = null;
       }
       // Backfill business-hours SLA + richer agent fields, and migrate v0.3
       // single-condition automation to the v0.4 multi-condition shape.
@@ -406,6 +410,7 @@ export class LocalRepository implements Repository {
       firstRespondedAt: null,
       resolvedAt: null,
       channelId: null,
+      mergedIntoId: null,
       customFields: {},
     };
     const message: Message = {
@@ -553,6 +558,39 @@ export class LocalRepository implements Repository {
         });
       }
     }
+  }
+
+  async mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }> {
+    const source = this.data.tickets.find((t) => t.id === ticketId);
+    const target = this.data.tickets.find((t) => t.id === into);
+    if (!source) throw new Error('source ticket not found');
+    if (!target) throw new Error('target ticket not found');
+    if (ticketId === into) throw new Error('cannot merge a ticket into itself');
+    if (source.mergedIntoId !== null) throw new Error('ticket is already merged');
+    if (target.mergedIntoId !== null) throw new Error('cannot merge into an already-merged ticket');
+
+    const now = new Date().toISOString();
+    for (const m of this.data.messages) if (m.ticketId === ticketId) m.ticketId = into;
+    for (const a of this.data.attachments) if (a.ticketId === ticketId) a.ticketId = into;
+    this.data.messages.push({
+      id: nextId(this.data.messages, 'm_', 5), ticketId: into, authorKind: 'agent',
+      authorId: CURRENT_AGENT_ID, kind: 'note',
+      body: `Merged ticket #${source.number} — "${source.subject}" — into this one.`, at: now,
+    });
+    source.mergedIntoId = into;
+    source.status = 'closed';
+    source.updatedAt = now;
+    const newestReply = this.data.messages
+      .filter((m) => m.ticketId === into && m.kind === 'reply' && !m.deletedAt)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .at(-1);
+    target.updatedAt = now;
+    if (newestReply) {
+      target.lastMessageAt = newestReply.at;
+      target.lastMessagePreview = preview(newestReply.body);
+    }
+    this.persist();
+    return { source: { ...source, tags: [...source.tags] }, target: { ...target, tags: [...target.tags] } };
   }
 
   async createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {

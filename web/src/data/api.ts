@@ -61,6 +61,9 @@ export class ApiRepository implements Repository {
     );
     return message;
   }
+  mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/merge`, jsonInit('POST', { into }));
+  }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();
     form.append('file', file);

@@ -229,6 +229,8 @@ export function openDb(dataDir: string): DatabaseSync {
   const cannedCols = db.prepare('PRAGMA table_info(canned_replies)').all() as { name: string }[];
   if (!cannedCols.some((c) => c.name === 'actions')) db.exec('ALTER TABLE canned_replies ADD COLUMN actions TEXT');
 
+  if (!ticketCols.some((c) => c.name === 'mergedIntoId')) db.exec('ALTER TABLE tickets ADD COLUMN mergedIntoId TEXT');
+
   return db;
 }
 

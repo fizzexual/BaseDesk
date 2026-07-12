@@ -24,6 +24,8 @@ export interface Repository {
   bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]>;
   addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }>;
   deleteMessage(ticketId: string, messageId: string): Promise<Message>;
+  /** Fold `ticketId` into `into`: moves messages, closes the source as a tombstone. */
+  mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }>;
   uploadAttachment(file: File): Promise<Attachment>;
   createContact(input: { name: string; email: string; company?: string }): Promise<Contact>;
   saveCanned(c: CannedReply): Promise<CannedReply>;

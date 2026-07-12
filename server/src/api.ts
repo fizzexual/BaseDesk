@@ -490,6 +490,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       firstRespondedAt: null,
       resolvedAt: null,
       channelId: null,
+      mergedIntoId: null,
       customFields: {},
     };
     const message: Message = {
@@ -639,6 +640,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (ticket === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     // A closed ticket is locked: no one — not even an admin — can post to it until it is reopened.
     if (ticket.status === 'closed') return c.json({ error: 'ticket is closed — reopen it to reply' }, 409);
+    if (ticket.mergedIntoId !== null) return c.json({ error: 'ticket was merged — reply on the ticket it was merged into' }, 409);
 
     let input: { kind?: unknown; body?: unknown; attachmentIds?: unknown };
     try {
@@ -704,6 +706,53 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         .run(new Date().toISOString(), currentAgentId(), mid);
     }
     return c.json({ message: getMessages(db, tid).find((m) => m.id === mid) ?? null });
+  });
+
+  // Merge a duplicate ticket into another: move its messages/attachments onto the
+  // target, drop a note recording the merge, and close the source as a tombstone
+  // pointing at the target. Idempotency and cycles are rejected up front.
+  app.post('/api/tickets/:id/merge', async (c) => {
+    const id = c.req.param('id');
+    const source = getTicket(db, id);
+    if (source === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let input: { into?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const into = typeof input.into === 'string' ? input.into : '';
+    if (into === '') return c.json({ error: 'into is required' }, 400);
+    if (into === id) return c.json({ error: 'cannot merge a ticket into itself' }, 400);
+    const target = getTicket(db, into);
+    if (target === null) return c.json({ error: `target ticket not found: ${into}` }, 404);
+    if (source.mergedIntoId !== null) return c.json({ error: 'ticket is already merged' }, 409);
+    if (target.mergedIntoId !== null) return c.json({ error: 'cannot merge into an already-merged ticket' }, 409);
+
+    const now = new Date().toISOString();
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE messages SET ticketId = ? WHERE ticketId = ?').run(into, id);
+      db.prepare('UPDATE attachments SET ticketId = ? WHERE ticketId = ?').run(into, id);
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(newId('m_'), into, 'agent', currentAgentId(), 'note', `Merged ticket #${source.number} — "${source.subject}" — into this one.`, now);
+      db.prepare('UPDATE tickets SET mergedIntoId = ?, status = ?, updatedAt = ? WHERE id = ?').run(into, 'closed', now, id);
+      // Reflect the merged-in activity on the target from its newest customer/agent reply.
+      const newestReply = db
+        .prepare("SELECT body, at FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC LIMIT 1")
+        .get(into) as { body: string; at: string } | undefined;
+      if (newestReply !== undefined) {
+        db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+          .run(now, newestReply.at, preview(newestReply.body), into);
+      } else {
+        db.prepare('UPDATE tickets SET updatedAt = ? WHERE id = ?').run(now, into);
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    return c.json({ source: getTicket(db, id), target: getTicket(db, into) });
   });
 
   // Upload a file (unattached until a message references it), then serve it back.
@@ -1655,7 +1704,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
       bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: [], channel: 'web',
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: null, customFields: {},
+      firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, customFields: {},
     };
     const message: Message = {
       id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
@@ -1921,7 +1970,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
       requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, customFields: {},
+      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, customFields: {},
     };
     const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
     db.exec('BEGIN');

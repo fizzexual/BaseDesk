@@ -15,6 +15,8 @@ export interface Ticket {
   snoozedUntil: string | null; lastMessageAt: string; lastMessagePreview: string;
   firstRespondedAt: string | null; resolvedAt: string | null;
   channelId: string | null;
+  /** When set, this ticket was merged into the referenced ticket and is a read-only tombstone. */
+  mergedIntoId: string | null;
   /** Values for admin-defined custom fields, keyed by field id. */
   customFields: Record<string, string>;
   /** Customer satisfaction rating (1–5) captured from the portal. */

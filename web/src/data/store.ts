@@ -38,6 +38,7 @@ export interface AppState {
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
   bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
+  mergeTicket(ticketId: string, into: string): Promise<void>;
   deleteMessage(ticketId: string, messageId: string): Promise<void>;
   uploadAttachment(file: File): Promise<Attachment>;
   setComposerPrefill(text: string | null): void;
@@ -339,6 +340,20 @@ export function createAppStore(repository: Repository) {
         set((s) => ({ messages: { ...s.messages, [ticketId]: prev } }));
         throw err;
       }
+    },
+
+    async mergeTicket(ticketId, into) {
+      const { source, target } = await repository.mergeTicket(ticketId, into);
+      set((s) => {
+        // Drop cached threads for both tickets so the moved messages reload fresh.
+        const messages = { ...s.messages };
+        delete messages[ticketId];
+        delete messages[into];
+        return {
+          tickets: { ...s.tickets, [source.id]: source, [target.id]: target },
+          messages,
+        };
+      });
     },
 
     async uploadAttachment(file) {
