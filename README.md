@@ -74,7 +74,8 @@ Customer portal — end-users sign in to track and reply to their own tickets:
 git clone https://github.com/fizzexual/BaseDesk.git
 cd BaseDesk
 docker compose up -d
-# → http://localhost:4011  (seeded with demo data on first boot)
+# → http://localhost:4010  agent dashboard   (seeded with demo data on first boot)
+# → http://localhost:4011  customer portal
 ```
 
 ### From source
@@ -85,16 +86,18 @@ Requires Node ≥ 23.4 (built-in SQLite).
 npm install
 npm run build
 npm start
-# → http://localhost:4011
+# → http://localhost:4010  agent dashboard
+# → http://localhost:4011  customer portal
 ```
 
-Data lives in `./data/basedesk.db` (override with `DATA_DIR`); port via `PORT`.
+The same server serves both ports. Data lives in `./data/basedesk.db` (override
+with `DATA_DIR`); ports via `ADMIN_PORT` (default 4010) and `PORTAL_PORT` (4011).
 
 ## Development
 
 ```bash
 npm install
-npm run dev        # API on :4011, web on :4010 (proxied)
+npm run dev        # admin :4010 · portal :4011 · API :4012 (Vite proxies to it)
 npm test           # server API tests + web store tests
 npm run typecheck  # strict TS, both workspaces
 ```
@@ -108,7 +111,7 @@ npm run typecheck  # strict TS, both workspaces
 - **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts — switchable between a compact **list** and a **card** layout
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
-- **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, and connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama) to power drafts with a real model. Your API key is stored on your server, never in the browser, and it always falls back to the rule-based engine
+- **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing), priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, and connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama). Your API key is stored on your server, never in the browser, and it always falls back to the rule-based engine
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
 - **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
 - **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
