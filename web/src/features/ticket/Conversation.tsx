@@ -70,16 +70,19 @@ function MessageRow({
   const name = author?.name ?? 'Unknown';
   const hue = author?.avatarHue ?? 0;
   const isNote = message.kind === 'note';
+  // Support (agents) sit on the right like your own messages in a chat app; the
+  // customer sits on the left. Internal notes stay agent-side but keep amber.
+  const mine = message.authorKind === 'agent';
 
   // A soft-deleted message shows a tombstone with who removed it and when.
   if (message.deletedAt) {
     const by = message.deletedBy ? (agents[message.deletedBy]?.name ?? 'an agent') : null;
     return (
-      <div className="flex items-start gap-3">
+      <div className={cx('flex items-start gap-3', mine && 'flex-row-reverse')}>
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-3">
           <IconTrash size={13} />
         </span>
-        <div className="min-w-0 rounded-lg rounded-tl-sm border border-dashed border-line px-3.5 py-2 text-[13px] italic text-text-3">
+        <div className="min-w-0 rounded-lg border border-dashed border-line px-3.5 py-2 text-[13px] italic text-text-3">
           Message deleted{by ? ` by ${by}` : ''} · <TimeAgo iso={message.deletedAt} />
         </div>
       </div>
@@ -87,20 +90,19 @@ function MessageRow({
   }
 
   return (
-    <div className="flex items-start gap-3">
+    <div className={cx('flex items-start gap-3', mine && 'flex-row-reverse')}>
       <Avatar name={name} hue={hue} size={28} className="mt-0.5" />
       <div
         onContextMenu={(e) => onContextMenu(e, message)}
         className={cx(
-          'min-w-0 max-w-[85%] rounded-lg rounded-tl-sm px-3.5 py-2.5',
-          isNote
-            ? 'border border-transparent bg-amber-bg'
-            : message.authorKind === 'contact'
-              ? 'bg-surface-2'
-              : 'border border-line bg-surface',
+          'min-w-0 max-w-[85%] rounded-lg px-3.5 py-2.5',
+          mine ? 'rounded-tr-sm' : 'rounded-tl-sm',
+          // Position is the primary sender cue; a light hue difference reinforces it
+          // while keeping default (readable) text on every bubble.
+          isNote ? 'bg-amber-bg' : mine ? 'bg-blue-bg' : 'bg-surface-2',
         )}
       >
-        <div className="mb-1 flex items-baseline gap-2">
+        <div className={cx('mb-1 flex items-baseline gap-2', mine && 'flex-row-reverse')}>
           <span className="text-[13px] font-medium">{name}</span>
           {isNote && (
             <span className="text-[11px] font-semibold uppercase tracking-wide text-amber">
