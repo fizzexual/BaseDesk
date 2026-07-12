@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import type { AiAction, AiAgent, ChannelConn, Contact, Deal, KbArticle, Message, Ticket, TicketPriority } from './types.js';
+import { DEFAULT_AI_PROVIDER } from './defaults.js';
+import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -171,6 +172,36 @@ export function setSetting(db: DatabaseSync, key: string, value: string): void {
   db.prepare(
     'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
   ).run(key, value);
+}
+
+/** Full provider config (including the key) as stored server-side. */
+export function getAiProviderConfig(db: DatabaseSync): AiProviderConfig {
+  const raw = getSetting(db, 'ai_provider');
+  if (raw === null) return { ...DEFAULT_AI_PROVIDER };
+  try {
+    const p = JSON.parse(raw) as Partial<AiProviderConfig>;
+    return {
+      enabled: Boolean(p.enabled),
+      baseUrl: typeof p.baseUrl === 'string' && p.baseUrl.trim() !== '' ? p.baseUrl : DEFAULT_AI_PROVIDER.baseUrl,
+      model: typeof p.model === 'string' && p.model.trim() !== '' ? p.model : DEFAULT_AI_PROVIDER.model,
+      temperature: typeof p.temperature === 'number' && p.temperature >= 0 ? p.temperature : DEFAULT_AI_PROVIDER.temperature,
+      apiKey: typeof p.apiKey === 'string' ? p.apiKey : '',
+    };
+  } catch {
+    return { ...DEFAULT_AI_PROVIDER };
+  }
+}
+
+export function setAiProviderConfig(db: DatabaseSync, cfg: AiProviderConfig): void {
+  setSetting(db, 'ai_provider', JSON.stringify(cfg));
+}
+
+/** Strips the secret key, leaving the client-safe status shape. */
+export function toPublicProvider(cfg: AiProviderConfig): AiProvider {
+  return {
+    enabled: cfg.enabled, baseUrl: cfg.baseUrl, model: cfg.model,
+    temperature: cfg.temperature, hasKey: cfg.apiKey.trim() !== '',
+  };
 }
 
 export function getTicket(db: DatabaseSync, id: string): Ticket | null {

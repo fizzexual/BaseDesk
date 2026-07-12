@@ -86,6 +86,23 @@ export interface Message {
   authorKind: 'contact' | 'agent'; authorId: string;
   kind: 'reply' | 'note'; body: string; at: string;
 }
+
+/** Model-provider config as stored server-side (includes the secret key). */
+export interface AiProviderConfig {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  apiKey: string;
+}
+/** Client-facing provider status — identical but with the key replaced by a flag. */
+export interface AiProvider {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  hasKey: boolean;
+}
 export interface Contact {
   id: string; name: string; email: string; company: string | null;
   avatarHue: number; location: string | null; timezone: string | null; createdAt: string;
@@ -146,4 +163,5 @@ export interface BootstrapData {
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
   slaHours: SlaHours;
+  aiProvider: AiProvider;
 }

@@ -71,6 +71,27 @@ export function draftReply(input: {
   return `${opener}\n\n${body}\n\n${closer}`;
 }
 
+export function summarizeThread(input: {
+  contactName: string;
+  messages: { authorKind: 'contact' | 'agent'; kind: 'reply' | 'note'; body: string }[];
+}): string {
+  const replies = input.messages.filter((m) => m.kind === 'reply');
+  if (replies.length === 0) return 'No customer-facing messages yet.';
+  const first = firstName(input.contactName);
+  const firstAsk = replies.find((m) => m.authorKind === 'contact');
+  const last = replies[replies.length - 1]!;
+  const clip = (s: string, n = 140): string => {
+    const t = s.replace(/\s+/g, ' ').trim();
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  };
+  const parts: string[] = [];
+  if (firstAsk !== undefined) parts.push(`${first} wrote in: "${clip(firstAsk.body)}"`);
+  parts.push(`${replies.length} message${replies.length === 1 ? '' : 's'} so far.`);
+  const who = last.authorKind === 'agent' ? 'Latest from your team' : `Latest from ${first}`;
+  parts.push(`${who}: "${clip(last.body)}"`);
+  return parts.join(' ');
+}
+
 /** Scores the ticket against KB articles; returns the best confident match. */
 export function deflect(text: string, kb: KbArticle[]): { articleId: string; score: number } | null {
   const hay = lc(text);

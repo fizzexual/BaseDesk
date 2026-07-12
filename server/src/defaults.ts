@@ -1,4 +1,14 @@
-import type { AutomationRule, SlaHours, SlaTargets } from './types.js';
+import type { AiProviderConfig, AutomationRule, SlaHours, SlaTargets } from './types.js';
+
+/** No model provider configured by default — the copilot runs rule-based and
+ *  offline until a key is added. Base URL/model prefill for DeepSeek. */
+export const DEFAULT_AI_PROVIDER: AiProviderConfig = {
+  enabled: false,
+  baseUrl: 'https://api.deepseek.com/v1',
+  model: 'deepseek-chat',
+  temperature: 0.4,
+  apiKey: '',
+};
 
 /** Default SLA targets (minutes) by priority. Editable in Settings → SLA. */
 export const DEFAULT_SLA_TARGETS: SlaTargets = {
