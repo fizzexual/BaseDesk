@@ -56,25 +56,34 @@ function renderThread(thread: ThreadMsg[], limit = 12): string {
 }
 
 /**
- * A reply the agent can send as-is, answered STRICTLY from the knowledge base.
- * If the articles don't cover the question, the model must not guess.
+ * A reply the agent can send as-is. In the default `kbOnly` mode the model may
+ * only use the knowledge base as its source of facts and must not guess; in the
+ * relaxed mode it may add general product knowledge but still invents no specifics.
  */
-export function draftMessages(ctx: DraftCtx): ChatMessage[] {
-  const hasKb = ctx.kb.length > 0;
-  const kb = hasKb
+export function draftMessages(ctx: DraftCtx, kbOnly = true): ChatMessage[] {
+  const kb = ctx.kb.length > 0
     ? ctx.kb.slice(0, 5).map((a, i) => `[KB${i + 1}] ${a.title}\n${clip(a.body, 800)}`).join('\n\n')
     : '(no relevant articles found)';
   const canned = ctx.canned.length > 0
     ? '\n\nApproved reply templates you may borrow wording/tone from (do NOT treat as new facts):\n' +
       ctx.canned.slice(0, 4).map((c, i) => `[T${i + 1}] ${c.title}: ${clip(c.body, 300)}`).join('\n')
     : '';
+  const rules = kbOnly
+    ? [
+        'Answer using ONLY the knowledge base articles provided below. Follow these rules exactly:',
+        '- Every fact, step, policy, price, or instruction in your reply MUST come from the knowledge base articles. Do not use outside/general knowledge.',
+        '- If the articles do not answer the question, do NOT guess or invent anything. Instead write a brief, honest reply saying you will check with the team and follow up, or ask one focused clarifying question.',
+      ]
+    : [
+        'Write the reply using the conversation and the knowledge base below. Follow these rules exactly:',
+        '- Prefer facts from the knowledge base; you may add general product/support knowledge to be helpful, but stay accurate.',
+        '- If you do not know something specific, say what you will do next or ask a focused question rather than guessing.',
+      ];
   const system = [
     `You are ${ctx.agentName}, a customer-support agent replying on behalf of your company.`,
-    'Answer using ONLY the knowledge base articles provided below. Follow these rules exactly:',
-    '- Every fact, step, policy, price, or instruction in your reply MUST come from the knowledge base articles. Do not use outside/general knowledge.',
-    '- If the articles do not answer the question, do NOT guess or invent anything. Instead write a brief, honest reply saying you will check with the team and follow up, or ask one focused clarifying question.',
-    '- Never invent order numbers, dates, prices, refund amounts, account details, URLs, or policies that are not in the articles.',
-    '- Be warm and concise, and match the customer\'s language.',
+    ...rules,
+    '- Never invent order numbers, dates, prices, refund amounts, account details, URLs, or policies that are not in the material.',
+    "- Be warm and concise, and match the customer's language.",
     '- Output ONLY the message body — no subject line, no "Draft:", no notes to yourself, no markdown headings.',
     ctx.signature.trim() !== ''
       ? `- End with exactly this signature on its own lines:\n${ctx.signature.trim()}`
@@ -88,11 +97,11 @@ export function draftMessages(ctx: DraftCtx): ChatMessage[] {
     'Conversation so far:',
     renderThread(ctx.thread),
     '',
-    'Knowledge base (your only source of facts):',
+    kbOnly ? 'Knowledge base (your only source of facts):' : 'Knowledge base:',
     kb,
     canned,
     '',
-    'Write the next reply to the customer, using only the knowledge base above.',
+    kbOnly ? 'Write the next reply to the customer, using only the knowledge base above.' : 'Write the next reply to the customer.',
   ].join('\n');
 
   return [

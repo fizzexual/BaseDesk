@@ -681,10 +681,13 @@ for (const t of draftTickets) {
   const c = contactById.get(t.requesterId);
   const first = c ? c.name.split(' ')[0] : 'there';
   const topic = t.subject.toLowerCase().replace(/[.?!]+$/, '');
+  const draftBody = `Hi ${first},\n\nThanks for reaching out about ${topic}. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant`;
   aiActions.push({
     id: 'act_' + pad(++aiN, 3), agentId: 'ai_1', ticketId: t.id, kind: 'draft', status: 'pending',
-    draftBody: `Hi ${first},\n\nThanks for reaching out about ${topic}. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant`,
+    draftBody,
     suggestedPriority: null, suggestedTags: [], kbArticleId: null,
+    // Deterministic, realistic token counts (as if a model produced these drafts).
+    promptTokens: 320 + (t.number % 460), completionTokens: Math.max(40, Math.round(draftBody.length / 4)),
     createdAt: iso(new Date(t.lastMessageAt).getTime() + 5 * MIN), resolvedAt: null,
   });
 }
@@ -692,6 +695,7 @@ for (const t of resolvedTickets) {
   aiActions.push({
     id: 'act_' + pad(++aiN, 3), agentId: 'ai_2', ticketId: t.id, kind: 'resolve', status: 'sent',
     draftBody: null, suggestedPriority: null, suggestedTags: [], kbArticleId: pick(kbSeed).id,
+    promptTokens: 540 + (t.number % 520), completionTokens: 130 + (t.number % 160),
     createdAt: iso(new Date(t.createdAt).getTime() + 10 * MIN), resolvedAt: t.updatedAt,
   });
 }

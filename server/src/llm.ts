@@ -23,6 +23,16 @@ export interface ChatOptions {
   allowEmpty?: boolean; // return '' instead of throwing when the model emits no text
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface ChatResult {
+  text: string;
+  usage: TokenUsage;
+}
+
 export class LlmError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
@@ -35,7 +45,7 @@ function endpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
 }
 
-async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: ChatOptions): Promise<string> {
+async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: ChatOptions): Promise<ChatResult> {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -66,6 +76,7 @@ async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: 
 
   const data = (await res.json()) as {
     choices?: { message?: { content?: string | null; reasoning_content?: string | null } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   if (!Array.isArray(data.choices) || data.choices.length === 0) {
     throw new LlmError('provider did not return a chat completion — check the base URL and model id');
@@ -78,7 +89,13 @@ async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: 
   if (content === '' && opts.allowEmpty !== true) {
     throw new LlmError('the model returned an empty completion — check the model id or raise max tokens');
   }
-  return content;
+  return {
+    text: content,
+    usage: {
+      promptTokens: data.usage?.prompt_tokens ?? 0,
+      completionTokens: data.usage?.completion_tokens ?? 0,
+    },
+  };
 }
 
 /**
@@ -86,7 +103,7 @@ async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: 
  * a bad key or model won't fix itself). Throws LlmError on failure so callers can
  * fall back to the rule-based engine.
  */
-export async function chat(cfg: LlmConfig, messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
+export async function chat(cfg: LlmConfig, messages: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {
   const url = endpoint(cfg.baseUrl);
   try {
     return await once(url, cfg, messages, opts);
@@ -104,7 +121,7 @@ export async function chat(cfg: LlmConfig, messages: ChatMessage[], opts: ChatOp
  * how to present an empty completion.
  */
 export async function ping(cfg: LlmConfig): Promise<{ ok: true; reply: string }> {
-  const reply = await chat(
+  const { text } = await chat(
     cfg,
     [
       { role: 'system', content: 'You are a connectivity check for a support tool.' },
@@ -112,5 +129,5 @@ export async function ping(cfg: LlmConfig): Promise<{ ok: true; reply: string }>
     ],
     { maxTokens: 64, timeoutMs: 15_000, temperature: 0, allowEmpty: true },
   );
-  return { ok: true, reply };
+  return { ok: true, reply: text };
 }

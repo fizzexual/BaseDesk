@@ -7295,6 +7295,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 478,
+      "completionTokens": 71,
       "createdAt": "2026-06-30T11:58:25.000Z",
       "resolvedAt": null
     },
@@ -7308,6 +7310,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 482,
+      "completionTokens": 67,
       "createdAt": "2026-06-30T23:40:54.000Z",
       "resolvedAt": null
     },
@@ -7321,6 +7325,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 485,
+      "completionTokens": 64,
       "createdAt": "2026-07-01T13:13:26.000Z",
       "resolvedAt": null
     },
@@ -7334,6 +7340,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 487,
+      "completionTokens": 70,
       "createdAt": "2026-07-02T07:08:22.000Z",
       "resolvedAt": null
     },
@@ -7347,6 +7355,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 490,
+      "completionTokens": 65,
       "createdAt": "2026-07-02T17:54:18.000Z",
       "resolvedAt": null
     },
@@ -7360,6 +7370,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": null,
+      "promptTokens": 495,
+      "completionTokens": 69,
       "createdAt": "2026-07-04T00:16:37.000Z",
       "resolvedAt": null
     },
@@ -7373,6 +7385,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": "kb_05",
+      "promptTokens": 1046,
+      "completionTokens": 196,
       "createdAt": "2026-06-13T23:05:59.000Z",
       "resolvedAt": "2026-06-14T16:01:04.000Z"
     },
@@ -7386,6 +7400,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": "kb_04",
+      "promptTokens": 1047,
+      "completionTokens": 197,
       "createdAt": "2026-06-14T06:12:20.000Z",
       "resolvedAt": "2026-06-14T17:26:01.000Z"
     },
@@ -7399,6 +7415,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": "kb_02",
+      "promptTokens": 1048,
+      "completionTokens": 198,
       "createdAt": "2026-06-14T07:28:16.000Z",
       "resolvedAt": "2026-06-15T00:55:00.000Z"
     },
@@ -7412,6 +7430,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": "kb_05",
+      "promptTokens": 1049,
+      "completionTokens": 199,
       "createdAt": "2026-06-14T15:19:16.000Z",
       "resolvedAt": "2026-06-15T05:25:32.000Z"
     },
@@ -7425,6 +7445,8 @@
       "suggestedPriority": null,
       "suggestedTags": [],
       "kbArticleId": "kb_05",
+      "promptTokens": 1050,
+      "completionTokens": 200,
       "createdAt": "2026-06-15T07:48:46.000Z",
       "resolvedAt": "2026-06-16T05:31:41.000Z"
     }

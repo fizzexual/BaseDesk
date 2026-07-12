@@ -222,6 +222,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       let kind = decision.kind;
       let body = decision.draftBody;
       let kbArticleId = decision.kbArticleId;
+      let promptTokens = 0;
+      let completionTokens = 0;
       if (useModel && agent.autonomy !== 'suggest') {
         const rankedKb = rankKb(`${ticket.subject} ${firstBody}`, kb, 5);
         const draftCtx = { subject: ticket.subject, contactName, agentName: agent.name, signature: '', thread, canned, kb: rankedKb };
@@ -229,12 +231,15 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
           const solved = await resolveAI(cfg, draftCtx);
           if (solved !== null) {
             kind = 'resolve'; body = solved.reply; kbArticleId = null;
+            promptTokens = solved.usage.promptTokens; completionTokens = solved.usage.completionTokens;
           } else {
             kind = 'draft'; kbArticleId = null;
-            body = (await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '')).body;
+            const d = await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '');
+            body = d.body; promptTokens = d.usage.promptTokens; completionTokens = d.usage.completionTokens;
           }
         } else {
-          body = (await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '')).body;
+          const d = await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '');
+          body = d.body; promptTokens = d.usage.promptTokens; completionTokens = d.usage.completionTokens;
         }
       }
 
@@ -244,6 +249,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         status: kind === 'resolve' ? 'sent' : 'pending',
         draftBody: body, suggestedPriority: decision.suggestedPriority,
         suggestedTags: decision.suggestedTags, kbArticleId,
+        promptTokens, completionTokens,
         createdAt: now, resolvedAt: kind === 'resolve' ? now : null,
       };
       insertAiAction(db, action);
@@ -1043,6 +1049,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       model: typeof input.model === 'string' && input.model.trim() !== '' ? input.model.trim() : current.model,
       temperature: Math.min(2, Math.max(0, temp)),
       reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : current.reasoning,
+      kbOnly: typeof input.kbOnly === 'boolean' ? input.kbOnly : current.kbOnly,
       // apiKey absent → keep the stored key; a string (even empty) replaces it.
       apiKey: typeof input.apiKey === 'string' ? input.apiKey.trim() : current.apiKey,
     };

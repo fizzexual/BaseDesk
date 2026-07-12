@@ -35,7 +35,9 @@ function mockProvider(handler: (body: { messages: { role: string; content: strin
     });
   });
 }
-const completion = (content: string) => ({ json: { choices: [{ message: { content } }] } });
+const completion = (content: string, usage?: { prompt_tokens: number; completion_tokens: number }) => ({
+  json: { choices: [{ message: { content } }], ...(usage ? { usage } : {}) },
+});
 
 afterEach(() => {
   mock?.close();
@@ -203,7 +205,7 @@ describe('knowledge-base grounding', () => {
     expect(ranked.every((a) => a.status === 'published')).toBe(true); // the draft is excluded
   });
 
-  it('sends the model a knowledge-base-only prompt', async () => {
+  it('sends the model a knowledge-base-only prompt by default', async () => {
     const app = makeApp();
     const ticketId = await firstTicketId(app);
     let captured: { messages: { role: string; content: string }[] } | null = null;
@@ -215,8 +217,52 @@ describe('knowledge-base grounding', () => {
     await app.request('/api/ai/draft', json('POST', { ticketId }));
 
     const text = JSON.stringify(captured!.messages).toLowerCase();
-    expect(text).toContain('knowledge base');
     expect(text).toContain('only the knowledge base');
+  });
+
+  it('relaxes the prompt when kbOnly is turned off', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    let captured: { messages: { role: string; content: string }[] } | null = null;
+    const url = await mockProvider((body) => {
+      captured = body;
+      return completion('A helpful reply.');
+    });
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k', kbOnly: false }));
+    await app.request('/api/ai/draft', json('POST', { ticketId }));
+
+    const text = JSON.stringify(captured!.messages).toLowerCase();
+    expect(text).not.toContain('only the knowledge base');
+    expect(text).toContain('general product/support knowledge');
+  });
+});
+
+describe('token usage', () => {
+  it('reports token usage from the model on a draft', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    const url = await mockProvider(() => completion('A reply.', { prompt_tokens: 412, completion_tokens: 73 }));
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+
+    const draft = await (await app.request('/api/ai/draft', json('POST', { ticketId }))).json();
+    expect(draft.usage).toEqual({ promptTokens: 412, completionTokens: 73 });
+  });
+
+  it('records token usage on an autonomous agent action', async () => {
+    const app = makeApp();
+    const boot = await (await app.request('/api/bootstrap')).json();
+    // A resolve-capable model answer carries usage onto the stored action.
+    const url = await mockProvider(() => completion('{"canResolve":true,"reply":"Here is the fix."}', { prompt_tokens: 600, completion_tokens: 120 }));
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+
+    await app.request('/api/tickets', json('POST', {
+      subject: 'Reset help', body: 'how do I reset', requesterId: boot.contacts[0].id, priority: 'low',
+    }));
+    const after = await (await app.request('/api/bootstrap')).json();
+    const withTokens = after.aiActions.find((a: { promptTokens: number }) => a.promptTokens > 0);
+    expect(withTokens).toBeDefined();
+    expect(withTokens.promptTokens).toBe(600);
+    expect(withTokens.completionTokens).toBe(120);
   });
 });
 

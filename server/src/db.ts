@@ -122,6 +122,8 @@ export function openDb(dataDir: string): DatabaseSync {
       suggestedPriority TEXT,
       suggestedTags TEXT NOT NULL,
       kbArticleId TEXT,
+      promptTokens INTEGER NOT NULL DEFAULT 0,
+      completionTokens INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL,
       resolvedAt TEXT
     );
@@ -164,6 +166,10 @@ export function openDb(dataDir: string): DatabaseSync {
   if (!agentCols.some((c) => c.name === 'inviteToken')) db.exec('ALTER TABLE agents ADD COLUMN inviteToken TEXT');
   if (!agentCols.some((c) => c.name === 'signature')) db.exec("ALTER TABLE agents ADD COLUMN signature TEXT NOT NULL DEFAULT ''");
 
+  const actionCols = db.prepare('PRAGMA table_info(ai_actions)').all() as { name: string }[];
+  if (!actionCols.some((c) => c.name === 'promptTokens')) db.exec('ALTER TABLE ai_actions ADD COLUMN promptTokens INTEGER NOT NULL DEFAULT 0');
+  if (!actionCols.some((c) => c.name === 'completionTokens')) db.exec('ALTER TABLE ai_actions ADD COLUMN completionTokens INTEGER NOT NULL DEFAULT 0');
+
   return db;
 }
 
@@ -190,6 +196,7 @@ export function getAiProviderConfig(db: DatabaseSync): AiProviderConfig {
       model: typeof p.model === 'string' && p.model.trim() !== '' ? p.model : DEFAULT_AI_PROVIDER.model,
       temperature: typeof p.temperature === 'number' && p.temperature >= 0 ? p.temperature : DEFAULT_AI_PROVIDER.temperature,
       reasoning: Boolean(p.reasoning),
+      kbOnly: p.kbOnly === undefined ? true : Boolean(p.kbOnly),
       apiKey: typeof p.apiKey === 'string' ? p.apiKey : '',
     };
   } catch {
@@ -205,7 +212,7 @@ export function setAiProviderConfig(db: DatabaseSync, cfg: AiProviderConfig): vo
 export function toPublicProvider(cfg: AiProviderConfig): AiProvider {
   return {
     enabled: cfg.enabled, baseUrl: cfg.baseUrl, model: cfg.model,
-    temperature: cfg.temperature, reasoning: cfg.reasoning, hasKey: cfg.apiKey.trim() !== '',
+    temperature: cfg.temperature, reasoning: cfg.reasoning, kbOnly: cfg.kbOnly, hasKey: cfg.apiKey.trim() !== '',
   };
 }
 
@@ -294,9 +301,9 @@ export function getAiAction(db: DatabaseSync, id: string): AiAction | null {
 
 export function insertAiAction(db: DatabaseSync, a: AiAction): void {
   db.prepare(
-    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, createdAt, resolvedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.createdAt, a.resolvedAt);
+    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, promptTokens, completionTokens, createdAt, resolvedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.promptTokens, a.completionTokens, a.createdAt, a.resolvedAt);
 }
 
 type ChannelRow = Omit<ChannelConn, 'enabled'> & { enabled: number };

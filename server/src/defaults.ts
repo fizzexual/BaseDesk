@@ -8,6 +8,7 @@ export const DEFAULT_AI_PROVIDER: AiProviderConfig = {
   model: 'deepseek-chat',
   temperature: 0.4,
   reasoning: false,
+  kbOnly: true,
   apiKey: '',
 };
 

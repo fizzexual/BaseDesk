@@ -79,6 +79,7 @@ export interface AiAction {
   suggestedPriority: TicketPriority | null;
   suggestedTags: string[];
   kbArticleId: string | null;
+  promptTokens: number; completionTokens: number; // 0 for the rule-based engine
   createdAt: string; resolvedAt: string | null;
 }
 export interface Message {
@@ -94,6 +95,7 @@ export interface AiProviderConfig {
   model: string;
   temperature: number;
   reasoning: boolean; // reasoning model — gets a larger output budget
+  kbOnly: boolean; // answer strictly from the knowledge base
   apiKey: string;
 }
 /** Client-facing provider status — identical but with the key replaced by a flag. */
@@ -103,6 +105,7 @@ export interface AiProvider {
   model: string;
   temperature: number;
   reasoning: boolean;
+  kbOnly: boolean;
   hasKey: boolean;
 }
 export interface Contact {

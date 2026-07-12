@@ -58,8 +58,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertAiAction = db.prepare(
-    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, createdAt, resolvedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, promptTokens, completionTokens, createdAt, resolvedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertChannel = db.prepare(
     'INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -95,7 +95,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
       insertAiAgent.run(g.id, g.name, g.avatarHue, g.enabled ? 1 : 0, g.autonomy, JSON.stringify(g.scopeTags), JSON.stringify(g.scopePriorities), g.createdAt);
     }
     for (const a of seed.aiActions) {
-      insertAiAction.run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.createdAt, a.resolvedAt);
+      insertAiAction.run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.promptTokens ?? 0, a.completionTokens ?? 0, a.createdAt, a.resolvedAt);
     }
     for (const ch of seed.channels) {
       insertChannel.run(ch.id, ch.type, ch.name, ch.enabled ? 1 : 0, ch.inboundToken, ch.address, ch.createdAt);
