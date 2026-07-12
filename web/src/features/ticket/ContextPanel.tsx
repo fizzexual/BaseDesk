@@ -157,6 +157,21 @@ function RevenueAwarePanel({
           {localTime !== null && <DetailRow label="Local time" value={localTime} />}
         </div>
       </section>
+      {typeof ticket.satisfactionScore === 'number' && (
+        <section className="border-t border-line p-4">
+          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">Satisfaction</h3>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[15px] leading-none">
+              <span className="text-amber">{'★'.repeat(ticket.satisfactionScore)}</span>
+              <span className="text-line-2">{'★'.repeat(5 - ticket.satisfactionScore)}</span>
+            </span>
+            <span className="text-[13px] tabular-nums text-text-2">{ticket.satisfactionScore}/5</span>
+          </div>
+          {ticket.satisfactionComment && (
+            <p className="mt-1.5 text-[13px] italic text-text-2">“{ticket.satisfactionComment}”</p>
+          )}
+        </section>
+      )}
       <TicketCustomFields ticket={ticket} />
       {aiEnabled() && (
         <section className="border-t border-line p-4">

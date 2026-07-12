@@ -169,6 +169,12 @@ export function ReportsPage() {
             />
           </div>
 
+          <div className="grid min-w-0 grid-cols-3 gap-3">
+            <StatCard label="Avg satisfaction" value={stats.csat.count > 0 ? `${stats.csat.average.toFixed(1)} / 5` : '—'} />
+            <StatCard label="Positive (4–5★)" value={stats.csat.count > 0 ? `${stats.csat.positivePct}%` : '—'} />
+            <StatCard label={`Ratings received`} value={nf.format(stats.csat.count)} />
+          </div>
+
           <div className="grid min-w-0 grid-cols-2 gap-4">
             <ChartCard
               title="Created vs solved"

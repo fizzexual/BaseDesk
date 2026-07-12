@@ -83,6 +83,9 @@ export const portalApi = {
   reply(id: string, message: string) {
     return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/messages`, body({ body: message }));
   },
+  rate(id: string, score: number, comment: string) {
+    return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/rating`, body({ score, comment }));
+  },
   kb() {
     return req<KbArticle[]>('/kb');
   },

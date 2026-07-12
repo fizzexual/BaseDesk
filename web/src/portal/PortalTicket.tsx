@@ -76,6 +76,99 @@ function TicketSkeleton() {
   );
 }
 
+function Star({ filled, size = 20 }: { filled: boolean; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={filled ? 'text-amber' : 'text-line-2'}
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+    </svg>
+  );
+}
+
+/** CSAT prompt shown on a solved/closed ticket — five stars plus an optional note. */
+function RatingCard({ ticket, onRated }: { ticket: Ticket; onRated: (t: Ticket) => void }) {
+  const [hover, setHover] = useState(0);
+  const [score, setScore] = useState(0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  if (typeof ticket.satisfactionScore === 'number') {
+    return (
+      <div className="mt-6 rounded-lg border border-line bg-surface p-4 text-center">
+        <p className="text-[13px] font-medium">Thanks for rating your support</p>
+        <div className="mt-2 flex justify-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Star key={n} filled={n <= (ticket.satisfactionScore ?? 0)} />
+          ))}
+        </div>
+        {ticket.satisfactionComment && (
+          <p className="mt-2 text-[13px] italic text-text-2">“{ticket.satisfactionComment}”</p>
+        )}
+      </div>
+    );
+  }
+
+  async function submit() {
+    if (score < 1 || busy) return;
+    setBusy(true);
+    try {
+      const { ticket: updated } = await portalApi.rate(ticket.id, score, comment.trim());
+      onRated(updated);
+      toast('Thanks for your feedback!');
+    } catch {
+      toast('Could not submit your rating');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const shown = hover || score;
+  return (
+    <div className="mt-6 rounded-lg border border-line bg-surface p-4">
+      <p className="text-center text-[14px] font-medium">How was our support?</p>
+      <div className="mt-3 flex justify-center gap-1.5" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} star${n > 1 ? 's' : ''}`}
+            className="rounded-sm p-0.5 transition-transform hover:scale-110"
+            onMouseEnter={() => setHover(n)}
+            onClick={() => setScore(n)}
+          >
+            <Star filled={n <= shown} size={26} />
+          </button>
+        ))}
+      </div>
+      {score > 0 && (
+        <div className="mt-3">
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={2}
+            placeholder="Add a comment (optional)"
+            className="w-full resize-y rounded-md border border-line bg-bg px-2.5 py-1.5 text-[13px] outline-none placeholder:text-text-3"
+          />
+          <div className="mt-2 flex justify-center">
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void submit()}>
+              {busy ? 'Submitting…' : 'Submit rating'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PortalTicket() {
   const { id = '' } = useParams();
   const refreshTickets = usePortal((s) => s.refreshTickets);
@@ -236,6 +329,10 @@ export function PortalTicket() {
       </div>
       {/* Scroll target that keeps the newest message in view (see the effect above). */}
       <div ref={bottomRef} aria-hidden />
+
+      {(ticket.status === 'solved' || ticket.status === 'closed') && (
+        <RatingCard ticket={ticket} onRated={setTicket} />
+      )}
 
       <div className="mt-6 rounded-lg border border-line bg-surface p-3">
         {closed ? (

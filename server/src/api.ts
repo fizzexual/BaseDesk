@@ -1566,6 +1566,31 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
+  // A customer rates their support once the ticket is solved or closed (CSAT).
+  app.post('/api/portal/tickets/:id/rating', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const ticket = getTicket(db, c.req.param('id'));
+    if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    if (ticket.status !== 'solved' && ticket.status !== 'closed') {
+      return c.json({ error: 'You can rate your support once the ticket is solved.' }, 409);
+    }
+    let input: { score?: unknown; comment?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { score } = input;
+    if (typeof score !== 'number' || !Number.isInteger(score) || score < 1 || score > 5) {
+      return c.json({ error: 'Score must be a whole number from 1 to 5' }, 400);
+    }
+    const comment = typeof input.comment === 'string' && input.comment.trim() !== '' ? input.comment.trim().slice(0, 1000) : null;
+    db.prepare('UPDATE tickets SET satisfactionScore = ?, satisfactionComment = ?, satisfactionAt = ? WHERE id = ?')
+      .run(score, comment, new Date().toISOString(), ticket.id);
+    return c.json({ ticket: getTicket(db, ticket.id) });
+  });
+
   app.get('/api/portal/kb', (c) => {
     const rows = db.prepare("SELECT * FROM kb_articles WHERE status = 'published' ORDER BY category, title").all() as unknown as KbArticle[];
     return c.json(rows);

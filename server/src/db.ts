@@ -58,7 +58,10 @@ export function openDb(dataDir: string): DatabaseSync {
       firstRespondedAt TEXT,
       resolvedAt TEXT,
       channelId TEXT,
-      customFields TEXT NOT NULL DEFAULT '{}'
+      customFields TEXT NOT NULL DEFAULT '{}',
+      satisfactionScore INTEGER,
+      satisfactionComment TEXT,
+      satisfactionAt TEXT
     );
     CREATE TABLE IF NOT EXISTS custom_fields (
       id TEXT PRIMARY KEY,
@@ -203,6 +206,9 @@ export function openDb(dataDir: string): DatabaseSync {
   if (!channelCols.some((c) => c.name === 'outboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN outboundSecret TEXT');
 
   if (!ticketCols.some((c) => c.name === 'customFields')) db.exec("ALTER TABLE tickets ADD COLUMN customFields TEXT NOT NULL DEFAULT '{}'");
+  if (!ticketCols.some((c) => c.name === 'satisfactionScore')) db.exec('ALTER TABLE tickets ADD COLUMN satisfactionScore INTEGER');
+  if (!ticketCols.some((c) => c.name === 'satisfactionComment')) db.exec('ALTER TABLE tickets ADD COLUMN satisfactionComment TEXT');
+  if (!ticketCols.some((c) => c.name === 'satisfactionAt')) db.exec('ALTER TABLE tickets ADD COLUMN satisfactionAt TEXT');
 
   const messageCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[];
   if (!messageCols.some((c) => c.name === 'deletedAt')) db.exec('ALTER TABLE messages ADD COLUMN deletedAt TEXT');

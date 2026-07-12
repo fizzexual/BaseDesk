@@ -90,6 +90,20 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
 
   const deals = db.prepare('SELECT * FROM deals').all() as unknown as Deal[];
 
+  // Customer satisfaction over rated tickets.
+  const rated = tickets.filter((t) => typeof t.satisfactionScore === 'number');
+  const csat = {
+    count: rated.length,
+    average:
+      rated.length === 0
+        ? 0
+        : Math.round((rated.reduce((s, t) => s + (t.satisfactionScore ?? 0), 0) / rated.length) * 10) / 10,
+    positivePct:
+      rated.length === 0
+        ? 0
+        : Math.round((rated.filter((t) => (t.satisfactionScore ?? 0) >= 4).length / rated.length) * 100),
+  };
+
   return {
     createdLast14Days: days.map((date) => ({ date, count: createdByDay.get(date)! })),
     solvedLast14Days: days.map((date) => ({ date, count: solvedByDay.get(date)! })),
@@ -102,5 +116,6 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     createdLast7Days: tickets.filter((t) => t.createdAt >= sevenDaysAgo).length,
     solvedLast7Days: solvedOrClosed.filter((t) => t.updatedAt >= sevenDaysAgo).length,
     revenue: computeRevenue(deals, now),
+    csat,
   };
 }

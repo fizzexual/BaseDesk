@@ -1022,6 +1022,22 @@ export class LocalRepository implements Repository {
       createdLast7Days,
       solvedLast7Days,
       revenue: computeRevenue(this.data.deals, now),
+      csat: this.computeCsat(),
+    };
+  }
+
+  private computeCsat() {
+    const rated = this.data.tickets.filter((t) => typeof t.satisfactionScore === 'number');
+    return {
+      count: rated.length,
+      average:
+        rated.length === 0
+          ? 0
+          : Math.round((rated.reduce((s, t) => s + (t.satisfactionScore ?? 0), 0) / rated.length) * 10) / 10,
+      positivePct:
+        rated.length === 0
+          ? 0
+          : Math.round((rated.filter((t) => (t.satisfactionScore ?? 0) >= 4).length / rated.length) * 100),
     };
   }
 

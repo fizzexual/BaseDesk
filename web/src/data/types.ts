@@ -17,6 +17,10 @@ export interface Ticket {
   channelId: string | null;
   /** Values for admin-defined custom fields, keyed by field id. */
   customFields: Record<string, string>;
+  /** Customer satisfaction rating (1–5) captured from the portal. */
+  satisfactionScore?: number | null;
+  satisfactionComment?: string | null;
+  satisfactionAt?: string | null;
 }
 
 export type CustomFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'date';
@@ -234,6 +238,12 @@ export interface StatsOverview {
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;
   revenue: RevenueStats;
+  csat: CsatStats;
+}
+export interface CsatStats {
+  count: number;
+  average: number;
+  positivePct: number;
 }
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;
