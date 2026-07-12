@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
-  SlaTargets, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
+  SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
@@ -10,7 +10,7 @@ export interface BootstrapData {
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
-  slaHours: SlaHours; aiProvider: AiProvider;
+  slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -47,6 +47,8 @@ export interface Repository {
   saveSlaHours(hours: SlaHours): Promise<SlaHours>;
   saveAiProvider(input: AiProviderSave): Promise<AiProvider>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
+  saveSmtp(input: SmtpSave): Promise<SmtpSettings>;
+  testSmtp(to?: string): Promise<SmtpTestResult>;
   aiDraft(ticketId: string): Promise<DraftResult>;
   aiTriage(ticketId: string): Promise<CopilotTriage>;
   aiSummarize(ticketId: string): Promise<SummaryResult>;

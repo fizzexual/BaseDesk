@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
-  SlaTargets, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
+  SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -161,6 +161,12 @@ export class ApiRepository implements Repository {
   }
   testAiProvider(input: AiProviderSave = {}): Promise<AiTestResult> {
     return request('/ai/provider/test', jsonInit('POST', input));
+  }
+  saveSmtp(input: SmtpSave): Promise<SmtpSettings> {
+    return request('/settings/smtp', jsonInit('PUT', input));
+  }
+  testSmtp(to = ''): Promise<SmtpTestResult> {
+    return request('/settings/smtp/test', jsonInit('POST', { to }));
   }
   aiDraft(ticketId: string): Promise<DraftResult> {
     return request('/ai/draft', jsonInit('POST', { ticketId }));

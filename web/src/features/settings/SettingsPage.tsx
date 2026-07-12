@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconNote, IconSparkle, IconSun, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconNote, IconSend, IconSparkle, IconSun, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
@@ -8,8 +8,9 @@ import { CannedReplies } from './CannedReplies';
 import { SlaSettings } from './SlaSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
+import { EmailSettings } from './EmailSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai' | 'email';
 
 const TABS: Array<{
   id: TabId;
@@ -23,6 +24,7 @@ const TABS: Array<{
   { id: 'sla', label: 'SLA', icon: IconClock },
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
+  { id: 'email', label: 'Email', icon: IconSend },
 ];
 
 export function SettingsPage() {
@@ -33,7 +35,8 @@ export function SettingsPage() {
     params.tab === 'canned' ||
     params.tab === 'sla' ||
     params.tab === 'automation' ||
-    params.tab === 'ai'
+    params.tab === 'ai' ||
+    params.tab === 'email'
       ? params.tab
       : 'profile';
 
@@ -67,6 +70,7 @@ export function SettingsPage() {
         {tab === 'sla' && <SlaSettings />}
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
+        {tab === 'email' && <EmailSettings />}
       </div>
     </div>
   );

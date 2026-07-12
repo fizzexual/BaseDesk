@@ -3,11 +3,11 @@ import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, Contact, CopilotTriage, Counts, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
-  SlaHours, SlaTargets, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
+  SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
-import { DEFAULT_AI_PROVIDER, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -23,6 +23,7 @@ export interface AppState {
   aiActions: Record<string, AiAction>;
   channels: Record<string, ChannelConn>;
   aiProvider: AiProvider;
+  smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -61,6 +62,8 @@ export interface AppState {
   deleteChannel(id: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
+  saveSmtp(input: SmtpSave): Promise<void>;
+  testSmtp(to?: string): Promise<SmtpTestResult>;
   aiDraft(ticketId: string): Promise<DraftResult>;
   aiTriage(ticketId: string): Promise<CopilotTriage>;
   aiSummarize(ticketId: string): Promise<SummaryResult>;
@@ -133,6 +136,7 @@ export function createAppStore(repository: Repository) {
     aiActions: {},
     channels: {},
     aiProvider: DEFAULT_AI_PROVIDER,
+    smtp: DEFAULT_SMTP,
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -154,6 +158,7 @@ export function createAppStore(repository: Repository) {
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         aiProvider: data.aiProvider,
+        smtp: data.smtp,
         currentAgentId: data.currentAgentId,
       });
     },
@@ -626,6 +631,15 @@ export function createAppStore(repository: Repository) {
 
     testAiProvider(input) {
       return repository.testAiProvider(input);
+    },
+
+    async saveSmtp(input) {
+      const smtp = await repository.saveSmtp(input);
+      set({ smtp });
+    },
+
+    testSmtp(to) {
+      return repository.testSmtp(to);
     },
 
     aiDraft(ticketId) {

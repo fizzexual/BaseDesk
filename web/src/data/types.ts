@@ -114,6 +114,21 @@ export type AiProviderSave = {
   kbOnly?: boolean;
   apiKey?: string;
 };
+export interface SmtpSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  fromName: string;
+  fromEmail: string;
+  publicUrl: string;
+  hasPass: boolean;
+}
+/** SMTP fields to update. `pass` omitted keeps the stored password; '' clears it. */
+export type SmtpSave = Partial<Omit<SmtpSettings, 'hasPass'>> & { pass?: string };
+export interface SmtpTestResult { ok: boolean; to?: string; error?: string }
+
 export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string; empty?: boolean }
 export type AiSource = 'model' | 'rules';
 export interface TokenUsage { promptTokens: number; completionTokens: number }

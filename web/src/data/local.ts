@@ -2,12 +2,12 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   ChannelConn, ChannelCreate, ChannelPatch, Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType,
-  DraftResult, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, SummaryResult, Ticket, TicketPatch,
-  TicketPriority, TicketStatus,
+  DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -83,6 +83,7 @@ interface LocalData {
   aiActions: AiAction[];
   channels: ChannelConn[];
   aiProvider: AiProvider;
+  smtp: SmtpSettings;
 }
 
 function slugify(title: string): string {
@@ -170,6 +171,7 @@ function seedData(): LocalData {
     aiActions: seed.aiActions.map((a) => ({ ...a })),
     channels: seed.channels.map((c) => ({ ...c })),
     aiProvider: { ...DEFAULT_AI_PROVIDER },
+    smtp: { ...DEFAULT_SMTP },
   };
 }
 
@@ -250,6 +252,11 @@ export class LocalRepository implements Repository {
         this.data.aiProvider = { ...DEFAULT_AI_PROVIDER };
         this.persist();
       }
+      // Backfill SMTP settings for blobs written before email notifications.
+      if (this.data.smtp === undefined) {
+        this.data.smtp = { ...DEFAULT_SMTP };
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -290,6 +297,7 @@ export class LocalRepository implements Repository {
       aiActions: this.data.aiActions.map((a) => ({ ...a })),
       channels: this.data.channels.map((ch) => ({ ...ch })),
       aiProvider: { ...this.data.aiProvider },
+      smtp: { ...this.data.smtp },
     };
   }
 
@@ -619,6 +627,29 @@ export class LocalRepository implements Repository {
   async testAiProvider(): Promise<AiTestResult> {
     // Demo mode has no server to hold a key or reach a provider.
     return { ok: false, error: 'Model calls run on the self-hosted server — demo mode uses the built-in rule-based engine.' };
+  }
+
+  async saveSmtp(input: SmtpSave): Promise<SmtpSettings> {
+    const cur = this.data.smtp;
+    const next: SmtpSettings = {
+      enabled: input.enabled ?? cur.enabled,
+      host: input.host !== undefined ? input.host.trim() : cur.host,
+      port: typeof input.port === 'number' && input.port > 0 ? input.port : cur.port,
+      secure: input.secure ?? cur.secure,
+      user: input.user !== undefined ? input.user.trim() : cur.user,
+      fromName: input.fromName !== undefined && input.fromName.trim() !== '' ? input.fromName.trim() : cur.fromName,
+      fromEmail: input.fromEmail !== undefined ? input.fromEmail.trim() : cur.fromEmail,
+      publicUrl: input.publicUrl !== undefined && input.publicUrl.trim() !== '' ? input.publicUrl.trim() : cur.publicUrl,
+      hasPass: typeof input.pass === 'string' ? input.pass.trim() !== '' : cur.hasPass,
+    };
+    this.data.smtp = next;
+    this.persist();
+    return { ...next };
+  }
+
+  async testSmtp(): Promise<SmtpTestResult> {
+    // Demo mode has no server to open an SMTP connection.
+    return { ok: false, error: 'Email sending runs on the self-hosted server.' };
   }
 
   async aiDraft(ticketId: string): Promise<DraftResult> {

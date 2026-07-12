@@ -1,4 +1,17 @@
-import type { AiProvider, AutomationRule, SlaHours, SlaTargets } from './types';
+import type { AiProvider, AutomationRule, SlaHours, SlaTargets, SmtpSettings } from './types';
+
+/** Client-facing default SMTP settings: no email configured. */
+export const DEFAULT_SMTP: SmtpSettings = {
+  enabled: false,
+  host: '',
+  port: 587,
+  secure: false,
+  user: '',
+  fromName: 'Support',
+  fromEmail: '',
+  publicUrl: 'http://localhost:4011',
+  hasPass: false,
+};
 
 /** Client-facing default provider status: no model configured, DeepSeek prefilled. */
 export const DEFAULT_AI_PROVIDER: AiProvider = {
