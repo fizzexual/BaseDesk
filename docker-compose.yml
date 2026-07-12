@@ -2,7 +2,8 @@ services:
   basedesk:
     build: .
     ports:
-      - '4011:4011'
+      - '4010:4010' # agent dashboard
+      - '4011:4011' # customer portal
     volumes:
       - basedesk-data:/data
     restart: unless-stopped

@@ -79,10 +79,18 @@ function AgentApp() {
   );
 }
 
-/** The customer portal at /portal/* is its own app — no agent store, no agent shell. */
+/**
+ * Admin dashboard on the admin port, customer portal on the portal port — the same
+ * bundle is served on both, and the port decides which app mounts. The production
+ * server injects `window.__PORTAL_PORT__` so custom ports work; in dev it defaults
+ * to 4011. `/portal/*` also renders the portal on the admin port (same-origin).
+ */
+const PORTAL_PORT =
+  (typeof window !== 'undefined' && (window as unknown as { __PORTAL_PORT__?: string }).__PORTAL_PORT__) || '4011';
 function Root() {
-  const isPortal = useLocation().pathname.startsWith('/portal');
-  return isPortal ? <PortalApp /> : <AgentApp />;
+  const onPortalPort = typeof window !== 'undefined' && window.location.port === PORTAL_PORT;
+  const onPortalPath = useLocation().pathname.startsWith('/portal');
+  return onPortalPort || onPortalPath ? <PortalApp /> : <AgentApp />;
 }
 
 export function App() {
