@@ -1,13 +1,14 @@
 import type {
-  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate, ArticlePatch,
-  ArticleStatus, AutomationCondition, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact,
-  Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, Ticket,
-  TicketPatch, TicketPriority, TicketStatus,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
+  AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
+  ChannelConn, ChannelCreate, ChannelPatch, Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType,
+  DraftResult, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, SummaryResult, Ticket, TicketPatch,
+  TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults';
-import { runAgent } from '../features/ai/engine';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults';
+import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
 const AUTONOMY_RANK: Record<string, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -81,6 +82,7 @@ interface LocalData {
   aiAgents: AiAgent[];
   aiActions: AiAction[];
   channels: ChannelConn[];
+  aiProvider: AiProvider;
 }
 
 function slugify(title: string): string {
@@ -167,6 +169,7 @@ function seedData(): LocalData {
     aiAgents: seed.aiAgents.map((a) => ({ ...a })),
     aiActions: seed.aiActions.map((a) => ({ ...a })),
     channels: seed.channels.map((c) => ({ ...c })),
+    aiProvider: { ...DEFAULT_AI_PROVIDER },
   };
 }
 
@@ -242,6 +245,11 @@ export class LocalRepository implements Repository {
         this.data.automation = normalizeAutomation(this.data.automation);
         this.persist();
       }
+      // Backfill the AI provider status for blobs written before it existed.
+      if (this.data.aiProvider === undefined) {
+        this.data.aiProvider = { ...DEFAULT_AI_PROVIDER };
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -281,6 +289,7 @@ export class LocalRepository implements Repository {
       aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
       aiActions: this.data.aiActions.map((a) => ({ ...a })),
       channels: this.data.channels.map((ch) => ({ ...ch })),
+      aiProvider: { ...this.data.aiProvider },
     };
   }
 
@@ -588,6 +597,64 @@ export class LocalRepository implements Repository {
     }
     this.data.agents = this.data.agents.filter((x) => x.id !== id);
     this.persist();
+  }
+
+  async saveAiProvider(input: AiProviderSave): Promise<AiProvider> {
+    const cur = this.data.aiProvider;
+    const next: AiProvider = {
+      enabled: input.enabled ?? cur.enabled,
+      baseUrl: input.baseUrl && input.baseUrl.trim() !== '' ? input.baseUrl.trim() : cur.baseUrl,
+      model: input.model && input.model.trim() !== '' ? input.model.trim() : cur.model,
+      temperature: typeof input.temperature === 'number' ? Math.min(2, Math.max(0, input.temperature)) : cur.temperature,
+      hasKey: typeof input.apiKey === 'string' ? input.apiKey.trim() !== '' : cur.hasKey,
+    };
+    this.data.aiProvider = next;
+    this.persist();
+    return { ...next };
+  }
+
+  async testAiProvider(): Promise<AiTestResult> {
+    // Demo mode has no server to hold a key or reach a provider.
+    return { ok: false, error: 'Model calls run on the self-hosted server — demo mode uses the built-in rule-based engine.' };
+  }
+
+  async aiDraft(ticketId: string): Promise<DraftResult> {
+    const ticket = this.ticket(ticketId);
+    const contact = this.data.contacts.find((c) => c.id === ticket.requesterId);
+    const agent = this.data.agents.find((a) => a.id === CURRENT_AGENT_ID);
+    const msgs = this.data.messages
+      .filter((m) => m.ticketId === ticketId)
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const lastCustomer = [...msgs].reverse().find((m) => m.authorKind === 'contact' && m.kind === 'reply');
+    const body = draftReply({
+      subject: ticket.subject,
+      contactName: contact?.name ?? 'there',
+      agentName: agent?.name ?? 'there',
+      lastCustomerMessage: lastCustomer?.body ?? '',
+      canned: this.data.canned,
+    });
+    return { body, source: 'rules' };
+  }
+
+  async aiTriage(ticketId: string): Promise<CopilotTriage> {
+    const ticket = this.ticket(ticketId);
+    const bodyText =
+      this.data.messages
+        .filter((m) => m.ticketId === ticketId && m.authorKind === 'contact' && m.kind === 'reply')
+        .map((m) => m.body)
+        .join('\n') || ticket.lastMessagePreview;
+    const t = suggestTriage({ subject: ticket.subject, bodyText, currentPriority: ticket.priority, currentTags: ticket.tags });
+    return { priority: t.priority, tags: t.tags, reason: t.reason, source: 'rules' };
+  }
+
+  async aiSummarize(ticketId: string): Promise<SummaryResult> {
+    const ticket = this.ticket(ticketId);
+    const contact = this.data.contacts.find((c) => c.id === ticket.requesterId);
+    const messages = this.data.messages
+      .filter((m) => m.ticketId === ticketId)
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const summary = summarizeThread({ contactName: contact?.name ?? 'there', messages });
+    return { summary, source: 'rules' };
   }
 
   async createArticle(input: ArticleCreate): Promise<KbArticle> {

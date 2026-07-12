@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate,
-  ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Counts, Deal,
-  DealCreate, DealPatch, KbArticle, Message, SlaHours, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
+  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
+  ChannelPatch, Contact, CopilotTriage, Counts, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  SlaHours, SlaTargets, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
-import { DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -21,6 +22,7 @@ export interface AppState {
   aiAgents: Record<string, AiAgent>;
   aiActions: Record<string, AiAction>;
   channels: Record<string, ChannelConn>;
+  aiProvider: AiProvider;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -57,6 +59,11 @@ export interface AppState {
   createChannel(input: ChannelCreate): Promise<string>;
   updateChannel(id: string, patch: ChannelPatch): Promise<void>;
   deleteChannel(id: string): Promise<void>;
+  saveAiProvider(input: AiProviderSave): Promise<void>;
+  testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
+  aiDraft(ticketId: string): Promise<DraftResult>;
+  aiTriage(ticketId: string): Promise<CopilotTriage>;
+  aiSummarize(ticketId: string): Promise<SummaryResult>;
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -125,6 +132,7 @@ export function createAppStore(repository: Repository) {
     aiAgents: {},
     aiActions: {},
     channels: {},
+    aiProvider: DEFAULT_AI_PROVIDER,
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -145,6 +153,7 @@ export function createAppStore(repository: Repository) {
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
+        aiProvider: data.aiProvider,
         currentAgentId: data.currentAgentId,
       });
     },
@@ -608,6 +617,27 @@ export function createAppStore(repository: Repository) {
         set((s) => ({ channels: { ...s.channels, [id]: prev } }));
         throw err;
       }
+    },
+
+    async saveAiProvider(input) {
+      const provider = await repository.saveAiProvider(input);
+      set({ aiProvider: provider });
+    },
+
+    testAiProvider(input) {
+      return repository.testAiProvider(input);
+    },
+
+    aiDraft(ticketId) {
+      return repository.aiDraft(ticketId);
+    },
+
+    aiTriage(ticketId) {
+      return repository.aiTriage(ticketId);
+    },
+
+    aiSummarize(ticketId) {
+      return repository.aiSummarize(ticketId);
     },
 
     setTheme(t) {

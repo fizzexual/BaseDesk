@@ -1,7 +1,8 @@
 import type {
-  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate, ArticlePatch,
-  AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch,
-  DealStage, DealType, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
+  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch,
+  Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
+  SlaTargets, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -153,5 +154,21 @@ export class ApiRepository implements Repository {
   }
   saveSlaHours(hours: SlaHours): Promise<SlaHours> {
     return request('/settings/sla-hours', jsonInit('PUT', hours));
+  }
+
+  saveAiProvider(input: AiProviderSave): Promise<AiProvider> {
+    return request('/ai/provider', jsonInit('PUT', input));
+  }
+  testAiProvider(input: AiProviderSave = {}): Promise<AiTestResult> {
+    return request('/ai/provider/test', jsonInit('POST', input));
+  }
+  aiDraft(ticketId: string): Promise<DraftResult> {
+    return request('/ai/draft', jsonInit('POST', { ticketId }));
+  }
+  aiTriage(ticketId: string): Promise<CopilotTriage> {
+    return request('/ai/triage', jsonInit('POST', { ticketId }));
+  }
+  aiSummarize(ticketId: string): Promise<SummaryResult> {
+    return request('/ai/summarize', jsonInit('POST', { ticketId }));
   }
 }

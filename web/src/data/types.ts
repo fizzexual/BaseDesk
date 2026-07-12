@@ -92,6 +92,28 @@ export interface AiAction {
 }
 export type AiAgentCreate = { name: string; autonomy: Autonomy; scopeTags?: string[]; scopePriorities?: TicketPriority[] };
 export type AiAgentPatch = Partial<Pick<AiAgent, 'name' | 'enabled' | 'autonomy' | 'scopeTags' | 'scopePriorities'>>;
+
+/** Model-provider status as seen by the client — never carries the API key. */
+export interface AiProvider {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  hasKey: boolean;
+}
+/** Provider fields to update. `apiKey` omitted keeps the stored key; '' clears it. */
+export type AiProviderSave = {
+  enabled?: boolean;
+  baseUrl?: string;
+  model?: string;
+  temperature?: number;
+  apiKey?: string;
+};
+export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string }
+export type AiSource = 'model' | 'rules';
+export interface DraftResult { body: string; source: AiSource }
+export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource }
+export interface SummaryResult { summary: string; source: AiSource }
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;

@@ -1,4 +1,13 @@
-import type { AutomationRule, SlaHours, SlaTargets } from './types';
+import type { AiProvider, AutomationRule, SlaHours, SlaTargets } from './types';
+
+/** Client-facing default provider status: no model configured, DeepSeek prefilled. */
+export const DEFAULT_AI_PROVIDER: AiProvider = {
+  enabled: false,
+  baseUrl: 'https://api.deepseek.com/v1',
+  model: 'deepseek-chat',
+  temperature: 0.4,
+  hasKey: false,
+};
 
 // Mirror of server/src/defaults.ts — used by the local demo repository so
 // demo mode and the real server agree on defaults.
