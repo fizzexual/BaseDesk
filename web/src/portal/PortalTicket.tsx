@@ -3,9 +3,11 @@ import { Link, useParams } from 'react-router';
 import { portalApi, type PortalMessage } from './api';
 import { usePortal } from './store';
 import { playNotification } from './sound';
+import { Skeleton } from './Skeleton';
 import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
+import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import type { Ticket } from '../data/types';
 import { IconChevronLeft } from '../icons';
@@ -41,6 +43,39 @@ function Bubble({ message, entering = false }: { message: PortalMessage; enterin
   );
 }
 
+// Content-shaped placeholder shown while the first ticket snapshot loads, mirroring
+// the real header / thread / composer so nothing jumps when the data lands.
+function TicketSkeleton() {
+  return (
+    <section>
+      <span className="sr-only">Loading ticket</span>
+      <Skeleton className="h-4 w-24" />
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-6 w-2/3" />
+          <Skeleton className="mt-2 h-3.5 w-24" />
+        </div>
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <div className="mt-6 flex flex-col gap-4">
+        <div className="flex flex-col items-start gap-1">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-16 w-3/5 rounded-lg" />
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-12 w-2/5 rounded-lg" />
+        </div>
+        <div className="flex flex-col items-start gap-1">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-14 w-1/2 rounded-lg" />
+        </div>
+      </div>
+      <Skeleton className="mt-6 h-24 w-full rounded-lg" />
+    </section>
+  );
+}
+
 export function PortalTicket() {
   const { id = '' } = useParams();
   const refreshTickets = usePortal((s) => s.refreshTickets);
@@ -58,6 +93,8 @@ export function PortalTicket() {
   const pollingRef = useRef(false); // guards against overlapping polls
   const loadedRef = useRef(false); // true once the first snapshot has landed
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]); // pending highlight-clear timers
+  const bottomRef = useRef<HTMLDivElement>(null); // sentinel below the last message
+  const msgCountRef = useRef(0); // messages shown last scroll, so we only chase new ones
 
   // Fold a fresh snapshot into state. `sound` is false for the first load and the
   // customer's own replies, so the chime and highlight only fire for agent replies
@@ -100,6 +137,7 @@ export function PortalTicket() {
   useEffect(() => {
     seenRef.current = new Set();
     loadedRef.current = false;
+    msgCountRef.current = 0; // a fresh thread should hard-jump to the bottom, not smooth-scroll
     setHighlightIds(new Set());
     setState('loading');
     void load();
@@ -131,12 +169,25 @@ export function PortalTicket() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Keep the newest message in view. The count only grows when a message actually
+  // arrives (a poll that changes nothing leaves it untouched), so we don't yank the
+  // page while the customer is reading. First paint jumps instantly; later arrivals
+  // — agent replies or the customer's own send — glide in smoothly.
+  useEffect(() => {
+    if (state !== 'ready') return;
+    if (messages.length <= msgCountRef.current) return;
+    const behavior: ScrollBehavior = msgCountRef.current === 0 ? 'auto' : 'smooth';
+    msgCountRef.current = messages.length;
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  }, [messages, state]);
+
   async function send() {
     const text = reply.trim();
     if (text === '' || sending) return;
     setSending(true);
     try {
       await portalApi.reply(id, text);
+      toast('Reply sent');
       setReply('');
       await load();
       await refreshTickets();
@@ -148,7 +199,7 @@ export function PortalTicket() {
   }
 
   if (state === 'loading') {
-    return <div className="py-16 text-center text-[13px] text-text-3">Loading…</div>;
+    return <TicketSkeleton />;
   }
   if (state === 'error' || ticket === null) {
     return (
@@ -183,6 +234,8 @@ export function PortalTicket() {
           <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} />
         ))}
       </div>
+      {/* Scroll target that keeps the newest message in view (see the effect above). */}
+      <div ref={bottomRef} aria-hidden />
 
       <div className="mt-6 rounded-lg border border-line bg-surface p-3">
         {closed ? (

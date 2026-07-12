@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { usePortal } from './store';
+import { ThemeToggle } from './ThemeToggle';
 import { Avatar } from '../components/Avatar';
 import { Menu } from '../components/Menu';
 import { cx } from '../components/util';
@@ -62,6 +63,8 @@ export function PortalLayout() {
           </nav>
 
           <div className="flex-1" />
+
+          <ThemeToggle />
 
           {contact && (
             <Menu
