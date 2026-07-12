@@ -3,10 +3,12 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
-  getContactByEmail, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getTicket, insertAiAction, openDb,
-  portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, toPublicProvider, type TicketRow,
+  getContactByEmail, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
+  insertAiAction, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
+  toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
+import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
@@ -188,6 +190,19 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return row.id;
   };
 
+  /** Fire-and-forget: email the ticket's requester that support replied. */
+  const emailReplyToCustomer = (ticket: Ticket, body: string): void => {
+    const cfg = getSmtpConfig(db);
+    if (!smtpReady(cfg)) return;
+    const contact = getContact(db, ticket.requesterId);
+    if (contact === null || contact.email.trim() === '') return;
+    const ticketUrl = `${cfg.publicUrl.replace(/\/+$/, '')}/portal/ticket/${ticket.id}`;
+    void sendReplyNotification(cfg, {
+      toEmail: contact.email, toName: contact.name, ticketNumber: ticket.number,
+      subject: ticket.subject, body, ticketUrl,
+    }).catch((err) => console.error('[email] reply notification failed:', err instanceof Error ? err.message : err));
+  };
+
   /**
    * Runs the enabled AI agents against a freshly-arrived ticket. The
    * highest-autonomy matching agent acts once: a resolve agent that deflects to
@@ -262,6 +277,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
           .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
         db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
           .run('solved', now, now, now, preview(body), now, ticket.id);
+        emailReplyToCustomer(ticket, body);
       }
       return action; // only the highest-autonomy matching agent acts
     }
@@ -297,6 +313,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       channels: getChannels(db),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
+      smtp: toPublicSmtp(getSmtpConfig(db)),
     };
     return c.json(data);
   });
@@ -507,6 +524,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
+    // Email the customer on a public reply (never on an internal note).
+    if (kind === 'reply') emailReplyToCustomer(ticket, body);
     return c.json({ message, ticket: getTicket(db, id) });
   });
 
@@ -1030,6 +1049,54 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json({ created });
   });
 
+  // --- SMTP / email notifications (the password never leaves the server) ---
+
+  app.get('/api/settings/smtp', (c) => c.json(toPublicSmtp(getSmtpConfig(db))));
+
+  app.put('/api/settings/smtp', async (c) => {
+    let input: Record<string, unknown>;
+    try {
+      input = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const current = getSmtpConfig(db);
+    const str = (k: string, fallback: string) => (typeof input[k] === 'string' ? (input[k] as string).trim() : fallback);
+    const cfg = {
+      enabled: typeof input.enabled === 'boolean' ? input.enabled : current.enabled,
+      host: str('host', current.host),
+      port: typeof input.port === 'number' && input.port > 0 && input.port <= 65535 ? input.port : current.port,
+      secure: typeof input.secure === 'boolean' ? input.secure : current.secure,
+      user: str('user', current.user),
+      fromName: str('fromName', current.fromName) || 'Support',
+      fromEmail: str('fromEmail', current.fromEmail),
+      publicUrl: (str('publicUrl', current.publicUrl) || current.publicUrl).replace(/\/+$/, ''),
+      // pass absent → keep the stored password; a string (even empty) replaces it.
+      pass: typeof input.pass === 'string' ? input.pass : current.pass,
+    };
+    setSmtpConfig(db, cfg);
+    return c.json(toPublicSmtp(cfg));
+  });
+
+  app.post('/api/settings/smtp/test', async (c) => {
+    let input: { to?: unknown };
+    try {
+      input = (await c.req.json()) as { to?: unknown };
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const cfg = getSmtpConfig(db);
+    const to = typeof input.to === 'string' && input.to.trim() !== '' ? input.to.trim() : cfg.fromEmail;
+    if (cfg.host.trim() === '' || cfg.fromEmail.trim() === '') return c.json({ ok: false, error: 'Set the SMTP host and From address first' }, 400);
+    if (to === '') return c.json({ ok: false, error: 'No recipient — set a From address or pass one' }, 400);
+    try {
+      await sendTestEmail(cfg, to);
+      return c.json({ ok: true, to });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : 'send failed' });
+    }
+  });
+
   // --- Model provider config (the API key never leaves the server) ---
 
   app.get('/api/ai/provider', (c) => c.json(toPublicProvider(getAiProviderConfig(db))));
@@ -1174,6 +1241,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
+    emailReplyToCustomer(ticket, body);
     return c.json({ action: getAiAction(db, id), ticket: getTicket(db, ticket.id), message });
   });
 

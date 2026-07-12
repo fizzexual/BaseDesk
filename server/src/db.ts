@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import { DEFAULT_AI_PROVIDER } from './defaults.js';
-import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, Ticket, TicketPriority } from './types.js';
+import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
+import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -213,6 +213,41 @@ export function toPublicProvider(cfg: AiProviderConfig): AiProvider {
   return {
     enabled: cfg.enabled, baseUrl: cfg.baseUrl, model: cfg.model,
     temperature: cfg.temperature, reasoning: cfg.reasoning, kbOnly: cfg.kbOnly, hasKey: cfg.apiKey.trim() !== '',
+  };
+}
+
+/** Full SMTP config (including the password) as stored server-side. */
+export function getSmtpConfig(db: DatabaseSync): SmtpConfig {
+  const raw = getSetting(db, 'smtp');
+  if (raw === null) return { ...DEFAULT_SMTP };
+  try {
+    const p = JSON.parse(raw) as Partial<SmtpConfig>;
+    return {
+      enabled: Boolean(p.enabled),
+      host: typeof p.host === 'string' ? p.host : '',
+      port: typeof p.port === 'number' && p.port > 0 ? p.port : DEFAULT_SMTP.port,
+      secure: Boolean(p.secure),
+      user: typeof p.user === 'string' ? p.user : '',
+      pass: typeof p.pass === 'string' ? p.pass : '',
+      fromName: typeof p.fromName === 'string' && p.fromName !== '' ? p.fromName : DEFAULT_SMTP.fromName,
+      fromEmail: typeof p.fromEmail === 'string' ? p.fromEmail : '',
+      publicUrl: typeof p.publicUrl === 'string' && p.publicUrl !== '' ? p.publicUrl : DEFAULT_SMTP.publicUrl,
+    };
+  } catch {
+    return { ...DEFAULT_SMTP };
+  }
+}
+
+export function setSmtpConfig(db: DatabaseSync, cfg: SmtpConfig): void {
+  setSetting(db, 'smtp', JSON.stringify(cfg));
+}
+
+/** Strips the secret password, leaving the client-safe settings shape. */
+export function toPublicSmtp(cfg: SmtpConfig): SmtpSettings {
+  return {
+    enabled: cfg.enabled, host: cfg.host, port: cfg.port, secure: cfg.secure,
+    user: cfg.user, fromName: cfg.fromName, fromEmail: cfg.fromEmail, publicUrl: cfg.publicUrl,
+    hasPass: cfg.pass.trim() !== '',
   };
 }
 

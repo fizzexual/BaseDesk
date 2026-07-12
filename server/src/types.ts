@@ -108,6 +108,31 @@ export interface AiProvider {
   kbOnly: boolean;
   hasKey: boolean;
 }
+
+/** SMTP config as stored server-side (includes the secret password). */
+export interface SmtpConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean; // implicit TLS (port 465)
+  user: string;
+  pass: string;
+  fromName: string;
+  fromEmail: string;
+  publicUrl: string; // base URL for links in emails, e.g. http://localhost:4011
+}
+/** Client-facing SMTP settings — the password is replaced by a flag. */
+export interface SmtpSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  fromName: string;
+  fromEmail: string;
+  publicUrl: string;
+  hasPass: boolean;
+}
 export interface Contact {
   id: string; name: string; email: string; company: string | null;
   avatarHue: number; location: string | null; timezone: string | null; createdAt: string;
@@ -169,4 +194,5 @@ export interface BootstrapData {
   aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
   slaHours: SlaHours;
   aiProvider: AiProvider;
+  smtp: SmtpSettings;
 }

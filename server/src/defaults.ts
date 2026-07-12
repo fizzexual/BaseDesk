@@ -1,4 +1,17 @@
-import type { AiProviderConfig, AutomationRule, SlaHours, SlaTargets } from './types.js';
+import type { AiProviderConfig, AutomationRule, SlaHours, SlaTargets, SmtpConfig } from './types.js';
+
+/** No email configured by default — notifications are off until SMTP is set up. */
+export const DEFAULT_SMTP: SmtpConfig = {
+  enabled: false,
+  host: '',
+  port: 587,
+  secure: false,
+  user: '',
+  pass: '',
+  fromName: 'Support',
+  fromEmail: '',
+  publicUrl: 'http://localhost:4011',
+};
 
 /** No model provider configured by default — the copilot runs rule-based and
  *  offline until a key is added. Base URL/model prefill for DeepSeek. */
