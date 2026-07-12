@@ -16,6 +16,13 @@ export interface Ticket {
   channel: Channel; createdAt: string; updatedAt: string;
   snoozedUntil: string | null; lastMessageAt: string; lastMessagePreview: string;
   firstRespondedAt: string | null; resolvedAt: string | null;
+  channelId: string | null;
+}
+
+export type ChannelType = 'webchat' | 'webhook' | 'email' | 'discord' | 'slack' | 'whatsapp';
+export interface ChannelConn {
+  id: string; type: ChannelType; name: string; enabled: boolean;
+  inboundToken: string; address: string | null; createdAt: string;
 }
 
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
@@ -121,5 +128,5 @@ export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
-  aiAgents: AiAgent[]; aiActions: AiAction[];
+  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
 }

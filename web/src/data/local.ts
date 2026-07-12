@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, ArticleStatus, AutomationRule,
-  CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets,
-  StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
+  CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
@@ -64,6 +64,7 @@ interface LocalData {
   kb: KbArticle[];
   aiAgents: AiAgent[];
   aiActions: AiAction[];
+  channels: ChannelConn[];
 }
 
 function slugify(title: string): string {
@@ -137,6 +138,7 @@ function seedData(): LocalData {
     kb: seed.kb.map((a) => ({ ...a })),
     aiAgents: seed.aiAgents.map((a) => ({ ...a })),
     aiActions: seed.aiActions.map((a) => ({ ...a })),
+    channels: seed.channels.map((c) => ({ ...c })),
   };
 }
 
@@ -192,6 +194,14 @@ export class LocalRepository implements Repository {
         this.data.aiActions = seed.aiActions.map((a) => ({ ...a }));
         this.persist();
       }
+      // Backfill channels + per-ticket channelId for blobs written before v0.4.
+      if (!Array.isArray(this.data.channels)) {
+        this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch }));
+        for (const t of this.data.tickets) {
+          if (t.channelId === undefined) t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
+        }
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -229,6 +239,7 @@ export class LocalRepository implements Repository {
       kb: this.data.kb.map((a) => ({ ...a })),
       aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
       aiActions: this.data.aiActions.map((a) => ({ ...a })),
+      channels: this.data.channels.map((ch) => ({ ...ch })),
     };
   }
 
@@ -262,6 +273,7 @@ export class LocalRepository implements Repository {
       lastMessagePreview: preview(input.body),
       firstRespondedAt: null,
       resolvedAt: null,
+      channelId: null,
     };
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),
@@ -607,6 +619,36 @@ export class LocalRepository implements Repository {
     action.resolvedAt = new Date().toISOString();
     this.persist();
     return { action: { ...action } };
+  }
+
+  async createChannel(input: ChannelCreate): Promise<ChannelConn> {
+    const channel: ChannelConn = {
+      id: nextId(this.data.channels, 'ch_', 1),
+      type: input.type,
+      name: input.name.trim(),
+      enabled: true,
+      inboundToken: `tok_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
+      address: input.address?.trim() ? input.address.trim() : null,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.channels.push(channel);
+    this.persist();
+    return { ...channel };
+  }
+
+  async updateChannel(id: string, patch: ChannelPatch): Promise<ChannelConn> {
+    const ch = this.data.channels.find((x) => x.id === id);
+    if (!ch) throw new Error('Channel not found');
+    if (patch.name !== undefined) ch.name = patch.name.trim();
+    if (patch.enabled !== undefined) ch.enabled = patch.enabled;
+    if (patch.address !== undefined) ch.address = patch.address && patch.address.trim() !== '' ? patch.address.trim() : null;
+    this.persist();
+    return { ...ch };
+  }
+
+  async deleteChannel(id: string): Promise<void> {
+    this.data.channels = this.data.channels.filter((c) => c.id !== id);
+    this.persist();
   }
 
   async getStats(): Promise<StatsOverview> {

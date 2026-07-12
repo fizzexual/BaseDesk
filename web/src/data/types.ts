@@ -14,7 +14,16 @@ export interface Ticket {
   channel: Channel; createdAt: string; updatedAt: string;
   snoozedUntil: string | null; lastMessageAt: string; lastMessagePreview: string;
   firstRespondedAt: string | null; resolvedAt: string | null;
+  channelId: string | null;
 }
+
+export type ChannelType = 'webchat' | 'webhook' | 'email' | 'discord' | 'slack' | 'whatsapp';
+export interface ChannelConn {
+  id: string; type: ChannelType; name: string; enabled: boolean;
+  inboundToken: string; address: string | null; createdAt: string;
+}
+export type ChannelCreate = { type: ChannelType; name: string; address?: string };
+export type ChannelPatch = Partial<Pick<ChannelConn, 'name' | 'enabled' | 'address'>>;
 
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
 export type SlaTargets = Record<TicketPriority, SlaTarget>;

@@ -2,20 +2,24 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getContact, getDeal, getKbArticle, getMessages,
-  getSetting, getTicket, insertAiAction, openDb, rowToTicket, setSetting, type TicketRow,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getChannel, getChannels, getContact, getDeal, getKbArticle,
+  getMessages, getSetting, getTicket, insertAiAction, openDb, rowToTicket, setSetting, type TicketRow,
 } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults.js';
 import { runAgent, type AgentContext, type Autonomy } from './ai-engine.js';
 import type {
-  AiAction, Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage,
-  DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AiAction, Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Channel, ChannelType, Contact, Deal,
+  DealStage, DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
 const AUTONOMIES: Autonomy[] = ['suggest', 'draft', 'resolve'];
+const CHANNEL_TYPES: ChannelType[] = ['webchat', 'webhook', 'email', 'discord', 'slack', 'whatsapp'];
+const CHANNEL_TO_TICKET: Record<ChannelType, Channel> = {
+  webchat: 'chat', webhook: 'api', email: 'email', discord: 'chat', slack: 'chat', whatsapp: 'chat',
+};
 
 const VERSION = '0.1.0';
 
@@ -77,6 +81,20 @@ function preview(body: string): string {
 
 function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function insertTicketRow(db: DatabaseSync, t: Ticket): void {
+  db.prepare(
+    `INSERT INTO tickets (
+      id, number, subject, status, priority, bucket, requesterId, assigneeId,
+      tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
+      firstRespondedAt, resolvedAt, channelId
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
+    JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil, t.lastMessageAt,
+    t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId,
+  );
 }
 
 /**
@@ -216,6 +234,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       kb,
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
+      channels: getChannels(db),
     };
     return c.json(data);
   });
@@ -296,6 +315,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       lastMessagePreview: preview(body),
       firstRespondedAt: null,
       resolvedAt: null,
+      channelId: null,
     };
     const message: Message = {
       id: newId('m_'),
@@ -309,18 +329,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
 
     db.exec('BEGIN');
     try {
-      db.prepare(
-        `INSERT INTO tickets (
-          id, number, subject, status, priority, bucket, requesterId, assigneeId,
-          tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-          firstRespondedAt, resolvedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        ticket.id, ticket.number, ticket.subject, ticket.status, ticket.priority, ticket.bucket,
-        ticket.requesterId, ticket.assigneeId, JSON.stringify(ticket.tags), ticket.channel,
-        ticket.createdAt, ticket.updatedAt, ticket.snoozedUntil, ticket.lastMessageAt, ticket.lastMessagePreview,
-        ticket.firstRespondedAt, ticket.resolvedAt,
-      );
+      insertTicketRow(db, ticket);
       db.prepare(
         'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
@@ -896,6 +905,137 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getAiAction(db, id) === null) return c.json({ error: `action not found: ${id}` }, 404);
     db.prepare("UPDATE ai_actions SET status = 'dismissed', resolvedAt = ? WHERE id = ?").run(new Date().toISOString(), id);
     return c.json({ action: getAiAction(db, id) });
+  });
+
+  app.post('/api/channels', async (c) => {
+    let input: { type?: unknown; name?: unknown; address?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { type, name, address } = input;
+    if (typeof type !== 'string' || !CHANNEL_TYPES.includes(type as ChannelType)) return c.json({ error: 'invalid channel type' }, 400);
+    if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    const channel = {
+      id: newId('ch_'), type: type as ChannelType, name: name.trim(), enabled: true,
+      inboundToken: `tok_${randomUUID().replace(/-/g, '').slice(0, 16)}`,
+      address: typeof address === 'string' && address.trim() !== '' ? address.trim() : null,
+      createdAt: new Date().toISOString(),
+    };
+    db.prepare('INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(channel.id, channel.type, channel.name, 1, channel.inboundToken, channel.address, channel.createdAt);
+    return c.json(channel);
+  });
+
+  app.patch('/api/channels/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = getChannel(db, id);
+    if (existing === null) return c.json({ error: `channel not found: ${id}` }, 404);
+    let patch: { name?: unknown; enabled?: unknown; address?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+    if ('name' in patch) {
+      if (typeof patch.name !== 'string' || patch.name.trim() === '') return c.json({ error: 'invalid name' }, 400);
+      sets.push('name = ?');
+      params.push(patch.name.trim());
+    }
+    if ('enabled' in patch) {
+      if (typeof patch.enabled !== 'boolean') return c.json({ error: 'invalid enabled' }, 400);
+      sets.push('enabled = ?');
+      params.push(patch.enabled ? 1 : 0);
+    }
+    if ('address' in patch) {
+      sets.push('address = ?');
+      params.push(typeof patch.address === 'string' && patch.address.trim() !== '' ? patch.address.trim() : null);
+    }
+    if (sets.length === 0) return c.json(existing);
+    db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(getChannel(db, id));
+  });
+
+  app.delete('/api/channels/:id', (c) => {
+    const id = c.req.param('id');
+    if (getChannel(db, id) === null) return c.json({ error: `channel not found: ${id}` }, 404);
+    db.prepare('DELETE FROM channels WHERE id = ?').run(id);
+    return c.json({ ok: true });
+  });
+
+  // Public, token-gated inbound: a real forwarder / widget POSTs a message here.
+  app.post('/api/channels/:id/inbound', async (c) => {
+    const id = c.req.param('id');
+    const channel = getChannel(db, id);
+    if (channel === null) return c.json({ error: 'channel not found' }, 404);
+    if (!channel.enabled) return c.json({ error: 'channel disabled' }, 403);
+    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
+    let input: { from?: { name?: unknown; email?: unknown }; subject?: unknown; body?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const email = input.from?.email;
+    const body = input.body;
+    if (typeof email !== 'string' || email.trim() === '') return c.json({ error: 'from.email is required' }, 400);
+    if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
+    const now = new Date().toISOString();
+
+    let contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(email.trim()) as Contact | undefined;
+    if (contact === undefined) {
+      const name = typeof input.from?.name === 'string' && input.from.name.trim() !== '' ? input.from.name.trim() : email.trim();
+      contact = {
+        id: newId('c_'), name, email: email.trim(), company: null, avatarHue: djb2(email.trim()) % 360,
+        location: null, timezone: null, createdAt: now, mrr: null,
+      };
+      db.prepare('INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
+    }
+
+    const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
+    const subject = typeof input.subject === 'string' && input.subject.trim() !== '' ? input.subject.trim() : preview(body);
+    const ticket: Ticket = {
+      id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
+      requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
+      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
+      firstRespondedAt: null, resolvedAt: null, channelId: channel.id,
+    };
+    const message: Message = {
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
+    };
+    db.exec('BEGIN');
+    try {
+      insertTicketRow(db, ticket);
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    runAgentsOnTicket(ticket, body);
+    return c.json({ ticketId: ticket.id });
+  });
+
+  // Public thread read for the web widget: latest ticket for this contact on this channel.
+  app.get('/api/channels/:id/thread', (c) => {
+    const id = c.req.param('id');
+    const channel = getChannel(db, id);
+    if (channel === null) return c.json({ error: 'channel not found' }, 404);
+    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
+    const email = c.req.query('contact');
+    if (email === undefined || email === '') return c.json([]);
+    const contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(email) as Contact | undefined;
+    if (contact === undefined) return c.json([]);
+    const ticket = db
+      .prepare('SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? ORDER BY createdAt DESC LIMIT 1')
+      .get(channel.id, contact.id) as TicketRow | undefined;
+    if (ticket === undefined) return c.json([]);
+    return c.json(getMessages(db, ticket.id));
   });
 
   app.get('/api/stats', (c) => c.json(computeStats(db, new Date())));

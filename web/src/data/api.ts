@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply,
-  Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview,
-  Ticket, TicketPatch, TicketPriority,
+  ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle,
+  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -130,5 +130,15 @@ export class ApiRepository implements Repository {
   }
   dismissAction(id: string): Promise<{ action: AiAction }> {
     return request(`/ai/actions/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
+  }
+
+  createChannel(input: ChannelCreate): Promise<ChannelConn> {
+    return request('/channels', jsonInit('POST', input));
+  }
+  updateChannel(id: string, patch: ChannelPatch): Promise<ChannelConn> {
+    return request(`/channels/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+  async deleteChannel(id: string): Promise<void> {
+    await request<{ ok: true }>(`/channels/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 }

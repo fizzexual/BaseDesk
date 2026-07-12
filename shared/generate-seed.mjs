@@ -696,10 +696,19 @@ for (const t of resolvedTickets) {
   });
 }
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions };
+// ---------------------------------------------------------------- channels
+const channels = [
+  { id: 'ch_1', type: 'webchat', name: 'Website chat', enabled: true, inboundToken: 'tok_webchat_3f9a2c81', address: null, createdAt: iso(NOW_MS - 50 * DAY) },
+  { id: 'ch_2', type: 'email', name: 'Email — support inbox', enabled: true, inboundToken: 'tok_email_b71e0439', address: 'support@basedesk.example', createdAt: iso(NOW_MS - 55 * DAY) },
+];
+for (const t of tickets) {
+  t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
+}
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
-console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions`);
+console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels`);
 
 
 

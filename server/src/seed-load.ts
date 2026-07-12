@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
-import type { AiAction, AiAgent, Agent, CannedReply, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
+import type { AiAction, AiAgent, Agent, CannedReply, ChannelConn, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
 
 interface SeedData {
   agents: Agent[];
@@ -14,6 +14,7 @@ interface SeedData {
   kb: KbArticle[];
   aiAgents: AiAgent[];
   aiActions: AiAction[];
+  channels: ChannelConn[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -36,8 +37,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
       tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-      firstRespondedAt, resolvedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      firstRespondedAt, resolvedAt, channelId
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertMessage = db.prepare(
     'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -60,6 +61,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
     `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, createdAt, resolvedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
+  const insertChannel = db.prepare(
+    'INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  );
 
   db.exec('BEGIN');
   try {
@@ -71,7 +75,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
       insertTicket.run(
         t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
         JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil,
-        t.lastMessageAt, t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt,
+        t.lastMessageAt, t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId,
       );
     }
     for (const m of seed.messages) {
@@ -92,6 +96,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
     }
     for (const a of seed.aiActions) {
       insertAiAction.run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.createdAt, a.resolvedAt);
+    }
+    for (const ch of seed.channels) {
+      insertChannel.run(ch.id, ch.type, ch.name, ch.enabled ? 1 : 0, ch.inboundToken, ch.address, ch.createdAt);
     }
     db.exec('COMMIT');
   } catch (err) {

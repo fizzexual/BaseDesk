@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, AutomationRule,
-  CannedReply, Contact, Counts, Deal, DealCreate, DealPatch, KbArticle, Message, SlaTargets, Ticket, TicketPatch,
-  TicketPriority, ViewId,
+  CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Counts, Deal, DealCreate, DealPatch, KbArticle,
+  Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
@@ -19,6 +19,7 @@ export interface AppState {
   kb: Record<string, KbArticle>;
   aiAgents: Record<string, AiAgent>;
   aiActions: Record<string, AiAction>;
+  channels: Record<string, ChannelConn>;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -48,6 +49,9 @@ export interface AppState {
   runAgents(): Promise<number>;
   approveAction(id: string): Promise<void>;
   dismissAction(id: string): Promise<void>;
+  createChannel(input: ChannelCreate): Promise<string>;
+  updateChannel(id: string, patch: ChannelPatch): Promise<void>;
+  deleteChannel(id: string): Promise<void>;
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -114,6 +118,7 @@ export function createAppStore(repository: Repository) {
     kb: {},
     aiAgents: {},
     aiActions: {},
+    channels: {},
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -132,6 +137,7 @@ export function createAppStore(repository: Repository) {
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
+        channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         currentAgentId: data.currentAgentId,
       });
     },
@@ -511,6 +517,41 @@ export function createAppStore(repository: Repository) {
         set((s) => ({ aiActions: { ...s.aiActions, [action.id]: action } }));
       } catch (err) {
         if (prev) set((s) => ({ aiActions: { ...s.aiActions, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async createChannel(input) {
+      const channel = await repository.createChannel(input);
+      set((s) => ({ channels: { ...s.channels, [channel.id]: channel } }));
+      return channel.id;
+    },
+
+    async updateChannel(id, patch) {
+      const prev = get().channels[id] as ChannelConn | undefined;
+      if (!prev) throw new Error('Channel not found');
+      set((s) => ({ channels: { ...s.channels, [id]: { ...prev, ...patch } } }));
+      try {
+        const channel = await repository.updateChannel(id, patch);
+        set((s) => ({ channels: { ...s.channels, [id]: channel } }));
+      } catch (err) {
+        set((s) => ({ channels: { ...s.channels, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async deleteChannel(id) {
+      const prev = get().channels[id] as ChannelConn | undefined;
+      if (!prev) return;
+      set((s) => {
+        const next = { ...s.channels };
+        delete next[id];
+        return { channels: next };
+      });
+      try {
+        await repository.deleteChannel(id);
+      } catch (err) {
+        set((s) => ({ channels: { ...s.channels, [id]: prev } }));
         throw err;
       }
     },

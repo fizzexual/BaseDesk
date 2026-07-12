@@ -11,7 +11,7 @@ function ticket(over: Partial<Ticket>): Ticket {
     requesterId: 'c1', assigneeId: null, tags: [], channel: 'web',
     createdAt: new Date(NOW).toISOString(), updatedAt: new Date(NOW).toISOString(),
     snoozedUntil: null, lastMessageAt: new Date(NOW).toISOString(), lastMessagePreview: '',
-    firstRespondedAt: null, resolvedAt: null,
+    firstRespondedAt: null, resolvedAt: null, channelId: null,
     ...over,
   };
 }

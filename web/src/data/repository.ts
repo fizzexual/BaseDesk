@@ -1,14 +1,14 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, AutomationRule, CannedReply,
-  Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview,
-  Ticket, TicketPatch, TicketPriority,
+  ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle,
+  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
-  aiAgents: AiAgent[]; aiActions: AiAction[];
+  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -36,4 +36,7 @@ export interface Repository {
   runAgents(): Promise<{ created: number }>;
   approveAction(id: string): Promise<{ action: AiAction; ticket: Ticket; message: Message }>;
   dismissAction(id: string): Promise<{ action: AiAction }>;
+  createChannel(input: ChannelCreate): Promise<ChannelConn>;
+  updateChannel(id: string, patch: ChannelPatch): Promise<ChannelConn>;
+  deleteChannel(id: string): Promise<void>;
 }
