@@ -12,6 +12,7 @@ import { ReportsPage } from '../features/reports/ReportsPage';
 import { RevenuePage } from '../features/revenue/RevenuePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { AiPage } from '../features/ai/AiPage';
+import { KbPage } from '../features/kb/KbPage';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -60,6 +61,8 @@ export function App() {
             <Route path="/revenue" element={<RevenuePage />} />
             <Route path="/revenue/:tab" element={<RevenuePage />} />
             <Route path="/ai" element={<AiPage />} />
+            <Route path="/kb" element={<KbPage />} />
+            <Route path="/kb/:id" element={<KbPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/:tab" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/view/all" replace />} />

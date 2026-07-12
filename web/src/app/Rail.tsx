@@ -3,6 +3,7 @@ import { useApp } from '../data/store';
 import { Avatar } from '../components/Avatar';
 import { Tooltip } from '../components/Tooltip';
 import {
+  IconBook,
   IconChart,
   IconContacts,
   IconInbox,
@@ -20,6 +21,7 @@ const NAV = [
   { to: '/revenue', label: 'Revenue', icon: IconRevenue, matches: ['/revenue'] },
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
+  { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
 ];
 
 function RailButton({

@@ -16,6 +16,7 @@ import { openHelp, requestNewTicket } from './shortcuts';
 import {
   IconAlert,
   IconArchive,
+  IconBook,
   IconChart,
   IconCheck,
   IconCheckCircle,
@@ -174,6 +175,7 @@ export function Palette() {
     },
     { kind: 'action', id: 'go-revenue', label: 'Go to Revenue', icon: IconRevenue, run: () => navigate('/revenue') },
     { kind: 'action', id: 'go-reports', label: 'Go to Reports', icon: IconChart, run: () => navigate('/reports') },
+    { kind: 'action', id: 'go-kb', label: 'Go to Knowledge base', icon: IconBook, run: () => navigate('/kb') },
     { kind: 'action', id: 'go-contacts', label: 'Go to Contacts', icon: IconContacts, run: () => navigate('/contacts') },
     { kind: 'action', id: 'go-settings', label: 'Go to Settings', icon: IconSettings, run: () => navigate('/settings') },
   ];
