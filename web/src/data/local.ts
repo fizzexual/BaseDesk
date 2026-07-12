@@ -1,6 +1,7 @@
 import type {
-  Agent, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
+  Agent, ArticleCreate, ArticlePatch, ArticleStatus, AutomationRule, CannedReply, Contact, Deal, DealCreate,
+  DealPatch, DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch,
+  TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
@@ -57,6 +58,11 @@ interface LocalData {
   deals: Deal[];
   sla: SlaTargets;
   automation: AutomationRule[];
+  kb: KbArticle[];
+}
+
+function slugify(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
@@ -123,6 +129,7 @@ function seedData(): LocalData {
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
     automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
+    kb: seed.kb.map((a) => ({ ...a })),
   };
 }
 
@@ -166,6 +173,11 @@ export class LocalRepository implements Repository {
         }
         this.persist();
       }
+      // Backfill the knowledge base for blobs written before it existed.
+      if (!Array.isArray(this.data.kb)) {
+        this.data.kb = (seedJson as unknown as LocalData).kb.map((a) => ({ ...a }));
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -200,6 +212,7 @@ export class LocalRepository implements Repository {
       currentAgentId: CURRENT_AGENT_ID,
       sla: this.data.sla,
       automation: this.data.automation.map((r) => ({ ...r })),
+      kb: this.data.kb.map((a) => ({ ...a })),
     };
   }
 
@@ -413,6 +426,49 @@ export class LocalRepository implements Repository {
     this.data.automation = rules.map((r) => ({ ...r }));
     this.persist();
     return this.data.automation.map((r) => ({ ...r }));
+  }
+
+  async createArticle(input: ArticleCreate): Promise<KbArticle> {
+    if (input.title.trim() === '') throw new Error('title is required');
+    if (input.category.trim() === '') throw new Error('category is required');
+    const now = new Date().toISOString();
+    const article: KbArticle = {
+      id: nextId(this.data.kb, 'kb_', 2),
+      title: input.title.trim(),
+      slug: slugify(input.title),
+      category: input.category.trim(),
+      body: input.body,
+      status: (input.status ?? 'draft') as ArticleStatus,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.data.kb.push(article);
+    this.persist();
+    return { ...article };
+  }
+
+  async updateArticle(id: string, patch: ArticlePatch): Promise<KbArticle> {
+    const a = this.data.kb.find((x) => x.id === id);
+    if (!a) throw new Error('Article not found');
+    if (patch.title !== undefined) {
+      if (patch.title.trim() === '') throw new Error('invalid title');
+      a.title = patch.title.trim();
+      a.slug = slugify(patch.title);
+    }
+    if (patch.category !== undefined) {
+      if (patch.category.trim() === '') throw new Error('invalid category');
+      a.category = patch.category.trim();
+    }
+    if (patch.body !== undefined) a.body = patch.body;
+    if (patch.status !== undefined) a.status = patch.status;
+    a.updatedAt = new Date().toISOString();
+    this.persist();
+    return { ...a };
+  }
+
+  async deleteArticle(id: string): Promise<void> {
+    this.data.kb = this.data.kb.filter((a) => a.id !== id);
+    this.persist();
   }
 
   async getStats(): Promise<StatsOverview> {

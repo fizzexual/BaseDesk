@@ -1,6 +1,6 @@
 import type {
-  AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  ArticleCreate, ArticlePatch, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch,
+  DealStage, DealType, KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -98,5 +98,17 @@ export class ApiRepository implements Repository {
 
   saveAutomation(rules: AutomationRule[]): Promise<AutomationRule[]> {
     return request('/settings/automation', jsonInit('PUT', rules));
+  }
+
+  createArticle(input: ArticleCreate): Promise<KbArticle> {
+    return request('/kb', jsonInit('POST', input));
+  }
+
+  updateArticle(id: string, patch: ArticlePatch): Promise<KbArticle> {
+    return request(`/kb/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+
+  async deleteArticle(id: string): Promise<void> {
+    await request<{ ok: true }>(`/kb/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 }

@@ -35,6 +35,20 @@ export interface TicketSla {
   label: string;
   clock: 'first_response' | 'resolution' | 'done';
 }
+
+export type ArticleStatus = 'draft' | 'published';
+export interface KbArticle {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  body: string;
+  status: ArticleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+export type ArticleCreate = { title: string; category: string; body: string; status?: ArticleStatus };
+export type ArticlePatch = Partial<Pick<KbArticle, 'title' | 'category' | 'body' | 'status'>>;
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;

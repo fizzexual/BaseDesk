@@ -37,6 +37,7 @@ export { IconCommand } from './IconCommand';
 export { IconDots } from './IconDots';
 export { IconX } from './IconX';
 export { IconArrowUp } from './IconArrowUp';
+export { IconBook } from './IconBook';
 export { IconArrowDown } from './IconArrowDown';
 export { IconPaperclip } from './IconPaperclip';
 export { IconKeyboard } from './IconKeyboard';

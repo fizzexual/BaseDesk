@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, Agent, AutomationRule, CannedReply, Contact, Counts, Deal, DealCreate, DealPatch,
-  Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AccountHealth, Agent, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, Contact, Counts, Deal,
+  DealCreate, DealPatch, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
@@ -15,6 +15,7 @@ export interface AppState {
   deals: Record<string, Deal>;
   sla: SlaTargets;
   automation: AutomationRule[];
+  kb: Record<string, KbArticle>;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -35,6 +36,9 @@ export interface AppState {
   accounts(): AccountHealth[];                                  // grouped by company
   saveSlaTargets(targets: SlaTargets): Promise<void>;
   saveAutomation(rules: AutomationRule[]): Promise<void>;
+  createArticle(input: ArticleCreate): Promise<string>;
+  updateArticle(id: string, patch: ArticlePatch): Promise<void>;
+  deleteArticle(id: string): Promise<void>;
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -98,6 +102,7 @@ export function createAppStore(repository: Repository) {
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
     automation: [],
+    kb: {},
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -113,6 +118,7 @@ export function createAppStore(repository: Repository) {
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
         automation: data.automation,
+        kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
         currentAgentId: data.currentAgentId,
       });
     },
@@ -388,6 +394,41 @@ export function createAppStore(repository: Repository) {
         set({ automation: saved });
       } catch (err) {
         set({ automation: prev });
+        throw err;
+      }
+    },
+
+    async createArticle(input) {
+      const article = await repository.createArticle(input);
+      set((s) => ({ kb: { ...s.kb, [article.id]: article } }));
+      return article.id;
+    },
+
+    async updateArticle(id, patch) {
+      const prev = get().kb[id] as KbArticle | undefined;
+      if (!prev) throw new Error('Article not found');
+      set((s) => ({ kb: { ...s.kb, [id]: { ...prev, ...patch, updatedAt: new Date().toISOString() } } }));
+      try {
+        const article = await repository.updateArticle(id, patch);
+        set((s) => ({ kb: { ...s.kb, [id]: article } }));
+      } catch (err) {
+        set((s) => ({ kb: { ...s.kb, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async deleteArticle(id) {
+      const prev = get().kb[id] as KbArticle | undefined;
+      if (!prev) return;
+      set((s) => {
+        const next = { ...s.kb };
+        delete next[id];
+        return { kb: next };
+      });
+      try {
+        await repository.deleteArticle(id);
+      } catch (err) {
+        set((s) => ({ kb: { ...s.kb, [id]: prev } }));
         throw err;
       }
     },
