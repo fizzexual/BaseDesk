@@ -53,6 +53,12 @@ Connect a model — pick a provider and model from a catalog with per-1M pricing
 
 ![AI model provider](docs/screenshots/ai-provider-light.png)
 
+Customer portal — end-users sign in to track and reply to their own tickets:
+
+| Sign in | My tickets | A conversation |
+| --- | --- | --- |
+| ![Portal sign-in](docs/screenshots/portal-login-light.png) | ![Portal tickets](docs/screenshots/portal-tickets-light.png) | ![Portal ticket](docs/screenshots/portal-ticket-light.png) |
+
 <details>
 <summary>Dark theme</summary>
 
@@ -107,6 +113,7 @@ npm run typecheck  # strict TS, both workspaces
 - **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
 - **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
 - **Team**: invite teammates with shareable links, admin/agent roles, and per-agent reply signatures (the last active admin is protected)
+- **Customer portal** (`/portal`): a separate customer-facing app where end-users sign in (email + password, scrypt-hashed) to see only their own tickets, reply, open new tickets, edit their profile, and browse the help center — replies reopen solved tickets and internal notes stay hidden
 - **Knowledge base**: a categorized help center with a reader and editor, draft/published articles, and search
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
@@ -128,11 +135,12 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Business-hours-aware SLA clocks** — pause outside working hours *(v0.4)*
 - [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
 - [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
+- [x] **Customer portal** — end-user sign-in (scrypt-hashed passwords), scoped tickets, replies, new tickets, profile, help center *(v0.5)*; magic-link email verification next
 - [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents; a model catalog (8 providers) with per-1M pricing, context, and reasoning info; key kept server-side; rule-based fallback *(v0.5)*
 - [ ] Holiday calendars for SLA clocks
 - [ ] Native email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) and outbound delivery — bulletproof threading or nothing
 - [ ] Native Slack & Discord connectors with two-way sync
-- [ ] Transparency portal — customer portal + status page + roadmap/feedback voting
+- [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)
 - [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
 - [ ] Single-binary packaging
 
