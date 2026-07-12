@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Agent, CannedReply, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
+import type { AiAction, AiAgent, Agent, CannedReply, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
 
 interface SeedData {
   agents: Agent[];
@@ -12,6 +12,8 @@ interface SeedData {
   canned: CannedReply[];
   deals: Deal[];
   kb: KbArticle[];
+  aiAgents: AiAgent[];
+  aiActions: AiAction[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +52,14 @@ export function seedIfEmpty(db: DatabaseSync): void {
     `INSERT INTO kb_articles (id, title, slug, category, body, status, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
+  const insertAiAgent = db.prepare(
+    `INSERT INTO ai_agents (id, name, avatarHue, enabled, autonomy, scopeTags, scopePriorities, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertAiAction = db.prepare(
+    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, createdAt, resolvedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
 
   db.exec('BEGIN');
   try {
@@ -76,6 +86,12 @@ export function seedIfEmpty(db: DatabaseSync): void {
     }
     for (const a of seed.kb) {
       insertKb.run(a.id, a.title, a.slug, a.category, a.body, a.status, a.createdAt, a.updatedAt);
+    }
+    for (const g of seed.aiAgents) {
+      insertAiAgent.run(g.id, g.name, g.avatarHue, g.enabled ? 1 : 0, g.autonomy, JSON.stringify(g.scopeTags), JSON.stringify(g.scopePriorities), g.createdAt);
+    }
+    for (const a of seed.aiActions) {
+      insertAiAction.run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.createdAt, a.resolvedAt);
     }
     db.exec('COMMIT');
   } catch (err) {

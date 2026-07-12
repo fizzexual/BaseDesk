@@ -42,6 +42,26 @@ export interface KbArticle {
   createdAt: string;
   updatedAt: string;
 }
+
+export type Autonomy = 'suggest' | 'draft' | 'resolve';
+export interface AiAgent {
+  id: string; name: string; avatarHue: number; enabled: boolean;
+  autonomy: Autonomy;
+  scopeTags: string[];
+  scopePriorities: TicketPriority[];
+  createdAt: string;
+}
+export type AiActionKind = 'triage' | 'draft' | 'resolve';
+export type AiActionStatus = 'pending' | 'approved' | 'dismissed' | 'sent';
+export interface AiAction {
+  id: string; agentId: string; ticketId: string;
+  kind: AiActionKind; status: AiActionStatus;
+  draftBody: string | null;
+  suggestedPriority: TicketPriority | null;
+  suggestedTags: string[];
+  kbArticleId: string | null;
+  createdAt: string; resolvedAt: string | null;
+}
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
@@ -101,4 +121,5 @@ export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
+  aiAgents: AiAgent[]; aiActions: AiAction[];
 }

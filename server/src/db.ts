@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import type { Contact, Deal, KbArticle, Message, Ticket } from './types.js';
+import type { AiAction, AiAgent, Contact, Deal, KbArticle, Message, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -93,6 +93,30 @@ export function openDb(dataDir: string): DatabaseSync {
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ai_agents (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      avatarHue INTEGER NOT NULL,
+      enabled INTEGER NOT NULL,
+      autonomy TEXT NOT NULL,
+      scopeTags TEXT NOT NULL,
+      scopePriorities TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ai_actions (
+      id TEXT PRIMARY KEY,
+      agentId TEXT NOT NULL,
+      ticketId TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      draftBody TEXT,
+      suggestedPriority TEXT,
+      suggestedTags TEXT NOT NULL,
+      kbArticleId TEXT,
+      createdAt TEXT NOT NULL,
+      resolvedAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_actions_status ON ai_actions(kind, status);
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_messages_ticket_at ON messages(ticketId, at);
@@ -153,4 +177,42 @@ export function getDeal(db: DatabaseSync, id: string): Deal | null {
 export function getKbArticle(db: DatabaseSync, id: string): KbArticle | null {
   const row = db.prepare('SELECT * FROM kb_articles WHERE id = ?').get(id) as KbArticle | undefined;
   return row ?? null;
+}
+
+type AiAgentRow = Omit<AiAgent, 'enabled' | 'scopeTags' | 'scopePriorities'> & {
+  enabled: number; scopeTags: string; scopePriorities: string;
+};
+export function rowToAiAgent(row: AiAgentRow): AiAgent {
+  return {
+    ...row,
+    enabled: row.enabled === 1,
+    scopeTags: JSON.parse(row.scopeTags) as string[],
+    scopePriorities: JSON.parse(row.scopePriorities) as TicketPriority[],
+  };
+}
+export function getAiAgents(db: DatabaseSync): AiAgent[] {
+  return (db.prepare('SELECT * FROM ai_agents ORDER BY createdAt').all() as unknown as AiAgentRow[]).map(rowToAiAgent);
+}
+export function getAiAgent(db: DatabaseSync, id: string): AiAgent | null {
+  const row = db.prepare('SELECT * FROM ai_agents WHERE id = ?').get(id) as AiAgentRow | undefined;
+  return row ? rowToAiAgent(row) : null;
+}
+
+type AiActionRow = Omit<AiAction, 'suggestedTags'> & { suggestedTags: string };
+export function rowToAiAction(row: AiActionRow): AiAction {
+  return { ...row, suggestedTags: JSON.parse(row.suggestedTags) as string[] };
+}
+export function getAiActions(db: DatabaseSync): AiAction[] {
+  return (db.prepare('SELECT * FROM ai_actions ORDER BY createdAt DESC').all() as unknown as AiActionRow[]).map(rowToAiAction);
+}
+export function getAiAction(db: DatabaseSync, id: string): AiAction | null {
+  const row = db.prepare('SELECT * FROM ai_actions WHERE id = ?').get(id) as AiActionRow | undefined;
+  return row ? rowToAiAction(row) : null;
+}
+
+export function insertAiAction(db: DatabaseSync, a: AiAction): void {
+  db.prepare(
+    `INSERT INTO ai_actions (id, agentId, ticketId, kind, status, draftBody, suggestedPriority, suggestedTags, kbArticleId, createdAt, resolvedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.createdAt, a.resolvedAt);
 }

@@ -7125,5 +7125,172 @@
       "createdAt": "2026-06-06T12:00:00.000Z",
       "updatedAt": "2026-07-01T12:00:00.000Z"
     }
+  ],
+  "aiAgents": [
+    {
+      "id": "ai_1",
+      "name": "Reply Assistant",
+      "avatarHue": 210,
+      "enabled": true,
+      "autonomy": "draft",
+      "scopeTags": [],
+      "scopePriorities": [],
+      "createdAt": "2026-06-01T12:00:00.000Z"
+    },
+    {
+      "id": "ai_2",
+      "name": "Deflection Bot",
+      "avatarHue": 285,
+      "enabled": true,
+      "autonomy": "resolve",
+      "scopeTags": [],
+      "scopePriorities": [],
+      "createdAt": "2026-06-11T12:00:00.000Z"
+    }
+  ],
+  "aiActions": [
+    {
+      "id": "act_001",
+      "agentId": "ai_1",
+      "ticketId": "t_055",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Chris,\n\nThanks for reaching out about sudden spike in 429 responses since this morning. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-06-30T11:58:25.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_002",
+      "agentId": "ai_1",
+      "ticketId": "t_059",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Derek,\n\nThanks for reaching out about order 41544 tracking has not moved. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-06-30T23:40:54.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_003",
+      "agentId": "ai_1",
+      "ticketId": "t_062",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Sofia,\n\nThanks for reaching out about where is order 33928. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-07-01T13:13:26.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_004",
+      "agentId": "ai_1",
+      "ticketId": "t_064",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Derek,\n\nThanks for reaching out about integration breaks on tickets without assignee. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-07-02T07:08:22.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_005",
+      "agentId": "ai_1",
+      "ticketId": "t_067",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Sofia,\n\nThanks for reaching out about order 37369 arrived damaged. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-07-02T17:54:18.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_006",
+      "agentId": "ai_1",
+      "ticketId": "t_072",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi Sofia,\n\nThanks for reaching out about setting up views for a three-person team. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "createdAt": "2026-07-04T00:16:37.000Z",
+      "resolvedAt": null
+    },
+    {
+      "id": "act_007",
+      "agentId": "ai_2",
+      "ticketId": "t_003",
+      "kind": "resolve",
+      "status": "sent",
+      "draftBody": null,
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": "kb_05",
+      "createdAt": "2026-06-13T23:05:59.000Z",
+      "resolvedAt": "2026-06-14T16:01:04.000Z"
+    },
+    {
+      "id": "act_008",
+      "agentId": "ai_2",
+      "ticketId": "t_004",
+      "kind": "resolve",
+      "status": "sent",
+      "draftBody": null,
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": "kb_04",
+      "createdAt": "2026-06-14T06:12:20.000Z",
+      "resolvedAt": "2026-06-14T17:26:01.000Z"
+    },
+    {
+      "id": "act_009",
+      "agentId": "ai_2",
+      "ticketId": "t_005",
+      "kind": "resolve",
+      "status": "sent",
+      "draftBody": null,
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": "kb_02",
+      "createdAt": "2026-06-14T07:28:16.000Z",
+      "resolvedAt": "2026-06-15T00:55:00.000Z"
+    },
+    {
+      "id": "act_010",
+      "agentId": "ai_2",
+      "ticketId": "t_006",
+      "kind": "resolve",
+      "status": "sent",
+      "draftBody": null,
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": "kb_05",
+      "createdAt": "2026-06-14T15:19:16.000Z",
+      "resolvedAt": "2026-06-15T05:25:32.000Z"
+    },
+    {
+      "id": "act_011",
+      "agentId": "ai_2",
+      "ticketId": "t_007",
+      "kind": "resolve",
+      "status": "sent",
+      "draftBody": null,
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": "kb_05",
+      "createdAt": "2026-06-15T07:48:46.000Z",
+      "resolvedAt": "2026-06-16T05:31:41.000Z"
+    }
   ]
 }

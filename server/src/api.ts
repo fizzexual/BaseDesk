@@ -1,14 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { getContact, getDeal, getKbArticle, getMessages, getSetting, getTicket, openDb, rowToTicket, setSetting, type TicketRow } from './db.js';
+import {
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getContact, getDeal, getKbArticle, getMessages,
+  getSetting, getTicket, insertAiAction, openDb, rowToTicket, setSetting, type TicketRow,
+} from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults.js';
+import { runAgent, type AgentContext, type Autonomy } from './ai-engine.js';
 import type {
-  Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType,
-  KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AiAction, Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage,
+  DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types.js';
+
+const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
+const AUTONOMIES: Autonomy[] = ['suggest', 'draft', 'resolve'];
 
 const VERSION = '0.1.0';
 
@@ -142,6 +149,53 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return row.id;
   };
 
+  /**
+   * Runs the enabled AI agents against a freshly-arrived ticket. The
+   * highest-autonomy matching agent acts once: a resolve agent that deflects to
+   * a KB article sends the reply and solves the ticket; draft/suggest agents
+   * record a pending action for the queues.
+   */
+  const runAgentsOnTicket = (ticket: Ticket, firstBody: string): AiAction | null => {
+    const agents = getAiAgents(db)
+      .filter((a) => a.enabled)
+      .sort((a, b) => AUTONOMY_RANK[b.autonomy] - AUTONOMY_RANK[a.autonomy]);
+    if (agents.length === 0) return null;
+    const contact = getContact(db, ticket.requesterId);
+    const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
+    const kb = db.prepare('SELECT * FROM kb_articles').all() as unknown as KbArticle[];
+    for (const agent of agents) {
+      const ctx: AgentContext = {
+        subject: ticket.subject, bodyText: firstBody,
+        contactName: contact?.name ?? 'there', agentName: agent.name,
+        currentPriority: ticket.priority, currentTags: ticket.tags,
+        canned, kb,
+      };
+      const decision = runAgent(agent, ctx);
+      if (decision === null) continue;
+      const now = new Date().toISOString();
+      const action: AiAction = {
+        id: newId('act_'), agentId: agent.id, ticketId: ticket.id, kind: decision.kind,
+        status: decision.kind === 'resolve' ? 'sent' : 'pending',
+        draftBody: decision.draftBody, suggestedPriority: decision.suggestedPriority,
+        suggestedTags: decision.suggestedTags, kbArticleId: decision.kbArticleId,
+        createdAt: now, resolvedAt: decision.kind === 'resolve' ? now : null,
+      };
+      insertAiAction(db, action);
+      if (decision.kind === 'resolve' && decision.draftBody !== null) {
+        const message: Message = {
+          id: newId('m_'), ticketId: ticket.id, authorKind: 'agent', authorId: currentAgentId(),
+          kind: 'reply', body: decision.draftBody, at: now,
+        };
+        db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+        db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
+          .run('solved', now, now, now, preview(decision.draftBody), now, ticket.id);
+      }
+      return action; // only the highest-autonomy matching agent acts
+    }
+    return null;
+  };
+
   const app = new Hono();
 
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
@@ -160,6 +214,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       sla: slaTargets(),
       automation: automationRules(),
       kb,
+      aiAgents: getAiAgents(db),
+      aiActions: getAiActions(db),
     };
     return c.json(data);
   });
@@ -273,7 +329,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
-    return c.json({ ticket, message });
+    // AI agents evaluate the new ticket (may auto-resolve it).
+    runAgentsOnTicket(ticket, body);
+    return c.json({ ticket: getTicket(db, ticket.id), message });
   });
 
   app.patch('/api/tickets/:id', async (c) => {
@@ -713,6 +771,131 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getKbArticle(db, id) === null) return c.json({ error: `article not found: ${id}` }, 404);
     db.prepare('DELETE FROM kb_articles WHERE id = ?').run(id);
     return c.json({ ok: true });
+  });
+
+  app.post('/api/ai/agents', async (c) => {
+    let input: { name?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { name, autonomy, scopeTags, scopePriorities } = input;
+    if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    if (typeof autonomy !== 'string' || !AUTONOMIES.includes(autonomy as Autonomy)) return c.json({ error: 'invalid autonomy' }, 400);
+    const tags = Array.isArray(scopeTags) ? scopeTags.filter((x): x is string => typeof x === 'string') : [];
+    const prios = Array.isArray(scopePriorities) ? scopePriorities.filter((p): p is TicketPriority => PRIORITIES.includes(p as TicketPriority)) : [];
+    const agent = {
+      id: newId('ai_'), name: name.trim(), avatarHue: djb2(name.trim()) % 360, enabled: true,
+      autonomy: autonomy as Autonomy, scopeTags: tags, scopePriorities: prios, createdAt: new Date().toISOString(),
+    };
+    db.prepare(
+      'INSERT INTO ai_agents (id, name, avatarHue, enabled, autonomy, scopeTags, scopePriorities, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(agent.id, agent.name, agent.avatarHue, 1, agent.autonomy, JSON.stringify(agent.scopeTags), JSON.stringify(agent.scopePriorities), agent.createdAt);
+    return c.json(agent);
+  });
+
+  app.patch('/api/ai/agents/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = getAiAgent(db, id);
+    if (existing === null) return c.json({ error: `agent not found: ${id}` }, 404);
+    let patch: { name?: unknown; enabled?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: (string | number)[] = [];
+    if ('name' in patch) {
+      if (typeof patch.name !== 'string' || patch.name.trim() === '') return c.json({ error: 'invalid name' }, 400);
+      sets.push('name = ?');
+      params.push(patch.name.trim());
+    }
+    if ('enabled' in patch) {
+      if (typeof patch.enabled !== 'boolean') return c.json({ error: 'invalid enabled' }, 400);
+      sets.push('enabled = ?');
+      params.push(patch.enabled ? 1 : 0);
+    }
+    if ('autonomy' in patch) {
+      if (typeof patch.autonomy !== 'string' || !AUTONOMIES.includes(patch.autonomy as Autonomy)) return c.json({ error: 'invalid autonomy' }, 400);
+      sets.push('autonomy = ?');
+      params.push(patch.autonomy);
+    }
+    if ('scopeTags' in patch) {
+      if (!Array.isArray(patch.scopeTags)) return c.json({ error: 'invalid scopeTags' }, 400);
+      sets.push('scopeTags = ?');
+      params.push(JSON.stringify(patch.scopeTags.filter((x): x is string => typeof x === 'string')));
+    }
+    if ('scopePriorities' in patch) {
+      if (!Array.isArray(patch.scopePriorities)) return c.json({ error: 'invalid scopePriorities' }, 400);
+      sets.push('scopePriorities = ?');
+      params.push(JSON.stringify(patch.scopePriorities.filter((p): p is TicketPriority => PRIORITIES.includes(p as TicketPriority))));
+    }
+    if (sets.length === 0) return c.json(existing);
+    db.prepare(`UPDATE ai_agents SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(getAiAgent(db, id));
+  });
+
+  app.delete('/api/ai/agents/:id', (c) => {
+    const id = c.req.param('id');
+    if (getAiAgent(db, id) === null) return c.json({ error: `agent not found: ${id}` }, 404);
+    db.prepare('DELETE FROM ai_agents WHERE id = ?').run(id);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/ai/run', (c) => {
+    const actioned = new Set(
+      (db.prepare('SELECT DISTINCT ticketId FROM ai_actions').all() as { ticketId: string }[]).map((r) => r.ticketId),
+    );
+    const rows = db
+      .prepare("SELECT * FROM tickets WHERE bucket = 'inbox' AND status IN ('open', 'pending')")
+      .all() as unknown as TicketRow[];
+    let created = 0;
+    for (const row of rows) {
+      const ticket = rowToTicket(row);
+      if (actioned.has(ticket.id)) continue;
+      const firstContact = getMessages(db, ticket.id).find((m) => m.authorKind === 'contact');
+      if (runAgentsOnTicket(ticket, firstContact?.body ?? '') !== null) created += 1;
+    }
+    return c.json({ created });
+  });
+
+  app.post('/api/ai/actions/:id/approve', (c) => {
+    const id = c.req.param('id');
+    const action = getAiAction(db, id);
+    if (action === null) return c.json({ error: `action not found: ${id}` }, 404);
+    if (action.kind !== 'draft' || action.status !== 'pending') return c.json({ error: 'not an approvable draft' }, 400);
+    const ticket = getTicket(db, action.ticketId);
+    if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    const now = new Date().toISOString();
+    const body = action.draftBody ?? '';
+    const message: Message = {
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'agent', authorId: currentAgentId(),
+      kind: 'reply', body, at: now,
+    };
+    db.exec('BEGIN');
+    try {
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      const nextStatus = ticket.status === 'open' ? 'pending' : ticket.status;
+      const nextFirstResponded = ticket.firstRespondedAt ?? now;
+      db.prepare('UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
+        .run(nextStatus, now, now, preview(body), nextFirstResponded, ticket.id);
+      db.prepare("UPDATE ai_actions SET status = 'approved', resolvedAt = ? WHERE id = ?").run(now, id);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    return c.json({ action: getAiAction(db, id), ticket: getTicket(db, ticket.id), message });
+  });
+
+  app.post('/api/ai/actions/:id/dismiss', (c) => {
+    const id = c.req.param('id');
+    if (getAiAction(db, id) === null) return c.json({ error: `action not found: ${id}` }, 404);
+    db.prepare("UPDATE ai_actions SET status = 'dismissed', resolvedAt = ? WHERE id = ?").run(new Date().toISOString(), id);
+    return c.json({ action: getAiAction(db, id) });
   });
 
   app.get('/api/stats', (c) => c.json(computeStats(db, new Date())));

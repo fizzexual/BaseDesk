@@ -667,10 +667,39 @@ const kbSeed = [
   updatedAt: iso(NOW_MS - (20 - i * 2) * DAY),
 }));
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed };
+// ---------------------------------------------------------------- ai agents
+const aiAgents = [
+  { id: 'ai_1', name: 'Reply Assistant', avatarHue: 210, enabled: true, autonomy: 'draft', scopeTags: [], scopePriorities: [], createdAt: iso(NOW_MS - 40 * DAY) },
+  { id: 'ai_2', name: 'Deflection Bot', avatarHue: 285, enabled: true, autonomy: 'resolve', scopeTags: [], scopePriorities: [], createdAt: iso(NOW_MS - 30 * DAY) },
+];
+const contactById = new Map(contacts.map((c) => [c.id, c]));
+const draftTickets = tickets.filter((t) => t.bucket === 'inbox' && (t.status === 'open' || t.status === 'pending')).slice(0, 6);
+const resolvedTickets = tickets.filter((t) => t.bucket === 'inbox' && t.status === 'solved').slice(0, 5);
+const aiActions = [];
+let aiN = 0;
+for (const t of draftTickets) {
+  const c = contactById.get(t.requesterId);
+  const first = c ? c.name.split(' ')[0] : 'there';
+  const topic = t.subject.toLowerCase().replace(/[.?!]+$/, '');
+  aiActions.push({
+    id: 'act_' + pad(++aiN, 3), agentId: 'ai_1', ticketId: t.id, kind: 'draft', status: 'pending',
+    draftBody: `Hi ${first},\n\nThanks for reaching out about ${topic}. I have looked into it on our side and will follow up shortly with the next step. If anything else comes up in the meantime, just reply here and it stays on this thread.\n\nBest,\nReply Assistant`,
+    suggestedPriority: null, suggestedTags: [], kbArticleId: null,
+    createdAt: iso(new Date(t.lastMessageAt).getTime() + 5 * MIN), resolvedAt: null,
+  });
+}
+for (const t of resolvedTickets) {
+  aiActions.push({
+    id: 'act_' + pad(++aiN, 3), agentId: 'ai_2', ticketId: t.id, kind: 'resolve', status: 'sent',
+    draftBody: null, suggestedPriority: null, suggestedTags: [], kbArticleId: pick(kbSeed).id,
+    createdAt: iso(new Date(t.createdAt).getTime() + 10 * MIN), resolvedAt: t.updatedAt,
+  });
+}
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
-console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb`);
+console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions`);
 
 
 
