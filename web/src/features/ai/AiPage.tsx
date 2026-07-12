@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
+import { estimateCost, formatCost, formatTokens } from '../../data/model-catalog';
 import type { AiAgent, Autonomy, TicketPriority } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
@@ -125,6 +126,7 @@ export function AiPage() {
 
   const aiAgents = useApp((s) => s.aiAgents);
   const aiActions = useApp((s) => s.aiActions);
+  const aiProvider = useApp((s) => s.aiProvider);
   const runAgents = useApp((s) => s.runAgents);
   const updateAiAgent = useApp((s) => s.updateAiAgent);
 
@@ -145,6 +147,19 @@ export function AiPage() {
     }
     return map;
   }, [aiActions]);
+
+  const usage = useMemo(() => {
+    let prompt = 0;
+    let completion = 0;
+    let generations = 0;
+    for (const a of Object.values(aiActions)) {
+      prompt += a.promptTokens;
+      completion += a.completionTokens;
+      if (a.promptTokens + a.completionTokens > 0) generations += 1;
+    }
+    const cost = estimateCost(prompt, completion, aiProvider.baseUrl, aiProvider.model);
+    return { total: prompt + completion, generations, cost };
+  }, [aiActions, aiProvider]);
 
   async function onRun() {
     if (running) return;
@@ -213,7 +228,33 @@ export function AiPage() {
       </div>
 
       <div className="mx-auto max-w-[720px] px-6 pb-16">
-        <div className="border-t border-line pt-10">
+        {usage.generations > 0 && (
+          <div className="border-t border-line pt-10">
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-lg border border-line bg-surface-2 px-4 py-3">
+              <div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">Tokens used</div>
+                <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{formatTokens(usage.total)}</div>
+              </div>
+              <div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">Estimated cost</div>
+                <div className="mt-0.5 text-[20px] font-semibold tabular-nums">
+                  {usage.cost !== null ? formatCost(usage.cost) : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">AI generations</div>
+                <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{usage.generations}</div>
+              </div>
+              <p className="min-w-0 flex-1 self-center text-right text-[12px] text-text-3">
+                {usage.cost !== null
+                  ? `Priced at ${aiProvider.model}`
+                  : 'Set a catalog model in Settings → AI to estimate cost'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className={cx(usage.generations > 0 ? 'pt-8' : 'border-t border-line pt-10')}>
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-semibold">Your agents</h2>
             <div className="flex items-center gap-2">

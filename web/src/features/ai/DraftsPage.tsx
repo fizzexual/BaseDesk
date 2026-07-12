@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
+import { TokenCost } from './TokenCost';
 import { IconNote, IconSparkle } from '../../icons';
 
 export function DraftsPage() {
@@ -100,6 +101,8 @@ export function DraftsPage() {
                       <span className="truncate">{agent?.name ?? 'Agent'}</span>
                       <span aria-hidden="true">·</span>
                       <TimeAgo iso={action.createdAt} />
+                      <span aria-hidden="true">·</span>
+                      <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
                     </div>
                   </div>
                 </div>

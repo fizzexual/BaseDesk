@@ -362,6 +362,7 @@ export class LocalRepository implements Repository {
         kind: decision.kind, status: decision.kind === 'resolve' ? 'sent' : 'pending',
         draftBody: decision.draftBody, suggestedPriority: decision.suggestedPriority,
         suggestedTags: decision.suggestedTags, kbArticleId: decision.kbArticleId,
+        promptTokens: 0, completionTokens: 0, // demo mode is rule-based — no model tokens
         createdAt: now, resolvedAt: decision.kind === 'resolve' ? now : null,
       };
       this.data.aiActions.push(action);
@@ -607,6 +608,7 @@ export class LocalRepository implements Repository {
       model: input.model && input.model.trim() !== '' ? input.model.trim() : cur.model,
       temperature: typeof input.temperature === 'number' ? Math.min(2, Math.max(0, input.temperature)) : cur.temperature,
       reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : cur.reasoning,
+      kbOnly: typeof input.kbOnly === 'boolean' ? input.kbOnly : cur.kbOnly,
       hasKey: typeof input.apiKey === 'string' ? input.apiKey.trim() !== '' : cur.hasKey,
     };
     this.data.aiProvider = next;
@@ -634,7 +636,7 @@ export class LocalRepository implements Repository {
       lastCustomerMessage: lastCustomer?.body ?? '',
       canned: this.data.canned,
     });
-    return { body, source: 'rules' };
+    return { body, source: 'rules', usage: { promptTokens: 0, completionTokens: 0 } };
   }
 
   async aiTriage(ticketId: string): Promise<CopilotTriage> {
@@ -645,7 +647,7 @@ export class LocalRepository implements Repository {
         .map((m) => m.body)
         .join('\n') || ticket.lastMessagePreview;
     const t = suggestTriage({ subject: ticket.subject, bodyText, currentPriority: ticket.priority, currentTags: ticket.tags });
-    return { priority: t.priority, tags: t.tags, reason: t.reason, source: 'rules' };
+    return { priority: t.priority, tags: t.tags, reason: t.reason, source: 'rules', usage: { promptTokens: 0, completionTokens: 0 } };
   }
 
   async aiSummarize(ticketId: string): Promise<SummaryResult> {
@@ -655,7 +657,7 @@ export class LocalRepository implements Repository {
       .filter((m) => m.ticketId === ticketId)
       .sort((a, b) => a.at.localeCompare(b.at));
     const summary = summarizeThread({ contactName: contact?.name ?? 'there', messages });
-    return { summary, source: 'rules' };
+    return { summary, source: 'rules', usage: { promptTokens: 0, completionTokens: 0 } };
   }
 
   async createArticle(input: ArticleCreate): Promise<KbArticle> {

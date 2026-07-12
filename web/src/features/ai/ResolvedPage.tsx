@@ -5,6 +5,7 @@ import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TimeAgo } from '../../components/TimeAgo';
+import { TokenCost } from './TokenCost';
 import { IconCheckCircle, IconSparkle } from '../../icons';
 
 export function ResolvedPage() {
@@ -70,6 +71,8 @@ export function ResolvedPage() {
                         </Link>
                       </>
                     )}
+                    <span aria-hidden="true">·</span>
+                    <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
                   </div>
                 </div>
                 <TimeAgo iso={action.resolvedAt ?? action.createdAt} />

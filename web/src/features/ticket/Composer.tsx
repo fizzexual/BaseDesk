@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { Contact, Ticket } from '../../data/types';
+import type { AiSource, Contact, Ticket, TokenUsage } from '../../data/types';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
-import { IconNote, IconReply, IconSend, IconSparkle } from '../../icons';
+import { IconBook, IconNote, IconReply, IconSend, IconSparkle } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
 import { aiEnabled } from '../ai/engine';
+import { TokenCost } from '../ai/TokenCost';
 
 type Mode = 'reply' | 'note';
 
@@ -27,6 +28,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
   const [drafting, setDrafting] = useState(false);
+  const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function autogrow() {
@@ -70,10 +72,10 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     if (drafting) return;
     setDrafting(true);
     try {
-      const { body: draft, source } = await aiDraft(ticket.id);
+      const { body: draft, source, usage } = await aiDraft(ticket.id);
       setBody(draft);
+      setDraftMeta({ source, usage });
       focusTextarea();
-      if (source === 'rules') toast('Drafted with the built-in engine — add a model in Settings → AI');
     } catch {
       toast('Could not draft a reply');
     } finally {
@@ -85,6 +87,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     const text = body.trim();
     if (text === '') return;
     setBody('');
+    setDraftMeta(null);
     focusTextarea();
     useApp
       .getState()
@@ -150,6 +153,20 @@ export function Composer({ ticket }: { ticket: Ticket }) {
             <IconSparkle size={14} />
             {drafting ? 'Drafting…' : 'Draft with AI'}
           </Button>
+        )}
+        {draftMeta !== null && (
+          <span className="flex items-center gap-1.5 pl-1 text-[12px] text-text-3">
+            {draftMeta.source === 'model' ? (
+              <>
+                <IconBook size={13} className="shrink-0 text-green" />
+                <span>From knowledge base</span>
+                <span aria-hidden="true">·</span>
+                <TokenCost promptTokens={draftMeta.usage.promptTokens} completionTokens={draftMeta.usage.completionTokens} />
+              </>
+            ) : (
+              <span>Rule-based draft</span>
+            )}
+          </span>
         )}
         <div className="flex-1" />
         <Button size="sm" disabled={body.trim() === ''} onClick={send}>

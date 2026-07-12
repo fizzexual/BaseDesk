@@ -88,6 +88,7 @@ export interface AiAction {
   suggestedPriority: TicketPriority | null;
   suggestedTags: string[];
   kbArticleId: string | null;
+  promptTokens: number; completionTokens: number;
   createdAt: string; resolvedAt: string | null;
 }
 export type AiAgentCreate = { name: string; autonomy: Autonomy; scopeTags?: string[]; scopePriorities?: TicketPriority[] };
@@ -100,6 +101,7 @@ export interface AiProvider {
   model: string;
   temperature: number;
   reasoning: boolean;
+  kbOnly: boolean;
   hasKey: boolean;
 }
 /** Provider fields to update. `apiKey` omitted keeps the stored key; '' clears it. */
@@ -109,13 +111,15 @@ export type AiProviderSave = {
   model?: string;
   temperature?: number;
   reasoning?: boolean;
+  kbOnly?: boolean;
   apiKey?: string;
 };
 export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string; empty?: boolean }
 export type AiSource = 'model' | 'rules';
-export interface DraftResult { body: string; source: AiSource }
-export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource }
-export interface SummaryResult { summary: string; source: AiSource }
+export interface TokenUsage { promptTokens: number; completionTokens: number }
+export interface DraftResult { body: string; source: AiSource; usage: TokenUsage }
+export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource; usage: TokenUsage }
+export interface SummaryResult { summary: string; source: AiSource; usage: TokenUsage }
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;

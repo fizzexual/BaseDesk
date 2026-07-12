@@ -148,3 +148,22 @@ export function formatPrice(usdPer1M: number): string {
 export function formatContext(contextK: number): string {
   return contextK >= 1000 ? `${contextK / 1000}M` : `${contextK}K`;
 }
+
+/** Dollar cost of a generation for the given model, or null if its price is unknown. */
+export function estimateCost(promptTokens: number, completionTokens: number, baseUrl: string, model: string): number | null {
+  const info = modelInfo(baseUrl, model);
+  if (info === undefined) return null;
+  return (promptTokens / 1_000_000) * info.inputPer1M + (completionTokens / 1_000_000) * info.outputPer1M;
+}
+
+export function formatCost(usd: number): string {
+  if (usd === 0) return 'free';
+  if (usd < 0.0001) return '<$0.0001';
+  if (usd < 1) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+/** "480" or "1.2K" tokens. */
+export function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n);
+}

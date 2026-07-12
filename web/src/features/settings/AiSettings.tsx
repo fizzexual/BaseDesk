@@ -30,6 +30,7 @@ export function AiSettings() {
   const [baseUrl, setBaseUrl] = useState<string>(provider.baseUrl);
   const [model, setModel] = useState<string>(provider.model);
   const [reasoning, setReasoning] = useState<boolean>(provider.reasoning);
+  const [kbOnly, setKbOnly] = useState<boolean>(provider.kbOnly);
   const [temperature, setTemperature] = useState<string>(String(provider.temperature));
   const [key, setKey] = useState<string>('');
   const [hasKey, setHasKey] = useState<boolean>(provider.hasKey);
@@ -63,6 +64,7 @@ export function AiSettings() {
       baseUrl: baseUrl.trim(),
       model: model.trim(),
       reasoning,
+      kbOnly,
       temperature: Number.isFinite(temp) ? temp : 0.4,
       // Only send the key when the user typed one, so blank keeps the stored key.
       ...(key.trim() !== '' ? { apiKey: key.trim() } : {}),
@@ -192,6 +194,21 @@ export function AiSettings() {
             </span>
           )}
         </div>
+
+        <label className="flex items-start gap-2.5 rounded-md border border-line p-2.5">
+          <input
+            type="checkbox"
+            checked={kbOnly}
+            onChange={(e) => setKbOnly(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-green"
+          />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-medium">Answer only from the knowledge base</span>
+            <span className="block text-[12px] text-text-3">
+              Drafts and auto-resolves use only your published articles as facts and never guess. Turn off to let the model add general knowledge (less safe, more flexible).
+            </span>
+          </span>
+        </label>
 
         <label className="flex items-start gap-2.5 rounded-md border border-line p-2.5">
           <input
