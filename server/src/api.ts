@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { getContact, getDeal, getMessages, getSetting, getTicket, openDb, rowToTicket, setSetting, type TicketRow } from './db.js';
+import { getContact, getDeal, getKbArticle, getMessages, getSetting, getTicket, openDb, rowToTicket, setSetting, type TicketRow } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults.js';
 import type {
-  Agent, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType, Message,
-  SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  Agent, ArticleStatus, AutomationRule, BootstrapData, CannedReply, Contact, Deal, DealStage, DealType,
+  KbArticle, Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types.js';
 
 const VERSION = '0.1.0';
@@ -66,6 +66,10 @@ function djb2(s: string): number {
 
 function preview(body: string): string {
   return body.replace(/\s+/g, ' ').trim().slice(0, 90);
+}
+
+function slugify(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 /**
@@ -149,11 +153,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
     const canned = db.prepare('SELECT * FROM canned_replies ORDER BY rowid').all() as unknown as CannedReply[];
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
+    const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
       tickets, contacts, agents, canned, deals,
       currentAgentId: currentAgentId(),
       sla: slaTargets(),
       automation: automationRules(),
+      kb,
     };
     return c.json(data);
   });
@@ -628,6 +634,85 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     setSetting(db, 'automation', JSON.stringify(input));
     return c.json(input);
+  });
+
+  app.get('/api/kb', (c) => {
+    const rows = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
+    return c.json(rows);
+  });
+
+  app.post('/api/kb', async (c) => {
+    let input: { title?: unknown; category?: unknown; body?: unknown; status?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { title, category, body, status } = input;
+    if (typeof title !== 'string' || title.trim() === '') return c.json({ error: 'title is required' }, 400);
+    if (typeof category !== 'string' || category.trim() === '') return c.json({ error: 'category is required' }, 400);
+    if (typeof body !== 'string') return c.json({ error: 'body is required' }, 400);
+    const st: ArticleStatus = status === 'published' ? 'published' : 'draft';
+    const now = new Date().toISOString();
+    const article: KbArticle = {
+      id: newId('kb_'),
+      title: title.trim(),
+      slug: slugify(title),
+      category: category.trim(),
+      body,
+      status: st,
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.prepare(
+      'INSERT INTO kb_articles (id, title, slug, category, body, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(article.id, article.title, article.slug, article.category, article.body, article.status, article.createdAt, article.updatedAt);
+    return c.json(article);
+  });
+
+  app.patch('/api/kb/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = getKbArticle(db, id);
+    if (existing === null) return c.json({ error: `article not found: ${id}` }, 404);
+    let patch: { title?: unknown; category?: unknown; body?: unknown; status?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: string[] = [];
+    if ('title' in patch) {
+      if (typeof patch.title !== 'string' || patch.title.trim() === '') return c.json({ error: 'invalid title' }, 400);
+      sets.push('title = ?', 'slug = ?');
+      params.push(patch.title.trim(), slugify(patch.title));
+    }
+    if ('category' in patch) {
+      if (typeof patch.category !== 'string' || patch.category.trim() === '') return c.json({ error: 'invalid category' }, 400);
+      sets.push('category = ?');
+      params.push(patch.category.trim());
+    }
+    if ('body' in patch) {
+      if (typeof patch.body !== 'string') return c.json({ error: 'invalid body' }, 400);
+      sets.push('body = ?');
+      params.push(patch.body);
+    }
+    if ('status' in patch) {
+      if (patch.status !== 'draft' && patch.status !== 'published') return c.json({ error: 'invalid status' }, 400);
+      sets.push('status = ?');
+      params.push(patch.status);
+    }
+    sets.push('updatedAt = ?');
+    params.push(new Date().toISOString());
+    db.prepare(`UPDATE kb_articles SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(getKbArticle(db, id));
+  });
+
+  app.delete('/api/kb/:id', (c) => {
+    const id = c.req.param('id');
+    if (getKbArticle(db, id) === null) return c.json({ error: `article not found: ${id}` }, 404);
+    db.prepare('DELETE FROM kb_articles WHERE id = ?').run(id);
+    return c.json({ ok: true });
   });
 
   app.get('/api/stats', (c) => c.json(computeStats(db, new Date())));

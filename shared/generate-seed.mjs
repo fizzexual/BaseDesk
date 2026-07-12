@@ -642,10 +642,35 @@ for (let i = 0; i < 35; i++) {
 }
 deals.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
 
-const out = { agents, contacts, tickets, messages, canned, deals };
+// ---------------------------------------------------------------- knowledge base
+const kbSeed = [
+  ['Getting started', 'Set up your first inbox view',
+    'Views are saved filters over your tickets. Start with the built-in All, Unassigned, and My open views, then add your own by combining a status, a priority, and an assignee. Most small teams run one shared triage view plus a personal view per agent so nobody trips over each other.'],
+  ['Getting started', 'Keyboard shortcuts cheat sheet',
+    'BaseDesk is keyboard-first. In the inbox, use j and k to move between tickets, Enter to open, e to solve, u to assign to yourself, and 1 to 4 to set priority. Inside a ticket, r focuses the reply box and n starts an internal note. Press ? anywhere to see the full list, or Ctrl/Cmd K to open the command palette.'],
+  ['Billing', 'How refunds are processed',
+    'Refunds are available within 30 days of purchase for unused items and within 14 days for opened ones. Once the return scan comes back from the carrier, the refund is issued automatically and lands on the original card within 3 to 5 business days. Duplicate charges are refunded as soon as we can see both on our side.'],
+  ['Billing', 'Update your VAT or tax ID',
+    'Add or correct a VAT or tax ID from the billing profile before an invoice is generated. If an invoice was already cut without the ID, we can reissue it with the correct details and, where VAT was charged in error, raise a credit note for the difference. Reissued invoices appear in your billing history.'],
+  ['API', 'Handling rate limits (429s)',
+    'The API allows 600 requests per minute per token, measured over a sliding window. Every response includes an X-RateLimit-Remaining header so your client can back off before hitting a 429. For bulk work, batch into chunks of about 50 requests with a short pause between them to stay comfortably under the limit.'],
+  ['Account', 'Reset two-factor authentication',
+    'If you have lost your authenticator and your backup codes, reply from the billing email on the account and include the last four digits of the card on file. After an identity check we reset 2FA and add an entry to the audit log. Set up fresh backup codes right after you are back in so this does not recur.'],
+].map(([category, title, body], i) => ({
+  id: 'kb_' + pad(i + 1, 2),
+  title,
+  slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  category,
+  body,
+  status: 'published',
+  createdAt: iso(NOW_MS - (60 - i * 5) * DAY),
+  updatedAt: iso(NOW_MS - (20 - i * 2) * DAY),
+}));
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
-console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals`);
+console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb`);
 
 
 

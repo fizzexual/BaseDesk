@@ -7063,5 +7063,67 @@
       "closedAt": "2026-06-06T11:00:00.000Z",
       "updatedAt": "2026-06-06T11:00:00.000Z"
     }
+  ],
+  "kb": [
+    {
+      "id": "kb_01",
+      "title": "Set up your first inbox view",
+      "slug": "set-up-your-first-inbox-view",
+      "category": "Getting started",
+      "body": "Views are saved filters over your tickets. Start with the built-in All, Unassigned, and My open views, then add your own by combining a status, a priority, and an assignee. Most small teams run one shared triage view plus a personal view per agent so nobody trips over each other.",
+      "status": "published",
+      "createdAt": "2026-05-12T12:00:00.000Z",
+      "updatedAt": "2026-06-21T12:00:00.000Z"
+    },
+    {
+      "id": "kb_02",
+      "title": "Keyboard shortcuts cheat sheet",
+      "slug": "keyboard-shortcuts-cheat-sheet",
+      "category": "Getting started",
+      "body": "BaseDesk is keyboard-first. In the inbox, use j and k to move between tickets, Enter to open, e to solve, u to assign to yourself, and 1 to 4 to set priority. Inside a ticket, r focuses the reply box and n starts an internal note. Press ? anywhere to see the full list, or Ctrl/Cmd K to open the command palette.",
+      "status": "published",
+      "createdAt": "2026-05-17T12:00:00.000Z",
+      "updatedAt": "2026-06-23T12:00:00.000Z"
+    },
+    {
+      "id": "kb_03",
+      "title": "How refunds are processed",
+      "slug": "how-refunds-are-processed",
+      "category": "Billing",
+      "body": "Refunds are available within 30 days of purchase for unused items and within 14 days for opened ones. Once the return scan comes back from the carrier, the refund is issued automatically and lands on the original card within 3 to 5 business days. Duplicate charges are refunded as soon as we can see both on our side.",
+      "status": "published",
+      "createdAt": "2026-05-22T12:00:00.000Z",
+      "updatedAt": "2026-06-25T12:00:00.000Z"
+    },
+    {
+      "id": "kb_04",
+      "title": "Update your VAT or tax ID",
+      "slug": "update-your-vat-or-tax-id",
+      "category": "Billing",
+      "body": "Add or correct a VAT or tax ID from the billing profile before an invoice is generated. If an invoice was already cut without the ID, we can reissue it with the correct details and, where VAT was charged in error, raise a credit note for the difference. Reissued invoices appear in your billing history.",
+      "status": "published",
+      "createdAt": "2026-05-27T12:00:00.000Z",
+      "updatedAt": "2026-06-27T12:00:00.000Z"
+    },
+    {
+      "id": "kb_05",
+      "title": "Handling rate limits (429s)",
+      "slug": "handling-rate-limits-429s",
+      "category": "API",
+      "body": "The API allows 600 requests per minute per token, measured over a sliding window. Every response includes an X-RateLimit-Remaining header so your client can back off before hitting a 429. For bulk work, batch into chunks of about 50 requests with a short pause between them to stay comfortably under the limit.",
+      "status": "published",
+      "createdAt": "2026-06-01T12:00:00.000Z",
+      "updatedAt": "2026-06-29T12:00:00.000Z"
+    },
+    {
+      "id": "kb_06",
+      "title": "Reset two-factor authentication",
+      "slug": "reset-two-factor-authentication",
+      "category": "Account",
+      "body": "If you have lost your authenticator and your backup codes, reply from the billing email on the account and include the last four digits of the card on file. After an identity check we reset 2FA and add an entry to the audit log. Set up fresh backup codes right after you are back in so this does not recur.",
+      "status": "published",
+      "createdAt": "2026-06-06T12:00:00.000Z",
+      "updatedAt": "2026-07-01T12:00:00.000Z"
+    }
   ]
 }

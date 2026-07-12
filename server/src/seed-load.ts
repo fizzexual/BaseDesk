@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Agent, CannedReply, Contact, Deal, Message, Ticket } from './types.js';
+import type { Agent, CannedReply, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
 
 interface SeedData {
   agents: Agent[];
@@ -11,6 +11,7 @@ interface SeedData {
   messages: Message[];
   canned: CannedReply[];
   deals: Deal[];
+  kb: KbArticle[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +46,10 @@ export function seedIfEmpty(db: DatabaseSync): void {
       id, title, type, stage, value, currency, contactId, ticketId, ownerId, note, createdAt, closedAt, updatedAt
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
+  const insertKb = db.prepare(
+    `INSERT INTO kb_articles (id, title, slug, category, body, status, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
 
   db.exec('BEGIN');
   try {
@@ -68,6 +73,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
         d.id, d.title, d.type, d.stage, d.value, d.currency, d.contactId, d.ticketId,
         d.ownerId, d.note, d.createdAt, d.closedAt, d.updatedAt,
       );
+    }
+    for (const a of seed.kb) {
+      insertKb.run(a.id, a.title, a.slug, a.category, a.body, a.status, a.createdAt, a.updatedAt);
     }
     db.exec('COMMIT');
   } catch (err) {

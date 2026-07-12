@@ -30,6 +30,18 @@ export interface AutomationRule {
   condition: { type: AutomationConditionType; value: string };
   action: { type: AutomationActionType; value: string };
 }
+
+export type ArticleStatus = 'draft' | 'published';
+export interface KbArticle {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  body: string;
+  status: ArticleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
@@ -88,5 +100,5 @@ export type TicketPatch = Partial<Pick<Ticket,
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
-  sla: SlaTargets; automation: AutomationRule[];
+  sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
 }

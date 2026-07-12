@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import type { Contact, Deal, Message, Ticket } from './types.js';
+import type { Contact, Deal, KbArticle, Message, Ticket } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -83,6 +83,16 @@ export function openDb(dataDir: string): DatabaseSync {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS kb_articles (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      category TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_messages_ticket_at ON messages(ticketId, at);
@@ -137,5 +147,10 @@ export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
 
 export function getDeal(db: DatabaseSync, id: string): Deal | null {
   const row = db.prepare('SELECT * FROM deals WHERE id = ?').get(id) as Deal | undefined;
+  return row ?? null;
+}
+
+export function getKbArticle(db: DatabaseSync, id: string): KbArticle | null {
+  const row = db.prepare('SELECT * FROM kb_articles WHERE id = ?').get(id) as KbArticle | undefined;
   return row ?? null;
 }
