@@ -1,12 +1,14 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconNote, IconSparkle, IconSun, IconUser } from '../../icons';
+import { IconClock, IconFilter, IconNote, IconSparkle, IconSun, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { Appearance } from './Appearance';
 import { CannedReplies } from './CannedReplies';
+import { SlaSettings } from './SlaSettings';
+import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
 
-type TabId = 'profile' | 'appearance' | 'canned' | 'ai';
+type TabId = 'profile' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai';
 
 const TABS: Array<{
   id: TabId;
@@ -16,13 +18,19 @@ const TABS: Array<{
   { id: 'profile', label: 'Profile', icon: IconUser },
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
+  { id: 'sla', label: 'SLA', icon: IconClock },
+  { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
 ];
 
 export function SettingsPage() {
   const params = useParams<{ tab?: string }>();
   const tab: TabId =
-    params.tab === 'appearance' || params.tab === 'canned' || params.tab === 'ai'
+    params.tab === 'appearance' ||
+    params.tab === 'canned' ||
+    params.tab === 'sla' ||
+    params.tab === 'automation' ||
+    params.tab === 'ai'
       ? params.tab
       : 'profile';
 
@@ -52,6 +60,8 @@ export function SettingsPage() {
         {tab === 'profile' && <Profile />}
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
+        {tab === 'sla' && <SlaSettings />}
+        {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
       </div>
     </div>
