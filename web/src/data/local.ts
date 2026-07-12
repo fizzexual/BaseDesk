@@ -457,6 +457,27 @@ export class LocalRepository implements Repository {
     return { ...t, tags: [...t.tags] };
   }
 
+  async bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]> {
+    const now = new Date().toISOString();
+    const out: Ticket[] = [];
+    for (const id of ids) {
+      const t = this.data.tickets.find((x) => x.id === id);
+      if (!t) continue;
+      for (const key of ['status', 'priority', 'assigneeId', 'bucket', 'snoozedUntil'] as const) {
+        if (key in patch && patch[key] !== undefined) (t as unknown as Record<string, unknown>)[key] = patch[key];
+      }
+      if (addTags && addTags.length > 0) t.tags = Array.from(new Set([...t.tags, ...addTags]));
+      if (patch.status !== undefined) {
+        if (RESOLVED.includes(patch.status) && t.resolvedAt === null) t.resolvedAt = now;
+        else if (!RESOLVED.includes(patch.status) && t.resolvedAt !== null) t.resolvedAt = null;
+      }
+      t.updatedAt = now;
+      out.push({ ...t, tags: [...t.tags] });
+    }
+    this.persist();
+    return out;
+  }
+
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
     const t = this.ticket(ticketId);
     const now = new Date().toISOString();

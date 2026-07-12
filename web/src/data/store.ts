@@ -34,6 +34,7 @@ export interface AppState {
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
+  bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
   deleteMessage(ticketId: string, messageId: string): Promise<void>;
   uploadAttachment(file: File): Promise<Attachment>;
@@ -234,6 +235,34 @@ export function createAppStore(repository: Repository) {
         set((s) => ({ tickets: { ...s.tickets, [id]: ticket } }));
       } catch (err) {
         set((s) => ({ tickets: { ...s.tickets, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async bulkPatch(ids, patch, addTags) {
+      const prev = get().tickets;
+      const now = new Date().toISOString();
+      const optimistic = { ...prev };
+      for (const id of ids) {
+        const t = prev[id] as Ticket | undefined;
+        if (!t) continue;
+        const next: Ticket = { ...t, updatedAt: now };
+        for (const [key, value] of Object.entries(patch)) {
+          if (value !== undefined) (next as unknown as Record<string, unknown>)[key] = value;
+        }
+        if (addTags && addTags.length > 0) next.tags = Array.from(new Set([...t.tags, ...addTags]));
+        optimistic[id] = next;
+      }
+      set({ tickets: optimistic });
+      try {
+        const updated = await repository.bulkPatchTickets(ids, patch, addTags);
+        set((s) => {
+          const merged = { ...s.tickets };
+          for (const t of updated) merged[t.id] = t;
+          return { tickets: merged };
+        });
+      } catch (err) {
+        set({ tickets: prev });
         throw err;
       }
     },

@@ -20,9 +20,11 @@ import {
   IconPlus,
   IconSearch,
   IconSnooze,
+  IconTag,
   IconTicket,
   IconTrash,
   IconUser,
+  IconX,
 } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
 import { NewTicketDialog } from './NewTicketDialog';
@@ -62,6 +64,9 @@ const PRIORITY_LABELS: Record<TicketPriority, string> = {
   medium: 'Medium',
   low: 'Low',
 };
+
+const BULK_BTN =
+  'inline-flex h-8 items-center gap-1.5 rounded-sm px-2.5 font-medium text-text-2 transition-colors hover:bg-surface hover:text-text';
 
 function isViewId(v: string | undefined): v is ViewId {
   return v !== undefined && v in VIEW_TITLES;
@@ -108,6 +113,7 @@ export function InboxPage() {
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [snooze, setSnooze] = useState<{ ticket: Ticket; rect: DOMRect } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; ticket: Ticket } | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
 
   function chooseViewMode(mode: ViewMode) {
@@ -141,11 +147,47 @@ export function InboxPage() {
 
   const selected: Ticket | undefined = selectedIndex >= 0 ? visible[selectedIndex] : undefined;
 
+  const allChecked = visible.length > 0 && visible.every((t) => checkedIds.has(t.id));
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const t of ticketsInView) for (const tag of t.tags) tags.add(tag);
+    return [...tags].sort();
+  }, [ticketsInView]);
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (allChecked) for (const t of visible) next.delete(t.id);
+      else for (const t of visible) next.add(t.id);
+      return next;
+    });
+  }
+  async function runBulk(patch: TicketPatch, message: string, addTags?: string[]) {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
+    setCheckedIds(new Set());
+    try {
+      await useApp.getState().bulkPatch(ids, patch, addTags);
+      toast(message);
+    } catch {
+      toast('Could not update the selected tickets');
+    }
+  }
+
   // Selection resets when the view changes.
   useEffect(() => {
     setSelectedIndex(-1);
     setSnooze(null);
     setCtx(null);
+    setCheckedIds(new Set());
   }, [view]);
 
   // Keep the selection inside the list when it shrinks (solve, filter, …).
@@ -412,12 +454,57 @@ export function InboxPage() {
         </Button>
       </div>
 
+      {checkedIds.size > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line bg-surface-2 px-4 py-1.5 text-[13px]">
+          <span className="mr-1 font-medium tabular-nums">{checkedIds.size} selected</span>
+          <div className="mx-1 h-4 w-px bg-line" />
+          <button type="button" className={BULK_BTN} onClick={() => void runBulk({ assigneeId: currentAgentId }, 'Assigned to you')}>
+            <IconUser size={14} /> Assign to me
+          </button>
+          <button type="button" className={BULK_BTN} onClick={() => void runBulk({ status: 'solved' }, 'Marked solved')}>
+            <IconCheck size={14} /> Solve
+          </button>
+          <Menu
+            triggerLabel="Set priority"
+            triggerClassName={BULK_BTN}
+            trigger={<><IconAlert size={14} /> Priority</>}
+            items={PRIORITIES.map((p) => ({ label: PRIORITY_LABELS[p], onSelect: () => void runBulk({ priority: p }, `Priority set to ${PRIORITY_LABELS[p]}`) }))}
+          />
+          {allTags.length > 0 && (
+            <Menu
+              triggerLabel="Add a tag"
+              triggerClassName={BULK_BTN}
+              trigger={<><IconTag size={14} /> Tag</>}
+              items={allTags.map((tag) => ({ label: tag, onSelect: () => void runBulk({}, `Tagged “${tag}”`, [tag]) }))}
+            />
+          )}
+          <button type="button" className={BULK_BTN} onClick={() => void runBulk({ bucket: 'archive' }, 'Archived')}>
+            <IconArchive size={14} /> Archive
+          </button>
+          <button type="button" className={cx(BULK_BTN, 'text-red hover:bg-red-bg hover:text-red')} onClick={() => void runBulk({ bucket: 'trash' }, 'Moved to trash')}>
+            <IconTrash size={14} /> Trash
+          </button>
+          <div className="flex-1" />
+          <button type="button" className={BULK_BTN} onClick={() => setCheckedIds(new Set())}>
+            <IconX size={14} /> Clear
+          </button>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length > 0 ? (
           viewMode === 'cards' ? (
             <TicketCards tickets={visible} selectedId={selected?.id ?? null} onRowContextMenu={openRowMenu} />
           ) : (
-            <TicketTable tickets={visible} selectedId={selected?.id ?? null} onRowContextMenu={openRowMenu} />
+            <TicketTable
+              tickets={visible}
+              selectedId={selected?.id ?? null}
+              onRowContextMenu={openRowMenu}
+              selectedIds={checkedIds}
+              onToggleSelect={toggleChecked}
+              onToggleAll={toggleAll}
+              allSelected={allChecked}
+            />
           )
         ) : total > 0 ? (
           <EmptyState

@@ -30,12 +30,21 @@ export function TicketTable({
   hideCustomer = false,
   selectedId = null,
   onRowContextMenu,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
+  allSelected = false,
 }: {
   tickets: Ticket[];
   hideCustomer?: boolean;
   /** Keyboard-selected row: highlighted and kept scrolled into view. */
   selectedId?: string | null;
   onRowContextMenu?: (e: MouseEvent, ticket: Ticket) => void;
+  /** When provided, rows show a bulk-select checkbox. */
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: () => void;
+  allSelected?: boolean;
 }) {
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
@@ -51,7 +60,14 @@ export function TicketTable({
     }
   }, [selectedId]);
 
-  const grid = hideCustomer ? GRID_NO_CUSTOMER : GRID_FULL;
+  const selectable = onToggleSelect !== undefined;
+  const grid = selectable
+    ? hideCustomer
+      ? 'grid-cols-[34px_minmax(0,2.4fr)_150px_90px]'
+      : 'grid-cols-[34px_minmax(200px,1.2fr)_minmax(0,2.4fr)_150px_90px]'
+    : hideCustomer
+      ? GRID_NO_CUSTOMER
+      : GRID_FULL;
 
   function setPriority(ticket: Ticket, priority: TicketPriority) {
     if (priority === ticket.priority) return;
@@ -66,6 +82,17 @@ export function TicketTable({
           grid,
         )}
       >
+        {selectable && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              aria-label="Select all tickets"
+              checked={allSelected}
+              onChange={onToggleAll}
+              className="size-4 cursor-pointer accent-green"
+            />
+          </div>
+        )}
         {!hideCustomer && <div>Customer</div>}
         <div>Subject</div>
         <div>Priority</div>
@@ -74,6 +101,7 @@ export function TicketTable({
       {tickets.map((t) => {
         const contact = contacts[t.requesterId] as Contact | undefined;
         const selected = t.id === selectedId;
+        const checked = selectedIds?.has(t.id) ?? false;
         const hasPreview = t.lastMessagePreview !== '';
         return (
           <div
@@ -89,7 +117,7 @@ export function TicketTable({
             className={cx(
               'grid h-16 cursor-pointer items-center gap-4 border-b border-line px-4 last:border-0',
               grid,
-              selected ? 'bg-surface-2' : 'hover:bg-surface-2',
+              selected || checked ? 'bg-surface-2' : 'hover:bg-surface-2',
             )}
             style={selected ? { boxShadow: 'inset 2px 0 0 0 var(--focus)' } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
@@ -101,6 +129,17 @@ export function TicketTable({
               }
             }}
           >
+            {selectable && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ticket: ${t.subject}`}
+                  checked={checked}
+                  onChange={() => onToggleSelect?.(t.id)}
+                  className="size-4 cursor-pointer accent-green"
+                />
+              </div>
+            )}
             {!hideCustomer && (
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={contact?.name ?? '?'} hue={contact?.avatarHue ?? 0} size={32} />

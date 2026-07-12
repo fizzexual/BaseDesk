@@ -525,6 +525,66 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(getTicket(db, id));
   });
 
+  // Bulk update: apply a uniform patch (status/priority/assignee/bucket/snooze) to
+  // many tickets at once, plus an optional per-ticket tag union. Returns the
+  // updated tickets so the client can merge them.
+  app.patch('/api/tickets', async (c) => {
+    let input: { ids?: unknown; patch?: unknown; addTags?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const ids = Array.isArray(input.ids) ? input.ids.filter((x): x is string => typeof x === 'string') : [];
+    if (ids.length === 0) return c.json({ error: 'ids is required' }, 400);
+    const patch = (input.patch !== null && typeof input.patch === 'object' ? input.patch : {}) as TicketPatch;
+    const addTags = Array.isArray(input.addTags)
+      ? input.addTags.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim())
+      : [];
+    if ('status' in patch && !STATUSES.includes(patch.status as string)) return c.json({ error: 'invalid status' }, 400);
+    if ('priority' in patch && !PRIORITIES.includes(patch.priority as TicketPriority)) return c.json({ error: 'invalid priority' }, 400);
+    if ('bucket' in patch && !BUCKETS.includes(patch.bucket as string)) return c.json({ error: 'invalid bucket' }, 400);
+    if ('assigneeId' in patch && patch.assigneeId !== null && typeof patch.assigneeId !== 'string') return c.json({ error: 'invalid assigneeId' }, 400);
+
+    const now = new Date().toISOString();
+    const BULK_KEYS = ['status', 'priority', 'assigneeId', 'bucket', 'snoozedUntil'] as const;
+    const updated: Ticket[] = [];
+    for (const id of ids) {
+      const existing = getTicket(db, id);
+      if (existing === null) continue;
+      const sets: string[] = [];
+      const params: (string | null)[] = [];
+      for (const key of BULK_KEYS) {
+        if (!(key in patch)) continue;
+        sets.push(`${key} = ?`);
+        params.push((patch[key] as string | null | undefined) ?? null);
+      }
+      if (addTags.length > 0) {
+        sets.push('tags = ?');
+        params.push(JSON.stringify(Array.from(new Set([...existing.tags, ...addTags]))));
+      }
+      if ('status' in patch && typeof patch.status === 'string') {
+        if (RESOLVED_STATUSES.includes(patch.status) && existing.resolvedAt === null) {
+          sets.push('resolvedAt = ?');
+          params.push(now);
+        } else if (!RESOLVED_STATUSES.includes(patch.status) && existing.resolvedAt !== null) {
+          sets.push('resolvedAt = ?');
+          params.push(null);
+        }
+      }
+      if (sets.length === 0) {
+        updated.push(existing);
+        continue;
+      }
+      sets.push('updatedAt = ?');
+      params.push(now);
+      db.prepare(`UPDATE tickets SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+      const t = getTicket(db, id);
+      if (t !== null) updated.push(t);
+    }
+    return c.json({ updated });
+  });
+
   app.get('/api/tickets/:id/messages', (c) => {
     const id = c.req.param('id');
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);

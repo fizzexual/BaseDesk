@@ -46,6 +46,10 @@ export class ApiRepository implements Repository {
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket> {
     return request(`/tickets/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
   }
+  async bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]> {
+    const { updated } = await request<{ updated: Ticket[] }>('/tickets', jsonInit('PATCH', { ids, patch, addTags }));
+    return updated;
+  }
 
   addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, jsonInit('POST', input));
