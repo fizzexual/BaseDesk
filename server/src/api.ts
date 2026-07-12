@@ -5,9 +5,10 @@ import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
   getContactByEmail, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
   insertAiAction, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
-  toPublicProvider, toPublicSmtp, type TicketRow,
+  toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
+import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
@@ -18,15 +19,16 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule,
-  BootstrapData, CannedReply, Channel, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message,
+  BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message,
   SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
 const AUTONOMIES: Autonomy[] = ['suggest', 'draft', 'resolve'];
-const CHANNEL_TYPES: ChannelType[] = ['webchat', 'webhook', 'email', 'discord', 'slack', 'whatsapp'];
+const CHANNEL_TYPES: ChannelType[] = ['webchat', 'webhook', 'email', 'discord', 'slack', 'whatsapp', 'telegram', 'messenger', 'sms'];
 const CHANNEL_TO_TICKET: Record<ChannelType, Channel> = {
-  webchat: 'chat', webhook: 'api', email: 'email', discord: 'chat', slack: 'chat', whatsapp: 'chat',
+  webchat: 'chat', webhook: 'api', email: 'email', discord: 'chat', slack: 'chat',
+  whatsapp: 'chat', telegram: 'chat', messenger: 'chat', sms: 'chat',
 };
 
 const VERSION = '0.1.0';
@@ -203,6 +205,27 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }).catch((err) => console.error('[email] reply notification failed:', err instanceof Error ? err.message : err));
   };
 
+  /** Fire-and-forget: deliver an agent reply back out to the ticket's chat channel. */
+  const sendReplyToChannel = (ticket: Ticket, body: string): void => {
+    if (ticket.channelId === null) return;
+    const channel = getChannel(db, ticket.channelId);
+    if (channel === null || !channelCanSend(channel)) return;
+    const contact = getContact(db, ticket.requesterId);
+    const fromName = getSmtpConfig(db).fromName.trim() || 'Support';
+    void sendToChannel(channel, {
+      ticketNumber: ticket.number, subject: ticket.subject, body,
+      toName: contact?.name ?? null, fromName,
+    })
+      .then((r) => { if (!r.ok) console.error(`[channel] outbound to ${channel.type} failed:`, r.error); })
+      .catch((err) => console.error('[channel] outbound failed:', err instanceof Error ? err.message : err));
+  };
+
+  /** Deliver an outgoing reply on every configured path: email + the source channel. */
+  const deliverReply = (ticket: Ticket, body: string): void => {
+    emailReplyToCustomer(ticket, body);
+    sendReplyToChannel(ticket, body);
+  };
+
   /**
    * Runs the enabled AI agents against a freshly-arrived ticket. The
    * highest-autonomy matching agent acts once: a resolve agent that deflects to
@@ -277,7 +300,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
           .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
         db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
           .run('solved', now, now, now, preview(body), now, ticket.id);
-        emailReplyToCustomer(ticket, body);
+        deliverReply(ticket, body);
       }
       return action; // only the highest-autonomy matching agent acts
     }
@@ -310,7 +333,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       kb,
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
-      channels: getChannels(db),
+      channels: getChannels(db).map(toPublicChannel),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -524,8 +547,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
-    // Email the customer on a public reply (never on an internal note).
-    if (kind === 'reply') emailReplyToCustomer(ticket, body);
+    // Notify the customer on a public reply (never on an internal note): email + source channel.
+    if (kind === 'reply') deliverReply(ticket, body);
     return c.json({ message, ticket: getTicket(db, id) });
   });
 
@@ -1241,7 +1264,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
-    emailReplyToCustomer(ticket, body);
+    deliverReply(ticket, body);
     return c.json({ action: getAiAction(db, id), ticket: getTicket(db, ticket.id), message });
   });
 
@@ -1472,7 +1495,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   });
 
   app.post('/api/channels', async (c) => {
-    let input: { type?: unknown; name?: unknown; address?: unknown };
+    let input: { type?: unknown; name?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -1481,22 +1504,25 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const { type, name, address } = input;
     if (typeof type !== 'string' || !CHANNEL_TYPES.includes(type as ChannelType)) return c.json({ error: 'invalid channel type' }, 400);
     if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
-    const channel = {
+    const cleanStr = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+    const channel: ChannelConn = {
       id: newId('ch_'), type: type as ChannelType, name: name.trim(), enabled: true,
       inboundToken: `tok_${randomUUID().replace(/-/g, '').slice(0, 16)}`,
-      address: typeof address === 'string' && address.trim() !== '' ? address.trim() : null,
+      address: cleanStr(address),
       createdAt: new Date().toISOString(),
+      outboundUrl: cleanStr(input.outboundUrl),
+      outboundSecret: cleanStr(input.outboundSecret),
     };
-    db.prepare('INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(channel.id, channel.type, channel.name, 1, channel.inboundToken, channel.address, channel.createdAt);
-    return c.json(channel);
+    db.prepare('INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt, outboundUrl, outboundSecret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(channel.id, channel.type, channel.name, 1, channel.inboundToken, channel.address, channel.createdAt, channel.outboundUrl, channel.outboundSecret);
+    return c.json(toPublicChannel(channel));
   });
 
   app.patch('/api/channels/:id', async (c) => {
     const id = c.req.param('id');
     const existing = getChannel(db, id);
     if (existing === null) return c.json({ error: `channel not found: ${id}` }, 404);
-    let patch: { name?: unknown; enabled?: unknown; address?: unknown };
+    let patch: { name?: unknown; enabled?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown };
     try {
       patch = await c.req.json();
     } catch {
@@ -1504,6 +1530,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     const sets: string[] = [];
     const params: (string | number | null)[] = [];
+    const cleanStr = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
     if ('name' in patch) {
       if (typeof patch.name !== 'string' || patch.name.trim() === '') return c.json({ error: 'invalid name' }, 400);
       sets.push('name = ?');
@@ -1516,11 +1543,21 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     if ('address' in patch) {
       sets.push('address = ?');
-      params.push(typeof patch.address === 'string' && patch.address.trim() !== '' ? patch.address.trim() : null);
+      params.push(cleanStr(patch.address));
     }
-    if (sets.length === 0) return c.json(existing);
+    if ('outboundUrl' in patch) {
+      sets.push('outboundUrl = ?');
+      params.push(cleanStr(patch.outboundUrl));
+    }
+    // Write-only: only touch the secret when the key is present (blank clears it).
+    if ('outboundSecret' in patch) {
+      sets.push('outboundSecret = ?');
+      params.push(cleanStr(patch.outboundSecret));
+    }
+    if (sets.length === 0) return c.json(toPublicChannel(existing));
     db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
-    return c.json(getChannel(db, id));
+    const updated = getChannel(db, id);
+    return c.json(toPublicChannel(updated ?? existing));
   });
 
   app.delete('/api/channels/:id', (c) => {
@@ -1528,6 +1565,24 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getChannel(db, id) === null) return c.json({ error: `channel not found: ${id}` }, 404);
     db.prepare('DELETE FROM channels WHERE id = ?').run(id);
     return c.json({ ok: true });
+  });
+
+  // Send a canned test message to the channel's outbound endpoint, so an admin
+  // can confirm Discord/Slack/relay delivery works before a customer relies on it.
+  app.post('/api/channels/:id/test', async (c) => {
+    const id = c.req.param('id');
+    const channel = getChannel(db, id);
+    if (channel === null) return c.json({ error: `channel not found: ${id}` }, 404);
+    if ((channel.outboundUrl?.trim() ?? '') === '') return c.json({ ok: false, error: 'Add an outbound URL first, then test.' });
+    const fromName = getSmtpConfig(db).fromName.trim() || 'Support';
+    const result = await sendToChannel(channel, {
+      ticketNumber: 0,
+      subject: 'BaseDesk test',
+      body: 'This is a test from BaseDesk. If you can read this, outbound delivery to this channel is working.',
+      toName: null,
+      fromName,
+    });
+    return c.json(result);
   });
 
   // Public, token-gated inbound: a real forwarder / widget POSTs a message here.

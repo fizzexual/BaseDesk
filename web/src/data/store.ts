@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, Contact, CopilotTriage, Counts, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -60,6 +60,7 @@ export interface AppState {
   createChannel(input: ChannelCreate): Promise<string>;
   updateChannel(id: string, patch: ChannelPatch): Promise<void>;
   deleteChannel(id: string): Promise<void>;
+  testChannel(id: string): Promise<ChannelTestResult>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
   saveSmtp(input: SmtpSave): Promise<void>;
@@ -622,6 +623,10 @@ export function createAppStore(repository: Repository) {
         set((s) => ({ channels: { ...s.channels, [id]: prev } }));
         throw err;
       }
+    },
+
+    async testChannel(id) {
+      return repository.testChannel(id);
     },
 
     async saveAiProvider(input) {

@@ -19,10 +19,23 @@ export interface Ticket {
   channelId: string | null;
 }
 
-export type ChannelType = 'webchat' | 'webhook' | 'email' | 'discord' | 'slack' | 'whatsapp';
+export type ChannelType =
+  | 'webchat' | 'webhook' | 'email' | 'discord' | 'slack'
+  | 'whatsapp' | 'telegram' | 'messenger' | 'sms';
+/** Full channel row, including the write-only outbound secret (server-side only). */
 export interface ChannelConn {
   id: string; type: ChannelType; name: string; enabled: boolean;
   inboundToken: string; address: string | null; createdAt: string;
+  /** Webhook/API endpoint agent replies are delivered to (null = inbound-only). */
+  outboundUrl: string | null;
+  /** Optional bearer token / bot secret for the outbound endpoint. Never sent to the client. */
+  outboundSecret: string | null;
+}
+/** Client-safe channel shape: outbound secret is masked to a boolean. */
+export interface PublicChannel {
+  id: string; type: ChannelType; name: string; enabled: boolean;
+  inboundToken: string; address: string | null; createdAt: string;
+  outboundUrl: string | null; hasOutboundSecret: boolean;
 }
 
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
@@ -191,7 +204,7 @@ export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
-  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
+  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: PublicChannel[];
   slaHours: SlaHours;
   aiProvider: AiProvider;
   smtp: SmtpSettings;

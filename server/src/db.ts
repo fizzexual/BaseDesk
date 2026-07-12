@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags is a JSON string column. */
 export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
@@ -135,7 +135,9 @@ export function openDb(dataDir: string): DatabaseSync {
       enabled INTEGER NOT NULL,
       inboundToken TEXT NOT NULL,
       address TEXT,
-      createdAt TEXT NOT NULL
+      createdAt TEXT NOT NULL,
+      outboundUrl TEXT,
+      outboundSecret TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
@@ -169,6 +171,10 @@ export function openDb(dataDir: string): DatabaseSync {
   const actionCols = db.prepare('PRAGMA table_info(ai_actions)').all() as { name: string }[];
   if (!actionCols.some((c) => c.name === 'promptTokens')) db.exec('ALTER TABLE ai_actions ADD COLUMN promptTokens INTEGER NOT NULL DEFAULT 0');
   if (!actionCols.some((c) => c.name === 'completionTokens')) db.exec('ALTER TABLE ai_actions ADD COLUMN completionTokens INTEGER NOT NULL DEFAULT 0');
+
+  const channelCols = db.prepare('PRAGMA table_info(channels)').all() as { name: string }[];
+  if (!channelCols.some((c) => c.name === 'outboundUrl')) db.exec('ALTER TABLE channels ADD COLUMN outboundUrl TEXT');
+  if (!channelCols.some((c) => c.name === 'outboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN outboundSecret TEXT');
 
   return db;
 }
@@ -343,7 +349,17 @@ export function insertAiAction(db: DatabaseSync, a: AiAction): void {
 
 type ChannelRow = Omit<ChannelConn, 'enabled'> & { enabled: number };
 export function rowToChannel(row: ChannelRow): ChannelConn {
-  return { ...row, enabled: row.enabled === 1 };
+  return {
+    ...row,
+    enabled: row.enabled === 1,
+    outboundUrl: row.outboundUrl ?? null,
+    outboundSecret: row.outboundSecret ?? null,
+  };
+}
+/** Strip the outbound secret before a channel crosses the wire to the client. */
+export function toPublicChannel(ch: ChannelConn): PublicChannel {
+  const { outboundSecret, ...rest } = ch;
+  return { ...rest, hasOutboundSecret: (outboundSecret ?? '').trim() !== '' };
 }
 export function getChannels(db: DatabaseSync): ChannelConn[] {
   return (db.prepare('SELECT * FROM channels ORDER BY createdAt').all() as unknown as ChannelRow[]).map(rowToChannel);

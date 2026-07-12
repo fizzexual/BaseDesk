@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
-  ChannelConn, ChannelCreate, ChannelPatch, Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType,
+  ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType,
   DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
@@ -169,7 +169,7 @@ function seedData(): LocalData {
     kb: seed.kb.map((a) => ({ ...a })),
     aiAgents: seed.aiAgents.map((a) => ({ ...a })),
     aiActions: seed.aiActions.map((a) => ({ ...a })),
-    channels: seed.channels.map((c) => ({ ...c })),
+    channels: seed.channels.map((c) => ({ ...c, outboundUrl: c.outboundUrl ?? null, hasOutboundSecret: c.hasOutboundSecret ?? false })),
     aiProvider: { ...DEFAULT_AI_PROVIDER },
     smtp: { ...DEFAULT_SMTP },
   };
@@ -229,7 +229,7 @@ export class LocalRepository implements Repository {
       }
       // Backfill channels + per-ticket channelId for blobs written before v0.4.
       if (!Array.isArray(this.data.channels)) {
-        this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch }));
+        this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch, outboundUrl: ch.outboundUrl ?? null, hasOutboundSecret: ch.hasOutboundSecret ?? false }));
         for (const t of this.data.tickets) {
           if (t.channelId === undefined) t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
         }
@@ -823,6 +823,8 @@ export class LocalRepository implements Repository {
       inboundToken: `tok_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
       address: input.address?.trim() ? input.address.trim() : null,
       createdAt: new Date().toISOString(),
+      outboundUrl: input.outboundUrl?.trim() ? input.outboundUrl.trim() : null,
+      hasOutboundSecret: Boolean(input.outboundSecret?.trim()),
     };
     this.data.channels.push(channel);
     this.persist();
@@ -835,6 +837,8 @@ export class LocalRepository implements Repository {
     if (patch.name !== undefined) ch.name = patch.name.trim();
     if (patch.enabled !== undefined) ch.enabled = patch.enabled;
     if (patch.address !== undefined) ch.address = patch.address && patch.address.trim() !== '' ? patch.address.trim() : null;
+    if (patch.outboundUrl !== undefined) ch.outboundUrl = patch.outboundUrl && patch.outboundUrl.trim() !== '' ? patch.outboundUrl.trim() : null;
+    if (patch.outboundSecret !== undefined) ch.hasOutboundSecret = patch.outboundSecret !== null && patch.outboundSecret.trim() !== '';
     this.persist();
     return { ...ch };
   }
@@ -842,6 +846,10 @@ export class LocalRepository implements Repository {
   async deleteChannel(id: string): Promise<void> {
     this.data.channels = this.data.channels.filter((c) => c.id !== id);
     this.persist();
+  }
+
+  async testChannel(_id: string): Promise<ChannelTestResult> {
+    return { ok: false, error: 'Outbound delivery runs on the live server, not this demo.' };
   }
 
   async getStats(): Promise<StatsOverview> {

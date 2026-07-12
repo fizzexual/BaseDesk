@@ -117,7 +117,7 @@ npm run typecheck  # strict TS, both workspaces
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
 - **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** by default (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing; a settings toggle relaxes this to general knowledge), priority/tag triage suggestions, and one-line thread summaries. Connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama), with **per-generation token counts and dollar cost** shown to admins, and always falls back to the rule-based engine. Your API key stays on your server, never in the browser
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
-- **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
+- **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box, and **agent replies deliver back out to the channel they came from**: Discord and Slack via a channel webhook URL, and Telegram/Messenger/WhatsApp/SMS via a generic JSON relay envelope (with an optional Bearer token). Every reply path — a manual reply, an AI-approved draft, an AI auto-resolve — fans out to the channel and to email; each connector has a **Send test** button. Each ticket shows its source
 - **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
 - **Team**: invite teammates with shareable links, admin/agent roles, and per-agent reply signatures (the last active admin is protected)
 - **Customer portal** (`/portal`, served on its own port): a separate customer-facing app where end-users sign in (email + password, scrypt-hashed) to see only their own tickets (filter + search), reply, open new tickets, edit their profile, and browse the help center — replies reopen solved tickets, internal notes stay hidden, the ticket view **updates live with a notification chime** when support replies, and it has its own light/dark theme toggle
@@ -148,7 +148,8 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [ ] Holiday calendars for SLA clocks
 - [x] **Outbound email** — SMTP notifications to customers on reply (zero-dep client) *(v0.5)*
 - [ ] Inbound email ingestion (IMAP + Gmail/MS365 OAuth) — bulletproof threading or nothing
-- [ ] Native Slack & Discord connectors with two-way sync
+- [x] **Outbound channel delivery** — agent/AI replies posted to Discord & Slack channel webhooks, plus a generic JSON relay envelope (optional Bearer token) for Telegram/Messenger/WhatsApp/SMS, with a per-channel test send *(v0.6)*
+- [ ] Native inbound sync for Slack & Discord (bot/Events API) — outbound ships now
 - [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)
 - [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
 - [ ] Single-binary packaging

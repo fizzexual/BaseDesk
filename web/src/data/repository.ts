@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch,
+  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -41,6 +41,7 @@ export interface Repository {
   createChannel(input: ChannelCreate): Promise<ChannelConn>;
   updateChannel(id: string, patch: ChannelPatch): Promise<ChannelConn>;
   deleteChannel(id: string): Promise<void>;
+  testChannel(id: string): Promise<ChannelTestResult>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;
   deleteAgent(id: string): Promise<void>;

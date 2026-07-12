@@ -9,9 +9,6 @@ import { CHANNEL_META, CHANNEL_TYPES, ChannelDialog, Switch } from './ChannelDia
 
 type DialogState = { channel?: ChannelConn; presetType?: ChannelType } | null;
 
-const INFRA_NOTE =
-  'Inbound works via forwarding/webhook now — native connector and outbound delivery arrive in a hosted deploy.';
-
 function inboundUrl(channel: ChannelConn): string {
   return `${window.location.origin}/api/channels/${channel.id}/inbound?token=${channel.inboundToken}`;
 }
@@ -85,6 +82,7 @@ function ConnectedChannel({
           </div>
           <div className="mt-0.5 text-[13px] text-text-3 tabular-nums">
             {meta.label} · {ticketCount} ticket{ticketCount === 1 ? '' : 's'}
+            {channel.outboundUrl !== null && <span className="text-green"> · replies on</span>}
           </div>
         </div>
         <Switch
@@ -202,7 +200,7 @@ export function ChannelsPage() {
                       <span className="text-[14px] font-medium">{meta.label}</span>
                     </div>
                     <p className="mt-2.5 text-[13px] text-text-2">{meta.description}</p>
-                    <p className="mt-1.5 text-[12px] text-text-3">{meta.live ? 'Live now.' : INFRA_NOTE}</p>
+                    <p className="mt-1.5 text-[12px] text-text-3">{meta.status}</p>
                     <div className="mt-auto flex pt-3.5">
                       <Button variant="subtle" size="sm" onClick={() => setDialog({ presetType: type })}>
                         Connect

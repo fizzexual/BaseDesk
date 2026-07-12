@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch,
+  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -141,6 +141,9 @@ export class ApiRepository implements Repository {
   }
   async deleteChannel(id: string): Promise<void> {
     await request<{ ok: true }>(`/channels/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  testChannel(id: string): Promise<ChannelTestResult> {
+    return request(`/channels/${encodeURIComponent(id)}/test`, { method: 'POST' });
   }
 
   inviteAgent(input: AgentInvite): Promise<Agent> {

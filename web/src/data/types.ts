@@ -17,13 +17,26 @@ export interface Ticket {
   channelId: string | null;
 }
 
-export type ChannelType = 'webchat' | 'webhook' | 'email' | 'discord' | 'slack' | 'whatsapp';
+export type ChannelType =
+  | 'webchat' | 'webhook' | 'email' | 'discord' | 'slack'
+  | 'whatsapp' | 'telegram' | 'messenger' | 'sms';
 export interface ChannelConn {
   id: string; type: ChannelType; name: string; enabled: boolean;
   inboundToken: string; address: string | null; createdAt: string;
+  /** Where agent replies are delivered (Discord/Slack webhook URL, or a relay endpoint). */
+  outboundUrl: string | null;
+  /** Whether an outbound auth token is stored server-side (the value never reaches the client). */
+  hasOutboundSecret: boolean;
 }
-export type ChannelCreate = { type: ChannelType; name: string; address?: string };
-export type ChannelPatch = Partial<Pick<ChannelConn, 'name' | 'enabled' | 'address'>>;
+export type ChannelCreate = {
+  type: ChannelType; name: string; address?: string;
+  outboundUrl?: string; outboundSecret?: string;
+};
+export type ChannelPatch =
+  Partial<Pick<ChannelConn, 'name' | 'enabled' | 'address' | 'outboundUrl'>>
+  & { outboundSecret?: string | null };
+/** Result of an outbound channel test send. */
+export type ChannelTestResult = { ok: boolean; status?: number; error?: string };
 
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
 export type SlaTargets = Record<TicketPriority, SlaTarget>;
