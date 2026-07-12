@@ -1,14 +1,78 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { usePortal } from './store';
+import { playNotification } from './sound';
 import { EmptyState } from '../components/EmptyState';
 import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
+import { cx } from '../components/util';
 import { IconInbox, IconPlus } from '../icons';
 import { btnPrimary } from './ui';
 
 export function PortalTickets() {
   const contact = usePortal((s) => s.contact);
   const tickets = usePortal((s) => s.tickets);
+  // Tickets that gained a reply while this list was open, shown with a "new" dot
+  // until the customer opens them.
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
+
+  const seenAtRef = useRef<Map<string, string>>(new Map()); // ticket id -> last activity we know of
+  const pollingRef = useRef(false); // guards against overlapping polls
+
+  // Live updates: refresh the list every 10s while the tab is visible so statuses
+  // and previews stay current. When a ticket's last activity advances (an agent
+  // reply — the customer can't post from this screen) flag it and play the chime
+  // at most once per cycle. Pauses while hidden and refetches when visible again.
+  useEffect(() => {
+    // Seed the baseline from whatever is already loaded so nothing flags on mount.
+    const seed = seenAtRef.current;
+    for (const t of usePortal.getState().tickets) seed.set(t.id, t.lastMessageAt);
+
+    async function poll() {
+      if (pollingRef.current || document.visibilityState === 'hidden') return;
+      pollingRef.current = true;
+      try {
+        await usePortal.getState().refreshTickets();
+        const seen = seenAtRef.current;
+        const fresh: string[] = [];
+        for (const t of usePortal.getState().tickets) {
+          const prev = seen.get(t.id);
+          if (prev !== undefined && new Date(t.lastMessageAt).getTime() > new Date(prev).getTime()) {
+            fresh.push(t.id);
+          }
+          seen.set(t.id, t.lastMessageAt);
+        }
+        if (fresh.length > 0) {
+          playNotification();
+          setNewIds((prev) => new Set([...prev, ...fresh]));
+        }
+      } catch {
+        // Transient failure — keep the current list and retry next tick.
+      } finally {
+        pollingRef.current = false;
+      }
+    }
+
+    const interval = setInterval(() => void poll(), 10000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void poll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  function openTicket(id: string) {
+    setNewIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
 
   return (
     <section>
@@ -35,28 +99,37 @@ export function PortalTickets() {
         </div>
       ) : (
         <ul className="mt-5 flex flex-col gap-2">
-          {tickets.map((t) => (
-            <li key={t.id}>
-              <Link
-                to={`/portal/ticket/${t.id}`}
-                className="block rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-2"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[15px] font-medium">{t.subject}</span>
-                      <span className="shrink-0 text-[12px] text-text-3">#{t.number}</span>
+          {tickets.map((t) => {
+            const isNew = newIds.has(t.id);
+            return (
+              <li key={t.id}>
+                <Link
+                  to={`/portal/ticket/${t.id}`}
+                  onClick={() => openTicket(t.id)}
+                  className={cx(
+                    'block rounded-lg border bg-surface p-4 transition-colors hover:border-line-2',
+                    isNew ? 'border-blue/40' : 'border-line',
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {isNew && <span className="h-2 w-2 shrink-0 rounded-full bg-blue" aria-hidden />}
+                        <span className="truncate text-[15px] font-medium">{t.subject}</span>
+                        <span className="shrink-0 text-[12px] text-text-3">#{t.number}</span>
+                        {isNew && <span className="sr-only">New reply</span>}
+                      </div>
+                      <p className="mt-1 truncate text-[13px] text-text-3">{t.lastMessagePreview}</p>
                     </div>
-                    <p className="mt-1 truncate text-[13px] text-text-3">{t.lastMessagePreview}</p>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <StatusBadge status={t.status} />
+                      <TimeAgo iso={t.lastMessageAt} className="text-[12px] text-text-3" />
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <StatusBadge status={t.status} />
-                    <TimeAgo iso={t.lastMessageAt} className="text-[12px] text-text-3" />
-                  </div>
-                </div>
-              </Link>
-            </li>
-          ))}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
