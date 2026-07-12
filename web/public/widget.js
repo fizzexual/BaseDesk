@@ -7,11 +7,13 @@
  * It injects a floating button (bottom-right); clicking it opens the chat panel
  * (an iframe to widget.html). The BaseDesk origin is inferred from this script's
  * own src, so nothing else needs configuring.
+ *
+ * Exposes window.BaseDeskWidget.destroy() so a host (e.g. the dashboard's live
+ * preview) can remove it again.
  */
 (function () {
   var self = document.currentScript;
-  if (!self || window.__basedeskWidget) return;
-  window.__basedeskWidget = true;
+  if (!self || window.BaseDeskWidget) return;
 
   var channel = self.getAttribute('data-channel') || 'ch_1';
   var token = self.getAttribute('data-token') || '';
@@ -74,12 +76,21 @@
 
   btn.addEventListener('click', function () { setOpen(!open); });
 
-  window.addEventListener('message', function (e) {
+  function onMessage(e) {
     var d = e && e.data;
     if (!d || typeof d !== 'object') return;
     if (d.type === 'basedesk:close') setOpen(false);
     else if (d.type === 'basedesk:unread' && !open) dot.style.display = 'block';
-  });
+  }
+  window.addEventListener('message', onMessage);
+
+  function destroy() {
+    try {
+      window.removeEventListener('message', onMessage);
+      [panel, btn, dot].forEach(function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); });
+    } catch (e) { /* ignore */ }
+    delete window.BaseDeskWidget;
+  }
 
   function mount() {
     var host = document.body || document.documentElement;
@@ -89,4 +100,6 @@
   }
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);
+
+  window.BaseDeskWidget = { destroy: destroy, channel: channel };
 })();

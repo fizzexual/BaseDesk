@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../data/store';
 import type { ChannelConn, ChannelType } from '../../data/types';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
+import { cx } from '../../components/util';
 import { IconDots, IconTrash } from '../../icons';
 import { CHANNEL_META, CHANNEL_TYPES, ChannelDialog, Switch } from './ChannelDialog';
 
@@ -26,6 +27,21 @@ function embedCode(channel: ChannelConn): string {
   return `<script src="${window.location.origin}/widget.js" data-channel="${channel.id}" data-token="${channel.inboundToken}" defer></script>`;
 }
 
+/** Inject the real launcher onto the dashboard so it can be live-tested here. */
+function startWidgetPreview(channel: ChannelConn) {
+  stopWidgetPreview();
+  const s = document.createElement('script');
+  s.id = 'basedesk-widget-preview';
+  s.src = `${window.location.origin}/widget.js`;
+  s.dataset.channel = channel.id;
+  s.dataset.token = channel.inboundToken;
+  document.body.appendChild(s);
+}
+function stopWidgetPreview() {
+  (window as unknown as { BaseDeskWidget?: { destroy?: () => void } }).BaseDeskWidget?.destroy?.();
+  document.getElementById('basedesk-widget-preview')?.remove();
+}
+
 async function copy(text: string, message: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -39,10 +55,14 @@ function ConnectedChannel({
   channel,
   ticketCount,
   onEdit,
+  previewing,
+  onTogglePreview,
 }: {
   channel: ChannelConn;
   ticketCount: number;
   onEdit: () => void;
+  previewing: boolean;
+  onTogglePreview: () => void;
 }) {
   const updateChannel = useApp((s) => s.updateChannel);
   const deleteChannel = useApp((s) => s.deleteChannel);
@@ -142,13 +162,20 @@ function ConnectedChannel({
 
       {channel.type === 'webchat' && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
+          <button
+            type="button"
+            className={cx('font-medium', previewing ? 'text-green' : 'text-text-2 hover:text-text')}
+            onClick={onTogglePreview}
+          >
+            {previewing ? 'Stop preview' : 'Preview widget'}
+          </button>
           <a
             href={widgetUrl(channel)}
             target="_blank"
             rel="noreferrer"
             className="font-medium text-text-2 underline-offset-2 hover:text-text hover:underline"
           >
-            Preview widget
+            Open full page
           </a>
           <button
             type="button"
@@ -167,6 +194,21 @@ export function ChannelsPage() {
   const channels = useApp((s) => s.channels);
   const tickets = useApp((s) => s.tickets);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+
+  // Tear the live preview down when leaving the page.
+  useEffect(() => () => stopWidgetPreview(), []);
+
+  function togglePreview(channel: ChannelConn) {
+    if (previewId === channel.id) {
+      stopWidgetPreview();
+      setPreviewId(null);
+    } else {
+      startWidgetPreview(channel);
+      setPreviewId(channel.id);
+      toast('Live preview on — the chat bubble is bottom-right');
+    }
+  }
 
   const connected = useMemo(
     () => Object.values(channels).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
@@ -204,6 +246,8 @@ export function ChannelsPage() {
                     channel={channel}
                     ticketCount={ticketCounts[channel.id] ?? 0}
                     onEdit={() => setDialog({ channel })}
+                    previewing={previewId === channel.id}
+                    onTogglePreview={() => togglePreview(channel)}
                   />
                 ))}
               </div>
