@@ -3,9 +3,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
-  getDeal, getKbArticle, getMessages, getSetting, getTicket, insertAiAction, openDb, rowToTicket, setAiProviderConfig,
-  setSetting, toPublicProvider, type TicketRow,
+  getContactByEmail, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getTicket, insertAiAction, openDb,
+  portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, toPublicProvider, type TicketRow,
 } from './db.js';
+import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
@@ -1171,6 +1172,225 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getAiAction(db, id) === null) return c.json({ error: `action not found: ${id}` }, 404);
     db.prepare("UPDATE ai_actions SET status = 'dismissed', resolvedAt = ? WHERE id = ?").run(new Date().toISOString(), id);
     return c.json({ action: getAiAction(db, id) });
+  });
+
+  // --- Customer portal (email + password auth, everything scoped to one contact) ---
+
+  const psecret = () => portalSecret(db, () => randomUUID().replace(/-/g, ''));
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+  /** Resolves the signed-in customer from the Bearer token, or null. */
+  const contactFromAuth = (header: string | undefined): Contact | null => {
+    const token = header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
+    if (token === '') return null;
+    const id = verifySession(psecret(), token);
+    return id === null ? null : getContact(db, id);
+  };
+
+  /** Agent display name for portal message attribution (falls back to "Support"). */
+  const agentName = (id: string): string => {
+    const row = db.prepare('SELECT name FROM agents WHERE id = ?').get(id) as { name: string } | undefined;
+    return row?.name ?? 'Support';
+  };
+
+  app.post('/api/portal/register', async (c) => {
+    let input: { name?: unknown; email?: unknown; password?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { name, email, password } = input;
+    if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'Name is required' }, 400);
+    if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) return c.json({ error: 'Enter a valid email' }, 400);
+    if (typeof password !== 'string' || password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+
+    const now = new Date().toISOString();
+    let contact = getContactByEmail(db, email);
+    if (contact !== null) {
+      if (getPortalAuth(db, contact.id) !== null) return c.json({ error: 'An account with this email already exists — please sign in.' }, 409);
+      // Claim an existing agent/inbound-created contact by setting its first password.
+    } else {
+      contact = {
+        id: newId('c_'), name: name.trim(), email: email.trim(), company: null, avatarHue: djb2(email.trim()) % 360,
+        location: null, timezone: null, createdAt: now, mrr: null,
+      };
+      db.prepare('INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
+    }
+    setPortalAuth(db, contact.id, hashPassword(password));
+    return c.json({ token: signSession(psecret(), contact.id), contact });
+  });
+
+  app.post('/api/portal/login', async (c) => {
+    let input: { email?: unknown; password?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { email, password } = input;
+    if (typeof email !== 'string' || typeof password !== 'string') return c.json({ error: 'Email and password are required' }, 400);
+    const contact = getContactByEmail(db, email);
+    const hash = contact !== null ? getPortalAuth(db, contact.id) : null;
+    if (contact === null || hash === null || !verifyPassword(password, hash)) {
+      return c.json({ error: 'Wrong email or password' }, 401);
+    }
+    return c.json({ token: signSession(psecret(), contact.id), contact });
+  });
+
+  app.get('/api/portal/me', (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    return contact === null ? c.json({ error: 'not signed in' }, 401) : c.json(contact);
+  });
+
+  app.patch('/api/portal/me', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    let patch: { name?: unknown; company?: unknown; location?: unknown; timezone?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: (string | null)[] = [];
+    if ('name' in patch) {
+      if (typeof patch.name !== 'string' || patch.name.trim() === '') return c.json({ error: 'invalid name' }, 400);
+      sets.push('name = ?');
+      params.push(patch.name.trim());
+    }
+    for (const field of ['company', 'location', 'timezone'] as const) {
+      if (field in patch) {
+        const v = patch[field];
+        if (v !== null && typeof v !== 'string') return c.json({ error: `invalid ${field}` }, 400);
+        sets.push(`${field} = ?`);
+        params.push(v === null || (v as string).trim() === '' ? null : (v as string).trim());
+      }
+    }
+    if (sets.length > 0) db.prepare(`UPDATE contacts SET ${sets.join(', ')} WHERE id = ?`).run(...params, contact.id);
+    return c.json(getContact(db, contact.id));
+  });
+
+  app.post('/api/portal/password', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    let input: { current?: unknown; next?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { current, next } = input;
+    if (typeof next !== 'string' || next.length < 8) return c.json({ error: 'New password must be at least 8 characters' }, 400);
+    const hash = getPortalAuth(db, contact.id);
+    if (hash === null || typeof current !== 'string' || !verifyPassword(current, hash)) {
+      return c.json({ error: 'Current password is incorrect' }, 401);
+    }
+    setPortalAuth(db, contact.id, hashPassword(next));
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/portal/tickets', (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const rows = db
+      .prepare("SELECT * FROM tickets WHERE requesterId = ? AND bucket = 'inbox' ORDER BY lastMessageAt DESC")
+      .all(contact.id) as unknown as TicketRow[];
+    return c.json(rows.map(rowToTicket));
+  });
+
+  app.get('/api/portal/tickets/:id', (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const ticket = getTicket(db, c.req.param('id'));
+    if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    // Customers see public replies only — never internal notes.
+    const messages = getMessages(db, ticket.id)
+      .filter((m) => m.kind === 'reply')
+      .map((m) => ({
+        id: m.id,
+        authorKind: m.authorKind,
+        authorName: m.authorKind === 'contact' ? contact.name : agentName(m.authorId),
+        body: m.body,
+        at: m.at,
+      }));
+    return c.json({ ticket, messages });
+  });
+
+  app.post('/api/portal/tickets', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    let input: { subject?: unknown; body?: unknown; priority?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { subject, body, priority } = input;
+    if (typeof subject !== 'string' || subject.trim() === '') return c.json({ error: 'Subject is required' }, 400);
+    if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'Message is required' }, 400);
+    const now = new Date().toISOString();
+    const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
+    const ticket: Ticket = {
+      id: newId('t_'), number: maxRow.maxNumber + 1, subject: subject.trim(), status: 'open',
+      priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
+      bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: [], channel: 'web',
+      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
+      firstRespondedAt: null, resolvedAt: null, channelId: null,
+    };
+    const message: Message = {
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
+    };
+    db.exec('BEGIN');
+    try {
+      insertTicketRow(db, ticket);
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    await runAgentsOnTicket(ticket, body);
+    return c.json({ ticket: getTicket(db, ticket.id) });
+  });
+
+  app.post('/api/portal/tickets/:id/messages', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const ticket = getTicket(db, c.req.param('id'));
+    if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    let input: { body?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.body !== 'string' || input.body.trim() === '') return c.json({ error: 'Message is required' }, 400);
+    const now = new Date().toISOString();
+    const message: Message = {
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: input.body, at: now,
+    };
+    // A customer reply reopens a solved ticket and clears its resolution stamp.
+    const nextStatus = ticket.status === 'solved' || ticket.status === 'closed' ? 'open' : ticket.status;
+    db.exec('BEGIN');
+    try {
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+        .run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, preview(input.body), ticket.id);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    return c.json({ ticket: getTicket(db, ticket.id) });
+  });
+
+  app.get('/api/portal/kb', (c) => {
+    const rows = db.prepare("SELECT * FROM kb_articles WHERE status = 'published' ORDER BY category, title").all() as unknown as KbArticle[];
+    return c.json(rows);
   });
 
   app.post('/api/channels', async (c) => {
