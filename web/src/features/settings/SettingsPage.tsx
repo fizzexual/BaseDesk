@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconNote, IconSend, IconSparkle, IconSun, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
@@ -9,8 +9,9 @@ import { SlaSettings } from './SlaSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
 import { EmailSettings } from './EmailSettings';
+import { CustomFieldsSettings } from './CustomFieldsSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai' | 'email';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'sla' | 'automation' | 'ai' | 'email';
 
 const TABS: Array<{
   id: TabId;
@@ -21,6 +22,7 @@ const TABS: Array<{
   { id: 'team', label: 'Team', icon: IconContacts },
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
+  { id: 'fields', label: 'Ticket fields', icon: IconTag },
   { id: 'sla', label: 'SLA', icon: IconClock },
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
@@ -33,6 +35,7 @@ export function SettingsPage() {
     params.tab === 'team' ||
     params.tab === 'appearance' ||
     params.tab === 'canned' ||
+    params.tab === 'fields' ||
     params.tab === 'sla' ||
     params.tab === 'automation' ||
     params.tab === 'ai' ||
@@ -67,6 +70,7 @@ export function SettingsPage() {
         {tab === 'team' && <TeamSettings />}
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
+        {tab === 'fields' && <CustomFieldsSettings />}
         {tab === 'sla' && <SlaSettings />}
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}

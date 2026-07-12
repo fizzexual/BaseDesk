@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
-  getContactByEmail, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
+  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
   insertAiAction, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
@@ -19,7 +19,8 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule,
-  BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message,
+  BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  CustomFieldType, Deal, DealStage, DealType, KbArticle, Message,
   SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
@@ -79,7 +80,7 @@ const VIEW_IDS: ViewId[] = [
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
 const STATUSES = ['open', 'pending', 'on_hold', 'solved', 'closed'];
 const BUCKETS = ['inbox', 'archive', 'spam', 'trash'];
-const PATCH_KEYS = ['status', 'priority', 'assigneeId', 'tags', 'bucket', 'snoozedUntil', 'subject'] as const;
+const PATCH_KEYS = ['status', 'priority', 'assigneeId', 'tags', 'bucket', 'snoozedUntil', 'subject', 'customFields'] as const;
 
 function newId(prefix: string): string {
   return `${prefix}${randomUUID().slice(0, 8)}`;
@@ -105,12 +106,12 @@ function insertTicketRow(db: DatabaseSync, t: Ticket): void {
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
       tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-      firstRespondedAt, resolvedAt, channelId
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      firstRespondedAt, resolvedAt, channelId, customFields
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
     JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil, t.lastMessageAt,
-    t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId,
+    t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId, JSON.stringify(t.customFields),
   );
 }
 
@@ -334,6 +335,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
       channels: getChannels(db).map(toPublicChannel),
+      customFields: getCustomFields(db),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -425,6 +427,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       firstRespondedAt: null,
       resolvedAt: null,
       channelId: null,
+      customFields: {},
     };
     const message: Message = {
       id: newId('m_'),
@@ -472,6 +475,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if ('subject' in patch && (typeof patch.subject !== 'string' || patch.subject.trim() === '')) return c.json({ error: 'invalid subject' }, 400);
     if ('tags' in patch && !Array.isArray(patch.tags)) return c.json({ error: 'invalid tags' }, 400);
     if ('assigneeId' in patch && patch.assigneeId !== null && typeof patch.assigneeId !== 'string') return c.json({ error: 'invalid assigneeId' }, 400);
+    if ('customFields' in patch && (typeof patch.customFields !== 'object' || patch.customFields === null || Array.isArray(patch.customFields))) return c.json({ error: 'invalid customFields' }, 400);
 
     const sets: string[] = [];
     const params: (string | null)[] = [];
@@ -479,7 +483,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       if (!(key in patch)) continue;
       const value = patch[key];
       sets.push(`${key} = ?`);
-      params.push(key === 'tags' ? JSON.stringify(value ?? []) : (value as string | null));
+      if (key === 'tags') params.push(JSON.stringify(value ?? []));
+      else if (key === 'customFields') params.push(JSON.stringify(value ?? {}));
+      else params.push(value as string | null);
     }
     const now = new Date().toISOString();
     // Maintain resolvedAt for the SLA resolution clock on status transitions.
@@ -1438,7 +1444,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
       bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: [], channel: 'web',
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: null,
+      firstRespondedAt: null, resolvedAt: null, channelId: null, customFields: {},
     };
     const message: Message = {
       id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
@@ -1621,7 +1627,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
       requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: channel.id,
+      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, customFields: {},
     };
     const message: Message = {
       id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
@@ -1638,6 +1644,81 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     await runAgentsOnTicket(ticket, body);
     return c.json({ ticketId: ticket.id });
+  });
+
+  // ── Custom fields ────────────────────────────────────────────────────────
+  const CUSTOM_FIELD_TYPES: CustomFieldType[] = ['text', 'textarea', 'number', 'select', 'checkbox', 'date'];
+  const CUSTOM_FIELD_ENTITIES: CustomFieldEntity[] = ['ticket', 'contact'];
+  const cleanOptions = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((o): o is string => typeof o === 'string' && o.trim() !== '').map((o) => o.trim()) : [];
+
+  app.post('/api/custom-fields', async (c) => {
+    let input: { entity?: unknown; label?: unknown; type?: unknown; options?: unknown; required?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const { entity, label, type } = input;
+    if (typeof entity !== 'string' || !CUSTOM_FIELD_ENTITIES.includes(entity as CustomFieldEntity)) return c.json({ error: 'invalid entity' }, 400);
+    if (typeof label !== 'string' || label.trim() === '') return c.json({ error: 'label is required' }, 400);
+    if (typeof type !== 'string' || !CUSTOM_FIELD_TYPES.includes(type as CustomFieldType)) return c.json({ error: 'invalid type' }, 400);
+    const options = cleanOptions(input.options);
+    if (type === 'select' && options.length === 0) return c.json({ error: 'a select field needs at least one option' }, 400);
+    const position = getCustomFields(db).filter((f) => f.entity === entity).length;
+    const field: CustomFieldDef = {
+      id: newId('cf_'), entity: entity as CustomFieldEntity, label: label.trim(), type: type as CustomFieldType,
+      options, required: input.required === true, position, createdAt: new Date().toISOString(),
+    };
+    db.prepare('INSERT INTO custom_fields (id, entity, label, type, options, required, position, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(field.id, field.entity, field.label, field.type, JSON.stringify(field.options), field.required ? 1 : 0, field.position, field.createdAt);
+    return c.json(field);
+  });
+
+  app.patch('/api/custom-fields/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = getCustomField(db, id);
+    if (existing === null) return c.json({ error: `custom field not found: ${id}` }, 404);
+    let patch: { label?: unknown; type?: unknown; options?: unknown; required?: unknown; position?: unknown };
+    try {
+      patch = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const sets: string[] = [];
+    const params: (string | number)[] = [];
+    if ('label' in patch) {
+      if (typeof patch.label !== 'string' || patch.label.trim() === '') return c.json({ error: 'invalid label' }, 400);
+      sets.push('label = ?');
+      params.push(patch.label.trim());
+    }
+    if ('type' in patch) {
+      if (typeof patch.type !== 'string' || !CUSTOM_FIELD_TYPES.includes(patch.type as CustomFieldType)) return c.json({ error: 'invalid type' }, 400);
+      sets.push('type = ?');
+      params.push(patch.type);
+    }
+    if ('options' in patch) {
+      sets.push('options = ?');
+      params.push(JSON.stringify(cleanOptions(patch.options)));
+    }
+    if ('required' in patch) {
+      sets.push('required = ?');
+      params.push(patch.required === true ? 1 : 0);
+    }
+    if ('position' in patch && typeof patch.position === 'number' && Number.isFinite(patch.position)) {
+      sets.push('position = ?');
+      params.push(patch.position);
+    }
+    if (sets.length === 0) return c.json(existing);
+    db.prepare(`UPDATE custom_fields SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    return c.json(getCustomField(db, id));
+  });
+
+  app.delete('/api/custom-fields/:id', (c) => {
+    const id = c.req.param('id');
+    if (getCustomField(db, id) === null) return c.json({ error: `custom field not found: ${id}` }, 404);
+    db.prepare('DELETE FROM custom_fields WHERE id = ?').run(id);
+    return c.json({ ok: true });
   });
 
   // Public thread read for the web widget: latest ticket for this contact on this channel.

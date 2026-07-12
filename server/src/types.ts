@@ -17,7 +17,21 @@ export interface Ticket {
   snoozedUntil: string | null; lastMessageAt: string; lastMessagePreview: string;
   firstRespondedAt: string | null; resolvedAt: string | null;
   channelId: string | null;
+  /** Values for admin-defined custom fields, keyed by field id. */
+  customFields: Record<string, string>;
 }
+
+export type CustomFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'date';
+export type CustomFieldEntity = 'ticket' | 'contact';
+/** An admin-defined custom field. Values live on the entity keyed by this id. */
+export interface CustomFieldDef {
+  id: string; entity: CustomFieldEntity; label: string; type: CustomFieldType;
+  options: string[]; required: boolean; position: number; createdAt: string;
+}
+export type CustomFieldCreate = {
+  entity: CustomFieldEntity; label: string; type: CustomFieldType; options?: string[]; required?: boolean;
+};
+export type CustomFieldPatch = Partial<Pick<CustomFieldDef, 'label' | 'type' | 'options' | 'required' | 'position'>>;
 
 export type ChannelType =
   | 'webchat' | 'webhook' | 'email' | 'discord' | 'slack'
@@ -198,7 +212,7 @@ export interface StatsOverview {
   revenue: RevenueStats;
 }
 export type TicketPatch = Partial<Pick<Ticket,
-  'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject'>>;
+  'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
@@ -208,4 +222,5 @@ export interface BootstrapData {
   slaHours: SlaHours;
   aiProvider: AiProvider;
   smtp: SmtpSettings;
+  customFields: CustomFieldDef[];
 }

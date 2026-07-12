@@ -11,6 +11,7 @@ import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
 import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
+import { TicketCustomFields } from './TicketCustomFields';
 import { aiEnabled } from '../ai/engine';
 
 function formatLocalTime(timezone: string): string | null {
@@ -156,6 +157,7 @@ function RevenueAwarePanel({
           {localTime !== null && <DetailRow label="Local time" value={localTime} />}
         </div>
       </section>
+      <TicketCustomFields ticket={ticket} />
       {aiEnabled() && (
         <section className="border-t border-line p-4">
           <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -22,6 +22,7 @@ export interface AppState {
   aiAgents: Record<string, AiAgent>;
   aiActions: Record<string, AiAction>;
   channels: Record<string, ChannelConn>;
+  customFields: CustomFieldDef[]; // ordered by entity + position
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
@@ -61,6 +62,10 @@ export interface AppState {
   updateChannel(id: string, patch: ChannelPatch): Promise<void>;
   deleteChannel(id: string): Promise<void>;
   testChannel(id: string): Promise<ChannelTestResult>;
+  createCustomField(input: CustomFieldCreate): Promise<void>;
+  updateCustomField(id: string, patch: CustomFieldPatch): Promise<void>;
+  deleteCustomField(id: string): Promise<void>;
+  setTicketField(ticketId: string, fieldId: string, value: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
   saveSmtp(input: SmtpSave): Promise<void>;
@@ -136,6 +141,7 @@ export function createAppStore(repository: Repository) {
     aiAgents: {},
     aiActions: {},
     channels: {},
+    customFields: [],
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
     messages: {},
@@ -158,6 +164,7 @@ export function createAppStore(repository: Repository) {
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
+        customFields: data.customFields,
         aiProvider: data.aiProvider,
         smtp: data.smtp,
         currentAgentId: data.currentAgentId,
@@ -627,6 +634,43 @@ export function createAppStore(repository: Repository) {
 
     async testChannel(id) {
       return repository.testChannel(id);
+    },
+
+    async createCustomField(input) {
+      const field = await repository.createCustomField(input);
+      set((s) => ({ customFields: [...s.customFields, field] }));
+    },
+
+    async updateCustomField(id, patch) {
+      const prev = get().customFields;
+      set((s) => ({ customFields: s.customFields.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
+      try {
+        const field = await repository.updateCustomField(id, patch);
+        set((s) => ({ customFields: s.customFields.map((f) => (f.id === id ? field : f)) }));
+      } catch (err) {
+        set({ customFields: prev });
+        throw err;
+      }
+    },
+
+    async deleteCustomField(id) {
+      const prev = get().customFields;
+      set((s) => ({ customFields: s.customFields.filter((f) => f.id !== id) }));
+      try {
+        await repository.deleteCustomField(id);
+      } catch (err) {
+        set({ customFields: prev });
+        throw err;
+      }
+    },
+
+    async setTicketField(ticketId, fieldId, value) {
+      const ticket = get().tickets[ticketId] as Ticket | undefined;
+      if (!ticket) throw new Error('Ticket not found');
+      const next = { ...ticket.customFields };
+      if (value.trim() === '') delete next[fieldId];
+      else next[fieldId] = value;
+      await get().patchTicket(ticketId, { customFields: next });
     },
 
     async saveAiProvider(input) {

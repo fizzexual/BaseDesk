@@ -1,13 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
-/** Ticket as stored: tags is a JSON string column. */
-export type TicketRow = Omit<Ticket, 'tags'> & { tags: string };
+/** Ticket as stored: tags and customFields are JSON string columns. */
+export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
 
 export function rowToTicket(row: TicketRow): Ticket {
-  return { ...row, tags: JSON.parse(row.tags) as string[] };
+  return {
+    ...row,
+    tags: JSON.parse(row.tags) as string[],
+    customFields: JSON.parse(row.customFields ?? '{}') as Record<string, string>,
+  };
 }
 
 export function openDb(dataDir: string): DatabaseSync {
@@ -53,7 +57,18 @@ export function openDb(dataDir: string): DatabaseSync {
       lastMessagePreview TEXT NOT NULL,
       firstRespondedAt TEXT,
       resolvedAt TEXT,
-      channelId TEXT
+      channelId TEXT,
+      customFields TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE TABLE IF NOT EXISTS custom_fields (
+      id TEXT PRIMARY KEY,
+      entity TEXT NOT NULL,
+      label TEXT NOT NULL,
+      type TEXT NOT NULL,
+      options TEXT NOT NULL DEFAULT '[]',
+      required INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -175,6 +190,8 @@ export function openDb(dataDir: string): DatabaseSync {
   const channelCols = db.prepare('PRAGMA table_info(channels)').all() as { name: string }[];
   if (!channelCols.some((c) => c.name === 'outboundUrl')) db.exec('ALTER TABLE channels ADD COLUMN outboundUrl TEXT');
   if (!channelCols.some((c) => c.name === 'outboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN outboundSecret TEXT');
+
+  if (!ticketCols.some((c) => c.name === 'customFields')) db.exec("ALTER TABLE tickets ADD COLUMN customFields TEXT NOT NULL DEFAULT '{}'");
 
   return db;
 }
@@ -367,4 +384,16 @@ export function getChannels(db: DatabaseSync): ChannelConn[] {
 export function getChannel(db: DatabaseSync, id: string): ChannelConn | null {
   const row = db.prepare('SELECT * FROM channels WHERE id = ?').get(id) as ChannelRow | undefined;
   return row ? rowToChannel(row) : null;
+}
+
+type CustomFieldRow = Omit<CustomFieldDef, 'options' | 'required'> & { options: string; required: number };
+function rowToCustomField(row: CustomFieldRow): CustomFieldDef {
+  return { ...row, options: JSON.parse(row.options) as string[], required: row.required === 1 };
+}
+export function getCustomFields(db: DatabaseSync): CustomFieldDef[] {
+  return (db.prepare('SELECT * FROM custom_fields ORDER BY entity, position, createdAt').all() as unknown as CustomFieldRow[]).map(rowToCustomField);
+}
+export function getCustomField(db: DatabaseSync, id: string): CustomFieldDef | null {
+  const row = db.prepare('SELECT * FROM custom_fields WHERE id = ?').get(id) as CustomFieldRow | undefined;
+  return row ? rowToCustomField(row) : null;
 }

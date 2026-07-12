@@ -1,6 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -144,6 +145,15 @@ export class ApiRepository implements Repository {
   }
   testChannel(id: string): Promise<ChannelTestResult> {
     return request(`/channels/${encodeURIComponent(id)}/test`, { method: 'POST' });
+  }
+  createCustomField(input: CustomFieldCreate): Promise<CustomFieldDef> {
+    return request('/custom-fields', jsonInit('POST', input));
+  }
+  updateCustomField(id: string, patch: CustomFieldPatch): Promise<CustomFieldDef> {
+    return request(`/custom-fields/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+  async deleteCustomField(id: string): Promise<void> {
+    await request<{ ok: true }>(`/custom-fields/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   inviteAgent(input: AgentInvite): Promise<Agent> {

@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
-  ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType,
+  ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DealStage, DealType,
   DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
@@ -84,6 +84,7 @@ interface LocalData {
   channels: ChannelConn[];
   aiProvider: AiProvider;
   smtp: SmtpSettings;
+  customFields: CustomFieldDef[];
 }
 
 function slugify(title: string): string {
@@ -157,7 +158,7 @@ function nextId(items: { id: string }[], prefix: string, width: number): string 
 function seedData(): LocalData {
   const seed = seedJson as unknown as LocalData;
   return {
-    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags] })),
+    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], customFields: { ...(t.customFields ?? {}) } })),
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
     agents: seed.agents.map((a) => ({ ...a })),
@@ -172,6 +173,7 @@ function seedData(): LocalData {
     channels: seed.channels.map((c) => ({ ...c, outboundUrl: c.outboundUrl ?? null, hasOutboundSecret: c.hasOutboundSecret ?? false })),
     aiProvider: { ...DEFAULT_AI_PROVIDER },
     smtp: { ...DEFAULT_SMTP },
+    customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
   };
 }
 
@@ -232,6 +234,14 @@ export class LocalRepository implements Repository {
         this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch, outboundUrl: ch.outboundUrl ?? null, hasOutboundSecret: ch.hasOutboundSecret ?? false }));
         for (const t of this.data.tickets) {
           if (t.channelId === undefined) t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
+        }
+        this.persist();
+      }
+      // Backfill custom fields for blobs written before they existed.
+      if (!Array.isArray(this.data.customFields)) {
+        this.data.customFields = [];
+        for (const t of this.data.tickets) {
+          if (t.customFields === undefined) t.customFields = {};
         }
         this.persist();
       }
@@ -298,6 +308,7 @@ export class LocalRepository implements Repository {
       channels: this.data.channels.map((ch) => ({ ...ch })),
       aiProvider: { ...this.data.aiProvider },
       smtp: { ...this.data.smtp },
+      customFields: this.data.customFields.map((f) => ({ ...f, options: [...f.options] })),
     };
   }
 
@@ -332,6 +343,7 @@ export class LocalRepository implements Repository {
       firstRespondedAt: null,
       resolvedAt: null,
       channelId: null,
+      customFields: {},
     };
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),
@@ -850,6 +862,39 @@ export class LocalRepository implements Repository {
 
   async testChannel(_id: string): Promise<ChannelTestResult> {
     return { ok: false, error: 'Outbound delivery runs on the live server, not this demo.' };
+  }
+
+  async createCustomField(input: CustomFieldCreate): Promise<CustomFieldDef> {
+    const field: CustomFieldDef = {
+      id: nextId(this.data.customFields, 'cf_', 1),
+      entity: input.entity,
+      label: input.label.trim(),
+      type: input.type,
+      options: (input.options ?? []).map((o) => o.trim()).filter((o) => o !== ''),
+      required: input.required === true,
+      position: this.data.customFields.filter((f) => f.entity === input.entity).length,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.customFields.push(field);
+    this.persist();
+    return { ...field, options: [...field.options] };
+  }
+
+  async updateCustomField(id: string, patch: CustomFieldPatch): Promise<CustomFieldDef> {
+    const f = this.data.customFields.find((x) => x.id === id);
+    if (!f) throw new Error('Custom field not found');
+    if (patch.label !== undefined) f.label = patch.label.trim();
+    if (patch.type !== undefined) f.type = patch.type;
+    if (patch.options !== undefined) f.options = patch.options.map((o) => o.trim()).filter((o) => o !== '');
+    if (patch.required !== undefined) f.required = patch.required;
+    if (patch.position !== undefined) f.position = patch.position;
+    this.persist();
+    return { ...f, options: [...f.options] };
+  }
+
+  async deleteCustomField(id: string): Promise<void> {
+    this.data.customFields = this.data.customFields.filter((f) => f.id !== id);
+    this.persist();
   }
 
   async getStats(): Promise<StatsOverview> {
