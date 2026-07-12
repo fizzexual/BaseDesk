@@ -709,10 +709,31 @@ for (const t of tickets) {
   t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
 }
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels };
+// ---------------------------------------------------------------- @mention notifications
+// Seed a couple of internal notes where a teammate @mentions the current admin
+// (Sam / a_1), plus the matching notifications — one unread, one already read —
+// so the header bell demonstrates both states on first load.
+const mentionTargets = tickets.filter((t) => t.status === 'open' || t.status === 'pending').slice(0, 2);
+const notifications = [];
+const noteSeeds = [
+  { actor: 'a_2', body: 'Hey @Sam, this one is asking for a manager callback — can you take it? I left a holding note.' },
+  { actor: 'a_3', body: 'Thanks @Sam, escalating to you since it touches billing. Flagged it urgent on my end.' },
+];
+mentionTargets.forEach((t, i) => {
+  const s = noteSeeds[i];
+  const at = iso(NOW_MS - (i === 0 ? 95 * MIN : 27 * HOUR));
+  const mid = 'm_note_' + (i + 1);
+  messages.push({ id: mid, ticketId: t.id, authorKind: 'agent', authorId: s.actor, kind: 'note', body: s.body, at });
+  notifications.push({
+    id: 'nt_' + (i + 1), agentId: 'a_1', ticketId: t.id, messageId: mid,
+    actorId: s.actor, snippet: s.body, createdAt: at, readAt: i === 0 ? null : at,
+  });
+});
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
-console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels`);
+console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels, ${notifications.length} notifications`);
 
 
 

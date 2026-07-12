@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  DraftResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
@@ -88,6 +88,7 @@ interface LocalData {
   customFields: CustomFieldDef[];
   attachments: Attachment[];
   savedViews: SavedView[];
+  notifications: Notification[];
 }
 
 function slugify(title: string): string {
@@ -179,6 +180,12 @@ function seedData(): LocalData {
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
     attachments: [],
     savedViews: [],
+    // Seed notifications ship without the joined display fields; resolve them here.
+    notifications: (seed.notifications ?? []).map((n) => ({
+      ...n,
+      actorName: seed.agents.find((a) => a.id === n.actorId)?.name ?? 'A teammate',
+      ticketSubject: seed.tickets.find((t) => t.id === n.ticketId)?.subject ?? '(ticket)',
+    })),
   };
 }
 
@@ -259,6 +266,10 @@ export class LocalRepository implements Repository {
         this.data.savedViews = [];
         this.persist();
       }
+      if (!Array.isArray(this.data.notifications)) {
+        this.data.notifications = [];
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -328,6 +339,9 @@ export class LocalRepository implements Repository {
       smtp: { ...this.data.smtp },
       customFields: this.data.customFields.map((f) => ({ ...f, options: [...f.options] })),
       savedViews: this.data.savedViews.map((v) => ({ ...v })),
+      notifications: [...this.data.notifications]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((n) => ({ ...n })),
     };
   }
 
@@ -517,8 +531,28 @@ export class LocalRepository implements Repository {
       if (t.status === 'open') t.status = 'pending';
       if (t.firstRespondedAt === null) t.firstRespondedAt = now;
     }
+    if (input.kind === 'note') this.notifyMentions(message, t.subject);
     this.persist();
     return { message: { ...message, attachments }, ticket: { ...t, tags: [...t.tags] } };
+  }
+
+  /** Mirrors the server: an @mentioned teammate (by first name) gets a notification. */
+  private notifyMentions(message: Message, ticketSubject: string): void {
+    const tokens = new Set((message.body.match(/@[A-Za-z]+/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    if (tokens.size === 0) return;
+    const actorName = this.data.agents.find((a) => a.id === message.authorId)?.name ?? 'A teammate';
+    for (const a of this.data.agents) {
+      if (a.id === message.authorId) continue;
+      const first = a.name.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+      if (first !== '' && tokens.has(first)) {
+        this.data.notifications.push({
+          id: nextId(this.data.notifications, 'nt_', 1),
+          agentId: a.id, ticketId: message.ticketId, ticketSubject,
+          messageId: message.id, actorId: message.authorId, actorName,
+          snippet: preview(message.body), createdAt: message.at, readAt: null,
+        });
+      }
+    }
   }
 
   async createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {
@@ -990,6 +1024,19 @@ export class LocalRepository implements Repository {
   async deleteSavedView(id: string): Promise<void> {
     this.data.savedViews = this.data.savedViews.filter((v) => v.id !== id);
     this.persist();
+  }
+
+  async markNotificationsRead(id?: string): Promise<Notification[]> {
+    const now = new Date().toISOString();
+    for (const n of this.data.notifications) {
+      if (n.agentId !== CURRENT_AGENT_ID) continue;
+      if ((id === undefined || n.id === id) && n.readAt === null) n.readAt = now;
+    }
+    this.persist();
+    return [...this.data.notifications]
+      .filter((n) => n.agentId === CURRENT_AGENT_ID)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((n) => ({ ...n }));
   }
 
   async getStats(): Promise<StatsOverview> {

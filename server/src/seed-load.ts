@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
-import type { AiAction, AiAgent, Agent, CannedReply, ChannelConn, Contact, Deal, KbArticle, Message, Ticket } from './types.js';
+import type { AiAction, AiAgent, Agent, CannedReply, ChannelConn, Contact, Deal, KbArticle, Message, Notification, Ticket } from './types.js';
+import { insertNotification } from './db.js';
 
 interface SeedData {
   agents: Agent[];
@@ -15,6 +16,7 @@ interface SeedData {
   aiAgents: AiAgent[];
   aiActions: AiAction[];
   channels: ChannelConn[];
+  notifications?: Notification[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -99,6 +101,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
     }
     for (const ch of seed.channels) {
       insertChannel.run(ch.id, ch.type, ch.name, ch.enabled ? 1 : 0, ch.inboundToken, ch.address, ch.createdAt);
+    }
+    for (const n of seed.notifications ?? []) {
+      insertNotification(db, n);
     }
     db.exec('COMMIT');
   } catch (err) {

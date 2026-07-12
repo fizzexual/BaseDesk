@@ -6,8 +6,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, setSavedViews,
-  insertAiAction, insertAttachment, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
+  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, markNotificationsRead, setSavedViews,
+  insertAiAction, insertAttachment, insertNotification, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
@@ -233,6 +233,27 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return row.id;
   };
 
+  /**
+   * Create an @mention notification for every teammate named in an internal
+   * note. Matches an `@word` token against each agent's first name
+   * (case-insensitive); the author never notifies themselves.
+   */
+  const notifyMentions = (opts: { body: string; ticketId: string; messageId: string; actorId: string; now: string }): void => {
+    const tokens = new Set((opts.body.match(/@[A-Za-z]+/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    if (tokens.size === 0) return;
+    const agents = db.prepare('SELECT id, name FROM agents').all() as { id: string; name: string }[];
+    for (const a of agents) {
+      if (a.id === opts.actorId) continue;
+      const first = a.name.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+      if (first !== '' && tokens.has(first)) {
+        insertNotification(db, {
+          id: newId('nt_'), agentId: a.id, ticketId: opts.ticketId, messageId: opts.messageId,
+          actorId: opts.actorId, snippet: preview(opts.body), createdAt: opts.now,
+        });
+      }
+    }
+  };
+
   /** Fire-and-forget: email the ticket's requester that support replied. */
   const emailReplyToCustomer = (ticket: Ticket, body: string): void => {
     const cfg = getSmtpConfig(db);
@@ -377,6 +398,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       channels: getChannels(db).map(toPublicChannel),
       customFields: getCustomFields(db),
       savedViews: getSavedViews(db),
+      notifications: getNotifications(db, currentAgentId()),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -664,6 +686,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     // Notify the customer on a public reply (never on an internal note): email + source channel.
     if (kind === 'reply') deliverReply(ticket, body.trim() !== '' ? body : '(sent an attachment)');
+    // An internal note can @mention teammates — alert each of them.
+    if (kind === 'note') notifyMentions({ body, ticketId: id, messageId: message.id, actorId: message.authorId, now });
     const saved = getMessages(db, id).find((m) => m.id === message.id) ?? message;
     return c.json({ message: saved, ticket: getTicket(db, id) });
   });
@@ -792,6 +816,22 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     db.prepare('DELETE FROM canned_replies WHERE id = ?').run(id);
     return c.json({ ok: true });
+  });
+
+  app.get('/api/notifications', (c) => c.json(getNotifications(db, currentAgentId())));
+
+  // Mark one notification read ({ id }), or all of the current agent's (no body).
+  // Returns the refreshed list so the client can resync in a single round-trip.
+  app.post('/api/notifications/read', async (c) => {
+    let input: { id?: unknown } = {};
+    try {
+      input = await c.req.json();
+    } catch {
+      /* empty body → mark all read */
+    }
+    const id = typeof input.id === 'string' ? input.id : undefined;
+    markNotificationsRead(db, currentAgentId(), new Date().toISOString(), id);
+    return c.json(getNotifications(db, currentAgentId()));
   });
 
   app.get('/api/deals', (c) => {

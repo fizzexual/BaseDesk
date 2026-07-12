@@ -1,4 +1,5 @@
 export { IconLogo } from './IconLogo';
+export { IconBell } from './IconBell';
 export { IconInbox } from './IconInbox';
 export { IconTicket } from './IconTicket';
 export { IconContacts } from './IconContacts';

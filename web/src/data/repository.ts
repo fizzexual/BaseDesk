@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -14,6 +14,7 @@ export interface BootstrapData {
   slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
   customFields: CustomFieldDef[];
   savedViews: SavedView[];
+  notifications: Notification[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -53,6 +54,8 @@ export interface Repository {
   deleteCustomField(id: string): Promise<void>;
   createSavedView(input: SavedViewCreate): Promise<SavedView>;
   deleteSavedView(id: string): Promise<void>;
+  /** Mark one notification read, or all of the current agent's when id is omitted; returns the fresh list. */
+  markNotificationsRead(id?: string): Promise<Notification[]>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;
   deleteAgent(id: string): Promise<void>;

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -24,6 +24,7 @@ export interface AppState {
   channels: Record<string, ChannelConn>;
   customFields: CustomFieldDef[]; // ordered by entity + position
   savedViews: SavedView[];
+  notifications: Notification[]; // @mention alerts for the current agent, newest first
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
@@ -73,6 +74,7 @@ export interface AppState {
   deleteCustomField(id: string): Promise<void>;
   createSavedView(input: SavedViewCreate): Promise<void>;
   deleteSavedView(id: string): Promise<void>;
+  markNotificationsRead(id?: string): Promise<void>;
   setTicketField(ticketId: string, fieldId: string, value: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
@@ -151,6 +153,7 @@ export function createAppStore(repository: Repository) {
     channels: {},
     customFields: [],
     savedViews: [],
+    notifications: [],
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
     messages: {},
@@ -176,6 +179,7 @@ export function createAppStore(repository: Repository) {
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         customFields: data.customFields,
         savedViews: data.savedViews,
+        notifications: data.notifications,
         aiProvider: data.aiProvider,
         smtp: data.smtp,
         currentAgentId: data.currentAgentId,
@@ -746,6 +750,23 @@ export function createAppStore(repository: Repository) {
       } catch (err) {
         set({ savedViews: prev });
         throw err;
+      }
+    },
+
+    async markNotificationsRead(id) {
+      const now = new Date().toISOString();
+      const prev = get().notifications;
+      // Optimistically stamp read; reconcile with the server's fresh list.
+      set((s) => ({
+        notifications: s.notifications.map((n) =>
+          (id === undefined || n.id === id) && n.readAt === null ? { ...n, readAt: now } : n,
+        ),
+      }));
+      try {
+        const fresh = await repository.markNotificationsRead(id);
+        set({ notifications: fresh });
+      } catch {
+        set({ notifications: prev });
       }
     },
 

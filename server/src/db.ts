@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -97,6 +97,16 @@ export function openDb(dataDir: string): DatabaseSync {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       body TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      agentId TEXT NOT NULL,
+      ticketId TEXT NOT NULL,
+      messageId TEXT NOT NULL,
+      actorId TEXT NOT NULL,
+      snippet TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      readAt TEXT
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -246,6 +256,48 @@ function parseMacroActions(raw: string | null): MacroActions | null {
     return parsed && typeof parsed === 'object' ? (parsed as MacroActions) : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * An agent's @mention notifications, newest first. actorName and ticketSubject
+ * are joined live (and a notification whose ticket was hard-deleted is skipped).
+ */
+export function getNotifications(db: DatabaseSync, agentId: string, limit = 50): Notification[] {
+  const rows = db
+    .prepare(
+      `SELECT n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.snippet, n.createdAt, n.readAt,
+              a.name AS actorName, t.subject AS ticketSubject
+         FROM notifications n
+         JOIN agents a ON a.id = n.actorId
+         JOIN tickets t ON t.id = n.ticketId
+        WHERE n.agentId = ?
+        ORDER BY n.createdAt DESC
+        LIMIT ?`,
+    )
+    .all(agentId, limit) as (Omit<Notification, 'actorName' | 'ticketSubject'> & { actorName: string; ticketSubject: string })[];
+  return rows.map((r) => ({
+    id: r.id, agentId: r.agentId, ticketId: r.ticketId, ticketSubject: r.ticketSubject,
+    messageId: r.messageId, actorId: r.actorId, actorName: r.actorName, snippet: r.snippet,
+    createdAt: r.createdAt, readAt: r.readAt,
+  }));
+}
+
+export function insertNotification(
+  db: DatabaseSync,
+  n: { id: string; agentId: string; ticketId: string; messageId: string; actorId: string; snippet: string; createdAt: string; readAt?: string | null },
+): void {
+  db.prepare(
+    'INSERT INTO notifications (id, agentId, ticketId, messageId, actorId, snippet, createdAt, readAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.snippet, n.createdAt, n.readAt ?? null);
+}
+
+/** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */
+export function markNotificationsRead(db: DatabaseSync, agentId: string, at: string, id?: string): void {
+  if (id !== undefined) {
+    db.prepare('UPDATE notifications SET readAt = ? WHERE id = ? AND agentId = ? AND readAt IS NULL').run(at, id, agentId);
+  } else {
+    db.prepare('UPDATE notifications SET readAt = ? WHERE agentId = ? AND readAt IS NULL').run(at, agentId);
   }
 }
 

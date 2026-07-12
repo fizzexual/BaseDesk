@@ -254,6 +254,16 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 
+/**
+ * An @mention alert for one agent. Stored with raw ids; actorName and
+ * ticketSubject are resolved at read time so renames stay accurate.
+ */
+export interface Notification {
+  id: string; agentId: string; ticketId: string; ticketSubject: string;
+  messageId: string; actorId: string; actorName: string; snippet: string;
+  createdAt: string; readAt: string | null;
+}
+
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
@@ -262,6 +272,7 @@ export interface BootstrapData {
   slaHours: SlaHours;
   aiProvider: AiProvider;
   smtp: SmtpSettings;
+  notifications: Notification[];
   customFields: CustomFieldDef[];
   savedViews: SavedView[];
 }

@@ -259,5 +259,12 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 export type SavedViewCreate = Omit<SavedView, 'id'>;
+
+/** An @mention alert for the current agent. */
+export interface Notification {
+  id: string; agentId: string; ticketId: string; ticketSubject: string;
+  messageId: string; actorId: string; actorName: string; snippet: string;
+  createdAt: string; readAt: string | null;
+}
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;

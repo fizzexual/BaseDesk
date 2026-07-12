@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -176,6 +176,10 @@ export class ApiRepository implements Repository {
   }
   async deleteSavedView(id: string): Promise<void> {
     await request<{ ok: true }>(`/saved-views/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  markNotificationsRead(id?: string): Promise<Notification[]> {
+    return request('/notifications/read', jsonInit('POST', id === undefined ? {} : { id }));
   }
 
   inviteAgent(input: AgentInvite): Promise<Agent> {

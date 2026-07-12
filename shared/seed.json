@@ -6639,6 +6639,24 @@
       "kind": "reply",
       "body": "Thanks, that is clear. Last thing — can we mix monthly and annual seats?",
       "at": "2026-07-11T10:33:27.000Z"
+    },
+    {
+      "id": "m_note_1",
+      "ticketId": "t_055",
+      "authorKind": "agent",
+      "authorId": "a_2",
+      "kind": "note",
+      "body": "Hey @Sam, this one is asking for a manager callback — can you take it? I left a holding note.",
+      "at": "2026-07-11T10:25:00.000Z"
+    },
+    {
+      "id": "m_note_2",
+      "ticketId": "t_059",
+      "authorKind": "agent",
+      "authorId": "a_3",
+      "kind": "note",
+      "body": "Thanks @Sam, escalating to you since it touches billing. Flagged it urgent on my end.",
+      "at": "2026-07-10T09:00:00.000Z"
     }
   ],
   "canned": [
@@ -7489,6 +7507,28 @@
       "inboundToken": "tok_email_b71e0439",
       "address": "support@basedesk.example",
       "createdAt": "2026-05-17T12:00:00.000Z"
+    }
+  ],
+  "notifications": [
+    {
+      "id": "nt_1",
+      "agentId": "a_1",
+      "ticketId": "t_055",
+      "messageId": "m_note_1",
+      "actorId": "a_2",
+      "snippet": "Hey @Sam, this one is asking for a manager callback — can you take it? I left a holding note.",
+      "createdAt": "2026-07-11T10:25:00.000Z",
+      "readAt": null
+    },
+    {
+      "id": "nt_2",
+      "agentId": "a_1",
+      "ticketId": "t_059",
+      "messageId": "m_note_2",
+      "actorId": "a_3",
+      "snippet": "Thanks @Sam, escalating to you since it touches billing. Flagged it urgent on my end.",
+      "createdAt": "2026-07-10T09:00:00.000Z",
+      "readAt": "2026-07-10T09:00:00.000Z"
     }
   ]
 }
