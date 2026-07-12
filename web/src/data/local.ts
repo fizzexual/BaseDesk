@@ -1,11 +1,12 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
-  ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DealStage, DealType,
   DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
+import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
 import { DEFAULT_AI_PROVIDER, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
@@ -85,6 +86,7 @@ interface LocalData {
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   customFields: CustomFieldDef[];
+  attachments: Attachment[];
 }
 
 function slugify(title: string): string {
@@ -174,6 +176,7 @@ function seedData(): LocalData {
     aiProvider: { ...DEFAULT_AI_PROVIDER },
     smtp: { ...DEFAULT_SMTP },
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
+    attachments: [],
   };
 }
 
@@ -243,6 +246,11 @@ export class LocalRepository implements Repository {
         for (const t of this.data.tickets) {
           if (t.customFields === undefined) t.customFields = {};
         }
+        this.persist();
+      }
+      // Backfill attachments store for blobs written before it existed.
+      if (!Array.isArray(this.data.attachments)) {
+        this.data.attachments = [];
         this.persist();
       }
       // Backfill business-hours SLA + richer agent fields, and migrate v0.3
@@ -316,7 +324,26 @@ export class LocalRepository implements Repository {
     return this.data.messages
       .filter((m) => m.ticketId === ticketId)
       .sort((a, b) => a.at.localeCompare(b.at))
-      .map((m) => ({ ...m }));
+      .map((m) => ({
+        ...m,
+        attachments: this.data.attachments.filter((a) => a.messageId === m.id).map((a) => ({ ...a })),
+      }));
+  }
+
+  async uploadAttachment(file: File): Promise<Attachment> {
+    const attachment: Attachment = {
+      id: nextId(this.data.attachments, 'at_', 4),
+      messageId: null,
+      ticketId: null,
+      filename: file.name || 'file',
+      mimeType: file.type || 'application/octet-stream',
+      size: file.size,
+      createdAt: new Date().toISOString(),
+    };
+    registerLocalAttachment(attachment.id, URL.createObjectURL(file));
+    this.data.attachments.push(attachment);
+    this.persist();
+    return { ...attachment };
   }
 
   async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
@@ -419,7 +446,7 @@ export class LocalRepository implements Repository {
     return { ...t, tags: [...t.tags] };
   }
 
-  async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string }): Promise<{ message: Message; ticket: Ticket }> {
+  async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
     const t = this.ticket(ticketId);
     const now = new Date().toISOString();
     const message: Message = {
@@ -432,15 +459,23 @@ export class LocalRepository implements Repository {
       at: now,
     };
     this.data.messages.push(message);
+    const ids = input.attachmentIds ?? [];
+    for (const a of this.data.attachments) {
+      if (a.messageId === null && ids.includes(a.id)) {
+        a.messageId = message.id;
+        a.ticketId = ticketId;
+      }
+    }
+    const attachments = this.data.attachments.filter((a) => a.messageId === message.id).map((a) => ({ ...a }));
     t.updatedAt = now;
     t.lastMessageAt = now;
     if (input.kind === 'reply') {
-      t.lastMessagePreview = preview(input.body);
+      t.lastMessagePreview = input.body.trim() !== '' ? preview(input.body) : 'Sent an attachment';
       if (t.status === 'open') t.status = 'pending';
       if (t.firstRespondedAt === null) t.firstRespondedAt = now;
     }
     this.persist();
-    return { message: { ...message }, ticket: { ...t, tags: [...t.tags] } };
+    return { message: { ...message, attachments }, ticket: { ...t, tags: [...t.tags] } };
   }
 
   async createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {

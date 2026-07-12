@@ -1,9 +1,11 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
-import type { Message, Ticket } from '../../data/types';
+import type { Attachment, Message, Ticket } from '../../data/types';
+import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
 import { cx } from '../../components/util';
+import { IconPaperclip } from '../../icons';
 
 /** Renders a message body, highlighting @mentions. */
 function Body({ text }: { text: string }) {
@@ -18,6 +20,38 @@ function Body({ text }: { text: string }) {
     ),
   );
   return <p className="whitespace-pre-line text-[14px] leading-relaxed">{nodes}</p>;
+}
+
+/** Image previews inline; other files as downloadable chips. */
+function Attachments({ items }: { items: Attachment[] }) {
+  return (
+    <div className={cx('flex flex-wrap gap-2', 'mt-2')}>
+      {items.map((a) => {
+        const url = attachmentUrl(a);
+        if (isImage(a)) {
+          return (
+            <a key={a.id} href={url} target="_blank" rel="noreferrer" title={a.filename} className="block overflow-hidden rounded-md border border-line">
+              <img src={url} alt={a.filename} className="max-h-40 max-w-[220px] object-cover" />
+            </a>
+          );
+        }
+        return (
+          <a
+            key={a.id}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            download={a.filename}
+            className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] transition-colors hover:bg-surface-2"
+          >
+            <IconPaperclip size={14} className="shrink-0 text-text-3" />
+            <span className="max-w-[180px] truncate font-medium">{a.filename}</span>
+            <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 function MessageRow({ message }: { message: Message }) {
@@ -52,7 +86,10 @@ function MessageRow({ message }: { message: Message }) {
           )}
           <TimeAgo iso={message.at} />
         </div>
-        <Body text={message.body} />
+        {message.body.trim() !== '' && <Body text={message.body} />}
+        {message.attachments !== undefined && message.attachments.length > 0 && (
+          <Attachments items={message.attachments} />
+        )}
       </div>
     </div>
   );

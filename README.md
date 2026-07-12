@@ -113,7 +113,7 @@ npm run typecheck  # strict TS, both workspaces
 ## The agent workspace
 
 - **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts — switchable between a compact **list** and a **card** layout
-- **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel, and **admin-defined custom fields** (text, long text, number, dropdown, checkbox, date) edited right on the ticket
+- **Ticket workspace**: threaded conversation with **file attachments** (attach a screenshot or file to a reply — images preview inline, everything else downloads; 10 MB cap), internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel, and **admin-defined custom fields** (text, long text, number, dropdown, checkbox, date) edited right on the ticket
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
 - **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** by default (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing; a settings toggle relaxes this to general knowledge), priority/tag triage suggestions, and one-line thread summaries. Connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama), with **per-generation token counts and dollar cost** shown to admins, and always falls back to the rule-based engine. Your API key stays on your server, never in the browser
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
@@ -149,6 +149,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Outbound email** — SMTP notifications to customers on reply (zero-dep client) *(v0.5)*
 - [ ] Inbound email ingestion (IMAP + Gmail/MS365 OAuth) — bulletproof threading or nothing
 - [x] **Custom fields** — admin-defined ticket fields (text, long text, number, dropdown, checkbox, date), managed in Settings and edited from the ticket side panel *(v0.6)*
+- [x] **Attachments** — upload files on a reply (10 MB cap), stored beside the database and served with `nosniff`/inline-image handling; images preview in-thread *(v0.6)*; portal-side upload next
 - [x] **Outbound channel delivery** — agent/AI replies posted to Discord & Slack channel webhooks, plus a generic JSON relay envelope (optional Bearer token) for Telegram/Messenger/WhatsApp/SMS, with a per-channel test send *(v0.6)*
 - [ ] Native inbound sync for Slack & Discord (bot/Events API) — outbound ships now
 - [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)

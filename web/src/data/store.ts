@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
-  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
+  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
@@ -33,7 +33,8 @@ export interface AppState {
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
-  sendMessage(ticketId: string, kind: 'reply' | 'note', body: string): Promise<void>;
+  sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
+  uploadAttachment(file: File): Promise<Attachment>;
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<string>; // returns id
   createContact(input: { name: string; email: string; company?: string }): Promise<string>;
   saveCanned(c: CannedReply): Promise<void>; deleteCanned(id: string): Promise<void>;
@@ -233,7 +234,7 @@ export function createAppStore(repository: Repository) {
       }
     },
 
-    async sendMessage(ticketId, kind, body) {
+    async sendMessage(ticketId, kind, body, attachmentIds = []) {
       const { tickets, messages, currentAgentId } = get();
       const prevTicket = tickets[ticketId] as Ticket | undefined;
       if (!prevTicket) throw new Error('Ticket not found');
@@ -259,7 +260,7 @@ export function createAppStore(repository: Repository) {
         messages: { ...s.messages, [ticketId]: [...prevMessages, temp] },
       }));
       try {
-        const { message, ticket } = await repository.addMessage(ticketId, { kind, body });
+        const { message, ticket } = await repository.addMessage(ticketId, { kind, body, attachmentIds });
         set((s) => ({
           tickets: { ...s.tickets, [ticketId]: ticket },
           messages: {
@@ -274,6 +275,10 @@ export function createAppStore(repository: Repository) {
         }));
         throw err;
       }
+    },
+
+    async uploadAttachment(file) {
+      return repository.uploadAttachment(file);
     },
 
     async createTicket(input) {

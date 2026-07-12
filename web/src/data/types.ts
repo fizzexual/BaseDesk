@@ -161,10 +161,15 @@ export interface TokenUsage { promptTokens: number; completionTokens: number }
 export interface DraftResult { body: string; source: AiSource; usage: TokenUsage }
 export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource; usage: TokenUsage }
 export interface SummaryResult { summary: string; source: AiSource; usage: TokenUsage }
+export interface Attachment {
+  id: string; messageId: string | null; ticketId: string | null;
+  filename: string; mimeType: string; size: number; createdAt: string;
+}
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
   kind: 'reply' | 'note'; body: string; at: string;
+  attachments?: Attachment[];
 }
 export interface Contact {
   id: string; name: string; email: string; company: string | null;

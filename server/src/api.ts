@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getChannel, getChannels, getContact,
   getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
-  insertAiAction, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
+  insertAiAction, insertAttachment, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
@@ -18,7 +20,7 @@ import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThrea
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, KbArticle, Message,
   SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -157,6 +159,11 @@ function viewWhere(view: ViewId, nowIso: string, currentAgentId: string): { sql:
 export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
+
+  // Uploaded files live next to the SQLite database, keyed by attachment id.
+  const attachDir = path.join(dataDir, 'attachments');
+  mkdirSync(attachDir, { recursive: true });
+  const MAX_UPLOAD = 10 * 1024 * 1024; // 10 MB
 
   // Ensure settings exist (fresh install or migrated pre-v0.3/v0.4 DB).
   if (getSetting(db, 'sla') === null) setSetting(db, 'sla', JSON.stringify(DEFAULT_SLA_TARGETS));
@@ -515,7 +522,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const ticket = getTicket(db, id);
     if (ticket === null) return c.json({ error: `ticket not found: ${id}` }, 404);
 
-    let input: { kind?: unknown; body?: unknown };
+    let input: { kind?: unknown; body?: unknown; attachmentIds?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -523,7 +530,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     const { kind, body } = input;
     if (kind !== 'reply' && kind !== 'note') return c.json({ error: "kind must be 'reply' or 'note'" }, 400);
-    if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
+    if (typeof body !== 'string') return c.json({ error: 'body is required' }, 400);
+    const attachmentIds = Array.isArray(input.attachmentIds)
+      ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
+      : [];
+    if (body.trim() === '' && attachmentIds.length === 0) return c.json({ error: 'a message or attachment is required' }, 400);
 
     const now = new Date().toISOString();
     const message: Message = {
@@ -535,8 +546,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       body,
       at: now,
     };
+    const previewText = body.trim() !== '' ? preview(body) : 'Sent an attachment';
     const nextStatus = kind === 'reply' && ticket.status === 'open' ? 'pending' : ticket.status;
-    const nextPreview = kind === 'reply' ? preview(body) : ticket.lastMessagePreview;
+    const nextPreview = kind === 'reply' ? previewText : ticket.lastMessagePreview;
     // The first agent reply stamps the SLA first-response clock.
     const nextFirstResponded = kind === 'reply' && ticket.firstRespondedAt === null ? now : ticket.firstRespondedAt;
 
@@ -545,6 +557,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.prepare(
         'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, id);
       db.prepare(
         'UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?',
       ).run(nextStatus, now, now, nextPreview, nextFirstResponded, id);
@@ -554,8 +567,49 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     // Notify the customer on a public reply (never on an internal note): email + source channel.
-    if (kind === 'reply') deliverReply(ticket, body);
-    return c.json({ message, ticket: getTicket(db, id) });
+    if (kind === 'reply') deliverReply(ticket, body.trim() !== '' ? body : '(sent an attachment)');
+    const saved = getMessages(db, id).find((m) => m.id === message.id) ?? message;
+    return c.json({ message: saved, ticket: getTicket(db, id) });
+  });
+
+  // Upload a file (unattached until a message references it), then serve it back.
+  app.post('/api/uploads', async (c) => {
+    const form = await c.req.parseBody().catch(() => null);
+    if (form === null) return c.json({ error: 'invalid form body' }, 400);
+    const file = form.file;
+    if (!(file instanceof File)) return c.json({ error: 'file is required' }, 400);
+    if (file.size > MAX_UPLOAD) return c.json({ error: 'file exceeds the 10 MB limit' }, 413);
+    const buf = Buffer.from(await file.arrayBuffer());
+    const attachment: Attachment = {
+      id: newId('at_'),
+      messageId: null,
+      ticketId: null,
+      filename: (file.name || 'file').slice(0, 200),
+      mimeType: file.type || 'application/octet-stream',
+      size: buf.length,
+      createdAt: new Date().toISOString(),
+    };
+    writeFileSync(path.join(attachDir, attachment.id), buf);
+    insertAttachment(db, attachment);
+    return c.json(attachment);
+  });
+
+  app.get('/api/attachments/:id', (c) => {
+    const id = c.req.param('id');
+    const att = getAttachment(db, id);
+    if (att === null) return c.json({ error: 'attachment not found' }, 404);
+    const filePath = path.join(attachDir, id);
+    if (!existsSync(filePath)) return c.json({ error: 'file missing' }, 404);
+    const buf = readFileSync(filePath);
+    // Inline images so they preview in-thread, but never SVG (script vector); everything else downloads.
+    const inline = att.mimeType.startsWith('image/') && att.mimeType !== 'image/svg+xml';
+    const safeName = att.filename.replace(/[\r\n"]/g, '');
+    return c.body(new Uint8Array(buf), 200, {
+      'Content-Type': att.mimeType,
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
+      'Content-Length': String(buf.length),
+      'X-Content-Type-Options': 'nosniff',
+    });
   });
 
   app.post('/api/contacts', async (c) => {

@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { AiSource, Contact, Ticket, TokenUsage } from '../../data/types';
+import type { AiSource, Attachment, Contact, Ticket, TokenUsage } from '../../data/types';
+import { formatBytes } from '../../data/attachments';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
-import { IconBook, IconNote, IconReply, IconSend, IconSparkle } from '../../icons';
+import { IconBook, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
 import { aiEnabled } from '../ai/engine';
 import { TokenCost } from '../ai/TokenCost';
+
+const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
 
 type Mode = 'reply' | 'note';
 
@@ -25,11 +28,15 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const contact = useApp((s) => s.contacts[ticket.requesterId]) as Contact | undefined;
   const canned = useApp((s) => s.canned);
   const aiDraft = useApp((s) => s.aiDraft);
+  const uploadAttachment = useApp((s) => s.uploadAttachment);
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage } | null>(null);
+  const [pending, setPending] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function autogrow() {
     const el = textareaRef.current;
@@ -83,17 +90,41 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     }
   }
 
+  async function onFiles(files: FileList | null) {
+    if (files === null || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_UPLOAD) {
+          toast(`${file.name} is over 10 MB`);
+          continue;
+        }
+        const att = await uploadAttachment(file);
+        setPending((prev) => [...prev, att]);
+      }
+    } catch {
+      toast('Could not upload the file');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
   function send() {
     const text = body.trim();
-    if (text === '') return;
+    if (text === '' && pending.length === 0) return;
+    const ids = pending.map((a) => a.id);
+    const sent = pending;
     setBody('');
     setDraftMeta(null);
+    setPending([]);
     focusTextarea();
     useApp
       .getState()
-      .sendMessage(ticket.id, mode, text)
+      .sendMessage(ticket.id, mode, text, ids)
       .catch(() => {
         setBody(text);
+        setPending(sent);
         toast('Could not send the message');
       });
   }
@@ -136,6 +167,32 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           }}
         />
       </div>
+      {pending.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {pending.map((a) => (
+            <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface-2 py-1 pl-2 pr-1 text-[12px]">
+              <IconPaperclip size={12} className="shrink-0 text-text-3" />
+              <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+              <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${a.filename}`}
+                onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-3 hover:text-text"
+              >
+                <IconX size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => void onFiles(e.target.files)}
+      />
       <div className="mt-2 flex items-center gap-1">
         <Menu
           triggerLabel="Canned replies"
@@ -148,6 +205,10 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           }
           items={cannedItems}
         />
+        <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+          <IconPaperclip size={14} />
+          {uploading ? 'Uploading…' : 'Attach'}
+        </Button>
         {aiEnabled() && (
           <Button variant="ghost" size="sm" onClick={() => void draftWithAi()} disabled={drafting}>
             <IconSparkle size={14} />
@@ -169,7 +230,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           </span>
         )}
         <div className="flex-1" />
-        <Button size="sm" disabled={body.trim() === ''} onClick={send}>
+        <Button size="sm" disabled={body.trim() === '' && pending.length === 0} onClick={send}>
           <IconSend size={14} />
           {mode === 'reply' ? 'Reply' : 'Add note'}
         </Button>

@@ -109,10 +109,16 @@ export interface AiAction {
   promptTokens: number; completionTokens: number; // 0 for the rule-based engine
   createdAt: string; resolvedAt: string | null;
 }
+export interface Attachment {
+  id: string; messageId: string | null; ticketId: string | null;
+  filename: string; mimeType: string; size: number; createdAt: string;
+}
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
   kind: 'reply' | 'note'; body: string; at: string;
+  /** Populated on read (getMessages joins them); omitted on insert. */
+  attachments?: Attachment[];
 }
 
 /** Model-provider config as stored server-side (includes the secret key). */

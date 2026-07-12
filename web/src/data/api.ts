@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -47,8 +47,13 @@ export class ApiRepository implements Repository {
     return request(`/tickets/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
   }
 
-  addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string }): Promise<{ message: Message; ticket: Ticket }> {
+  addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, jsonInit('POST', input));
+  }
+  uploadAttachment(file: File): Promise<Attachment> {
+    const form = new FormData();
+    form.append('file', file);
+    return request('/uploads', { method: 'POST', body: form });
   }
 
   createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {

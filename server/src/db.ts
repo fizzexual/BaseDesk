@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -78,6 +78,15 @@ export function openDb(dataDir: string): DatabaseSync {
       kind TEXT NOT NULL,
       body TEXT NOT NULL,
       at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      messageId TEXT,
+      ticketId TEXT,
+      filename TEXT NOT NULL,
+      mimeType TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS canned_replies (
       id TEXT PRIMARY KEY,
@@ -311,9 +320,35 @@ export function portalSecret(db: DatabaseSync, generate: () => string): string {
 }
 
 export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
-  return db
+  const messages = db
     .prepare('SELECT * FROM messages WHERE ticketId = ? ORDER BY at ASC, id ASC')
     .all(ticketId) as unknown as Message[];
+  const files = db
+    .prepare('SELECT * FROM attachments WHERE ticketId = ? ORDER BY createdAt ASC')
+    .all(ticketId) as unknown as Attachment[];
+  if (files.length === 0) return messages;
+  const byMessage = new Map<string, Attachment[]>();
+  for (const f of files) {
+    if (f.messageId === null) continue;
+    const list = byMessage.get(f.messageId) ?? [];
+    list.push(f);
+    byMessage.set(f.messageId, list);
+  }
+  return messages.map((m) => ({ ...m, attachments: byMessage.get(m.id) ?? [] }));
+}
+
+export function insertAttachment(db: DatabaseSync, a: Attachment): void {
+  db.prepare('INSERT INTO attachments (id, messageId, ticketId, filename, mimeType, size, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(a.id, a.messageId, a.ticketId, a.filename, a.mimeType, a.size, a.createdAt);
+}
+export function getAttachment(db: DatabaseSync, id: string): Attachment | null {
+  const row = db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Attachment | undefined;
+  return row ?? null;
+}
+/** Bind pending (unlinked) uploads to a freshly-created message + ticket. */
+export function linkAttachments(db: DatabaseSync, ids: string[], messageId: string, ticketId: string): void {
+  const stmt = db.prepare('UPDATE attachments SET messageId = ?, ticketId = ? WHERE id = ? AND messageId IS NULL');
+  for (const id of ids) stmt.run(messageId, ticketId, id);
 }
 
 export function getDeal(db: DatabaseSync, id: string): Deal | null {
