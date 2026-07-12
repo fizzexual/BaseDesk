@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from '../../components/util';
 import { formatContext, formatPrice, type ModelInfo } from '../../data/model-catalog';
 import { IconCheck, IconChevronDown } from '../../icons';
@@ -36,13 +37,48 @@ export function ModelPicker({
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const selected = models.find((m) => m.id === value);
+
+  // Anchor the (portaled) list to the trigger in viewport space so it escapes
+  // the scrollable settings panel; flip up when it would overflow the bottom.
+  const reposition = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const r = root.getBoundingClientRect();
+    const gap = 4;
+    const mh = menuRef.current?.offsetHeight ?? 0;
+    let top = r.bottom + gap;
+    if (mh && top + mh > window.innerHeight - 8) {
+      const above = r.top - gap - mh;
+      top = above >= 8 ? above : Math.max(8, window.innerHeight - 8 - mh);
+    }
+    setPos({ top, left: r.left, width: r.width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    reposition();
+    const onMove = () => reposition();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [open, reposition]);
 
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
@@ -92,11 +128,20 @@ export function ModelPicker({
         <IconChevronDown size={14} className="shrink-0 text-text-3" />
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          className="absolute z-30 mt-1 max-h-[340px] w-full overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-2"
-        >
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={{
+              position: 'fixed',
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              width: pos?.width,
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+            className="z-[100] max-h-[min(70vh,340px)] overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-2"
+          >
           {models.map((m) => (
             <button
               key={m.id}
@@ -150,8 +195,9 @@ export function ModelPicker({
               </button>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

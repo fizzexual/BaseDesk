@@ -1,10 +1,13 @@
 import {
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { IconCheck } from '../icons';
 import { cx } from './util';
 
@@ -40,8 +43,11 @@ export function Menu({
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  // Fixed-viewport coordinates for the portaled menu; null until first measured.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const enabledIndexes = items
@@ -56,6 +62,7 @@ export function Menu({
   function closeMenu(refocusTrigger: boolean) {
     setOpen(false);
     setActive(-1);
+    setPos(null);
     if (refocusTrigger) triggerRef.current?.focus();
   }
 
@@ -71,13 +78,46 @@ export function Menu({
     setActive(enabledIndexes[next]!);
   }
 
+  // Anchor the menu to the trigger in viewport space; flip up / clamp to stay
+  // on screen. Runs after render (menu measured) and on scroll/resize.
+  const reposition = useCallback(() => {
+    const t = triggerRef.current;
+    const m = menuRef.current;
+    if (!t || !m) return;
+    const r = t.getBoundingClientRect();
+    const gap = 4;
+    const mw = m.offsetWidth;
+    const mh = m.offsetHeight;
+    let top = r.bottom + gap;
+    if (top + mh > window.innerHeight - 8) {
+      const above = r.top - gap - mh;
+      top = above >= 8 ? above : Math.max(8, window.innerHeight - 8 - mh);
+    }
+    let left = align === 'end' ? r.right - mw : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+    setPos({ top, left });
+  }, [align]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    reposition();
+    const onMove = () => reposition();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [open, reposition, items.length]);
+
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (rootRef.current && e.target instanceof Node && !rootRef.current.contains(e.target)) {
-        setOpen(false);
-        setActive(-1);
-      }
+      const target = e.target instanceof Node ? e.target : null;
+      if (target && (rootRef.current?.contains(target) || menuRef.current?.contains(target))) return;
+      setOpen(false);
+      setActive(-1);
+      setPos(null);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
@@ -129,59 +169,66 @@ export function Menu({
       >
         {typeof trigger === 'function' ? trigger(open) : trigger}
       </button>
-      {open && (
-        <div
-          role="menu"
-          className={cx(
-            'absolute top-full z-50 mt-1 min-w-44 rounded-md border border-line bg-surface p-1 shadow-2',
-            align === 'end' ? 'right-0' : 'left-0',
-          )}
-        >
-          {items.map((item, i) =>
-            isSeparator(item) ? (
-              <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-line" />
-            ) : (
-              <button
-                key={`${item.label}-${i}`}
-                ref={(el) => {
-                  itemRefs.current[i] = el;
-                }}
-                type="button"
-                role="menuitem"
-                tabIndex={-1}
-                disabled={item.disabled}
-                className={cx(
-                  'flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] outline-none',
-                  item.danger ? 'text-red hover:bg-red-bg' : 'text-text hover:bg-surface-2',
-                  active === i && (item.danger ? 'bg-red-bg' : 'bg-surface-2'),
-                  item.disabled && 'cursor-default opacity-50',
-                )}
-                onMouseEnter={() => {
-                  if (!item.disabled) setActive(i);
-                }}
-                onClick={() => {
-                  if (item.disabled) return;
-                  closeMenu(true);
-                  item.onSelect();
-                }}
-              >
-                {item.icon != null && (
-                  <span
-                    className={cx(
-                      'inline-flex w-4 shrink-0 items-center justify-center',
-                      !item.danger && 'text-text-2',
-                    )}
-                  >
-                    {item.icon}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.checked && <IconCheck size={14} className="shrink-0" />}
-              </button>
-            ),
-          )}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            onKeyDown={onKeyDown}
+            style={{
+              position: 'fixed',
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+            className="z-[100] max-h-[min(70vh,420px)] min-w-44 overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-2"
+          >
+            {items.map((item, i) =>
+              isSeparator(item) ? (
+                <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-line" />
+              ) : (
+                <button
+                  key={`${item.label}-${i}`}
+                  ref={(el) => {
+                    itemRefs.current[i] = el;
+                  }}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={-1}
+                  disabled={item.disabled}
+                  className={cx(
+                    'flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] outline-none',
+                    item.danger ? 'text-red hover:bg-red-bg' : 'text-text hover:bg-surface-2',
+                    active === i && (item.danger ? 'bg-red-bg' : 'bg-surface-2'),
+                    item.disabled && 'cursor-default opacity-50',
+                  )}
+                  onMouseEnter={() => {
+                    if (!item.disabled) setActive(i);
+                  }}
+                  onClick={() => {
+                    if (item.disabled) return;
+                    closeMenu(true);
+                    item.onSelect();
+                  }}
+                >
+                  {item.icon != null && (
+                    <span
+                      className={cx(
+                        'inline-flex w-4 shrink-0 items-center justify-center',
+                        !item.danger && 'text-text-2',
+                      )}
+                    >
+                      {item.icon}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.checked && <IconCheck size={14} className="shrink-0" />}
+                </button>
+              ),
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
