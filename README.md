@@ -155,6 +155,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Right-click quick actions** — a reusable context menu on inbox rows (assign, solve/reopen, snooze, archive, trash), reusing the same menu primitive as message delete *(v0.6)*
 - [x] **Outbound channel delivery** — agent/AI replies posted to Discord & Slack channel webhooks, plus a generic JSON relay envelope (optional Bearer token) for Telegram/Messenger/WhatsApp/SMS, with a per-channel test send *(v0.6)*
 - [x] **Two-way channels** — inbound threads into one ticket per sender, an HMAC-signed **command** endpoint manages tickets from a bot (reply/solve/reopen), all secrets server-side; connect a provider via a small relay ([docs/channels.md](docs/channels.md)) *(v0.6)*
+- [x] **Discord ticket bot** — a turnkey [`bot/`](bot/) (discord.js): drop in a token + app id, invite it, and `/ticket` opens a private thread that *is* a BaseDesk ticket — customer messages sync in, dashboard replies post back, and `/reply` `/solve` `/close` `/reopen` manage it from Discord. Auto-provisions its own channel; token stays in a git-ignored `.env` *(v0.6)*
 - [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)
 - [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
 - [ ] Single-binary packaging

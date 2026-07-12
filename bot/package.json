@@ -1,0 +1,15 @@
+{
+  "name": "basedesk-discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Turnkey Discord ticket bot for BaseDesk — threads become tickets, manage them with slash commands.",
+  "engines": { "node": ">=20.6" },
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "check": "node --check src/index.js && node --check src/basedesk.js && node --check src/store.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}
