@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useState, type ComponentType, type MouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useApp } from '../../data/store';
 import { useTicketsForView } from '../../data/hooks';
 import type { Contact, Ticket, TicketPatch, TicketPriority, ViewId } from '../../data/types';
 import { Button } from '../../components/Button';
+import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import {
   IconAlert,
+  IconArchive,
   IconCheck,
   IconFilter,
   IconGrid,
@@ -18,7 +20,9 @@ import {
   IconPlus,
   IconSearch,
   IconSnooze,
+  IconTicket,
   IconTrash,
+  IconUser,
 } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
 import { NewTicketDialog } from './NewTicketDialog';
@@ -63,6 +67,13 @@ function isViewId(v: string | undefined): v is ViewId {
   return v !== undefined && v in VIEW_TITLES;
 }
 
+function tomorrowNine(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
+
 type IconComponent = ComponentType<{ size?: number; className?: string }>;
 
 function emptyFor(view: ViewId): { icon: IconComponent; title: string } {
@@ -96,6 +107,7 @@ export function InboxPage() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [snooze, setSnooze] = useState<{ ticket: Ticket; rect: DOMRect } | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; ticket: Ticket } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
 
   function chooseViewMode(mode: ViewMode) {
@@ -133,6 +145,7 @@ export function InboxPage() {
   useEffect(() => {
     setSelectedIndex(-1);
     setSnooze(null);
+    setCtx(null);
   }, [view]);
 
   // Keep the selection inside the list when it shrinks (solve, filter, …).
@@ -195,6 +208,82 @@ export function InboxPage() {
     setSnooze(null);
     run(id, { snoozedUntil: date.toISOString() });
     toast(`Snoozed until ${toastLabel}`, { undo: () => run(id, { snoozedUntil }) });
+  }
+
+  // Right-click quick actions on a ticket row (list or card layout).
+  function openRowMenu(e: MouseEvent, ticket: Ticket) {
+    e.preventDefault();
+    setSnooze(null);
+    setCtx({ x: e.clientX, y: e.clientY, ticket });
+  }
+
+  function rowMenuItems(t: Ticket): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [
+      { label: 'Open', icon: <IconTicket size={15} />, onSelect: () => navigate(`/ticket/${t.id}`) },
+      { separator: true },
+    ];
+    if (t.assigneeId !== currentAgentId) {
+      items.push({
+        label: 'Assign to me',
+        icon: <IconUser size={15} />,
+        onSelect: () => {
+          run(t.id, { assigneeId: currentAgentId });
+          toast('Assigned to you');
+        },
+      });
+    }
+    if (t.status !== 'solved' && t.status !== 'closed') {
+      items.push({
+        label: 'Mark solved',
+        icon: <IconCheck size={15} />,
+        onSelect: () => {
+          const prev = t.status;
+          run(t.id, { status: 'solved' });
+          toast('Marked solved', { undo: () => run(t.id, { status: prev }) });
+        },
+      });
+    } else {
+      items.push({ label: 'Reopen', icon: <IconInbox size={15} />, onSelect: () => run(t.id, { status: 'open' }) });
+    }
+    items.push({
+      label: 'Snooze to tomorrow',
+      icon: <IconSnooze size={15} />,
+      onSelect: () => {
+        const prev = t.snoozedUntil;
+        run(t.id, { snoozedUntil: tomorrowNine().toISOString() });
+        toast('Snoozed until tomorrow', { undo: () => run(t.id, { snoozedUntil: prev }) });
+      },
+    });
+    items.push({ separator: true });
+    if (t.bucket === 'inbox') {
+      items.push({
+        label: 'Archive',
+        icon: <IconArchive size={15} />,
+        onSelect: () => {
+          run(t.id, { bucket: 'archive' });
+          toast('Archived', { undo: () => run(t.id, { bucket: 'inbox' }) });
+        },
+      });
+      items.push({
+        label: 'Move to trash',
+        icon: <IconTrash size={15} />,
+        danger: true,
+        onSelect: () => {
+          run(t.id, { bucket: 'trash' });
+          toast('Moved to trash', { undo: () => run(t.id, { bucket: 'inbox' }) });
+        },
+      });
+    } else {
+      items.push({
+        label: 'Move to inbox',
+        icon: <IconInbox size={15} />,
+        onSelect: () => {
+          run(t.id, { bucket: 'inbox' });
+          toast('Moved to inbox');
+        },
+      });
+    }
+    return items;
   }
 
   useShortcuts(
@@ -326,9 +415,9 @@ export function InboxPage() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length > 0 ? (
           viewMode === 'cards' ? (
-            <TicketCards tickets={visible} selectedId={selected?.id ?? null} />
+            <TicketCards tickets={visible} selectedId={selected?.id ?? null} onRowContextMenu={openRowMenu} />
           ) : (
-            <TicketTable tickets={visible} selectedId={selected?.id ?? null} />
+            <TicketTable tickets={visible} selectedId={selected?.id ?? null} onRowContextMenu={openRowMenu} />
           )
         ) : total > 0 ? (
           <EmptyState
@@ -347,6 +436,9 @@ export function InboxPage() {
 
       {snooze !== null && (
         <SnoozePopover anchor={snooze.rect} onPick={applySnooze} onClose={() => setSnooze(null)} />
+      )}
+      {ctx !== null && (
+        <ContextMenu x={ctx.x} y={ctx.y} items={rowMenuItems(ctx.ticket)} onClose={() => setCtx(null)} />
       )}
       <NewTicketDialog open={newTicketOpen} onClose={() => setNewTicketOpen(false)} />
     </div>

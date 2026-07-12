@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority } from '../../data/types';
@@ -14,9 +14,11 @@ import { alertSla } from './TicketTable';
 export function TicketCards({
   tickets,
   selectedId = null,
+  onRowContextMenu,
 }: {
   tickets: Ticket[];
   selectedId?: string | null;
+  onRowContextMenu?: (e: MouseEvent, ticket: Ticket) => void;
 }) {
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
@@ -57,6 +59,7 @@ export function TicketCards({
             )}
             style={selected ? { boxShadow: 'inset 0 0 0 1.5px var(--focus)' } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
+            onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, t) : undefined}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

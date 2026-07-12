@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority, TicketSla } from '../../data/types';
@@ -29,11 +29,13 @@ export function TicketTable({
   tickets,
   hideCustomer = false,
   selectedId = null,
+  onRowContextMenu,
 }: {
   tickets: Ticket[];
   hideCustomer?: boolean;
   /** Keyboard-selected row: highlighted and kept scrolled into view. */
   selectedId?: string | null;
+  onRowContextMenu?: (e: MouseEvent, ticket: Ticket) => void;
 }) {
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
@@ -91,6 +93,7 @@ export function TicketTable({
             )}
             style={selected ? { boxShadow: 'inset 2px 0 0 0 var(--focus)' } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
+            onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, t) : undefined}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
