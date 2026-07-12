@@ -88,6 +88,10 @@ export function openDb(dataDir: string): DatabaseSync {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS portal_auth (
+      contactId TEXT PRIMARY KEY,
+      passwordHash TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS kb_articles (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -213,6 +217,32 @@ export function getTicket(db: DatabaseSync, id: string): Ticket | null {
 export function getContact(db: DatabaseSync, id: string): Contact | null {
   const row = db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as Contact | undefined;
   return row ?? null;
+}
+
+/** Case-insensitive lookup used by portal sign-in. */
+export function getContactByEmail(db: DatabaseSync, email: string): Contact | null {
+  const row = db.prepare('SELECT * FROM contacts WHERE lower(email) = lower(?)').get(email.trim()) as Contact | undefined;
+  return row ?? null;
+}
+
+export function getPortalAuth(db: DatabaseSync, contactId: string): string | null {
+  const row = db.prepare('SELECT passwordHash FROM portal_auth WHERE contactId = ?').get(contactId) as { passwordHash: string } | undefined;
+  return row?.passwordHash ?? null;
+}
+
+export function setPortalAuth(db: DatabaseSync, contactId: string, passwordHash: string): void {
+  db.prepare(
+    'INSERT INTO portal_auth (contactId, passwordHash) VALUES (?, ?) ON CONFLICT(contactId) DO UPDATE SET passwordHash = excluded.passwordHash',
+  ).run(contactId, passwordHash);
+}
+
+/** The per-install secret that signs portal sessions, generated once on first use. */
+export function portalSecret(db: DatabaseSync, generate: () => string): string {
+  const existing = getSetting(db, 'portal_secret');
+  if (existing !== null) return existing;
+  const secret = generate();
+  setSetting(db, 'portal_secret', secret);
+  return secret;
 }
 
 export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
