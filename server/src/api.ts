@@ -2,17 +2,21 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getChannel, getChannels, getContact, getDeal, getKbArticle,
-  getMessages, getSetting, getTicket, insertAiAction, openDb, rowToTicket, setSetting, type TicketRow,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getChannel, getChannels, getContact,
+  getDeal, getKbArticle, getMessages, getSetting, getTicket, insertAiAction, openDb, rowToTicket, setAiProviderConfig,
+  setSetting, toPublicProvider, type TicketRow,
 } from './db.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
-import { runAgent, type AgentContext, type Autonomy } from './ai-engine.js';
+import { draftReply, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
+import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
+import { ping, type LlmConfig } from './llm.js';
+import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule, BootstrapData, CannedReply,
-  Channel, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message, SlaTargets, Ticket, TicketPatch,
-  TicketPriority, TicketStatus, ViewId,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, AutomationAction, AutomationCondition, AutomationRule,
+  BootstrapData, CannedReply, Channel, ChannelType, Contact, Deal, DealStage, DealType, KbArticle, Message,
+  SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -189,7 +193,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
    * a KB article sends the reply and solves the ticket; draft/suggest agents
    * record a pending action for the queues.
    */
-  const runAgentsOnTicket = (ticket: Ticket, firstBody: string): AiAction | null => {
+  const runAgentsOnTicket = async (ticket: Ticket, firstBody: string): Promise<AiAction | null> => {
     const agents = getAiAgents(db)
       .filter((a) => a.enabled)
       .sort((a, b) => AUTONOMY_RANK[b.autonomy] - AUTONOMY_RANK[a.autonomy]);
@@ -197,38 +201,70 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const contact = getContact(db, ticket.requesterId);
     const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
     const kb = db.prepare('SELECT * FROM kb_articles').all() as unknown as KbArticle[];
+    const cfg = getAiProviderConfig(db);
+    const useModel = providerReady(cfg);
+    const contactName = contact?.name ?? 'there';
+    const thread: ThreadMsg[] = [{ role: 'customer', body: firstBody }];
     for (const agent of agents) {
       const ctx: AgentContext = {
         subject: ticket.subject, bodyText: firstBody,
-        contactName: contact?.name ?? 'there', agentName: agent.name,
+        contactName, agentName: agent.name,
         currentPriority: ticket.priority, currentTags: ticket.tags,
         canned, kb,
       };
       const decision = runAgent(agent, ctx);
       if (decision === null) continue;
+
+      // When a model is configured, it writes the body. For a resolve agent it
+      // also GATES the auto-send: it only sends if it can answer from the KB,
+      // otherwise the action degrades to a draft for a human to review.
+      let kind = decision.kind;
+      let body = decision.draftBody;
+      let kbArticleId = decision.kbArticleId;
+      if (useModel && agent.autonomy !== 'suggest') {
+        const draftCtx = { subject: ticket.subject, contactName, agentName: agent.name, signature: '', thread, canned, kb };
+        if (agent.autonomy === 'resolve') {
+          const solved = await resolveAI(cfg, draftCtx);
+          if (solved !== null) {
+            kind = 'resolve'; body = solved.reply; kbArticleId = null;
+          } else {
+            kind = 'draft'; kbArticleId = null;
+            body = (await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '')).body;
+          }
+        } else {
+          body = (await draftReplyAI(cfg, draftCtx, decision.draftBody ?? '')).body;
+        }
+      }
+
       const now = new Date().toISOString();
       const action: AiAction = {
-        id: newId('act_'), agentId: agent.id, ticketId: ticket.id, kind: decision.kind,
-        status: decision.kind === 'resolve' ? 'sent' : 'pending',
-        draftBody: decision.draftBody, suggestedPriority: decision.suggestedPriority,
-        suggestedTags: decision.suggestedTags, kbArticleId: decision.kbArticleId,
-        createdAt: now, resolvedAt: decision.kind === 'resolve' ? now : null,
+        id: newId('act_'), agentId: agent.id, ticketId: ticket.id, kind,
+        status: kind === 'resolve' ? 'sent' : 'pending',
+        draftBody: body, suggestedPriority: decision.suggestedPriority,
+        suggestedTags: decision.suggestedTags, kbArticleId,
+        createdAt: now, resolvedAt: kind === 'resolve' ? now : null,
       };
       insertAiAction(db, action);
-      if (decision.kind === 'resolve' && decision.draftBody !== null) {
+      if (kind === 'resolve' && body !== null) {
         const message: Message = {
           id: newId('m_'), ticketId: ticket.id, authorKind: 'agent', authorId: currentAgentId(),
-          kind: 'reply', body: decision.draftBody, at: now,
+          kind: 'reply', body, at: now,
         };
         db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
         db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
-          .run('solved', now, now, now, preview(decision.draftBody), now, ticket.id);
+          .run('solved', now, now, now, preview(body), now, ticket.id);
       }
       return action; // only the highest-autonomy matching agent acts
     }
     return null;
   };
+
+  /** A ticket's customer-facing reply thread, shaped for the prompt builders. */
+  const threadOf = (ticketId: string): ThreadMsg[] =>
+    getMessages(db, ticketId)
+      .filter((m) => m.kind === 'reply')
+      .map((m) => ({ role: m.authorKind === 'contact' ? 'customer' : 'agent', body: m.body }));
 
   const app = new Hono();
 
@@ -252,6 +288,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       aiActions: getAiActions(db),
       channels: getChannels(db),
       slaHours: slaHours() as BootstrapData['slaHours'],
+      aiProvider: toPublicProvider(getAiProviderConfig(db)),
     };
     return c.json(data);
   });
@@ -363,7 +400,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     // AI agents evaluate the new ticket (may auto-resolve it).
-    runAgentsOnTicket(ticket, body);
+    await runAgentsOnTicket(ticket, body);
     return c.json({ ticket: getTicket(db, ticket.id), message });
   });
 
@@ -968,7 +1005,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json({ ok: true });
   });
 
-  app.post('/api/ai/run', (c) => {
+  app.post('/api/ai/run', async (c) => {
     const actioned = new Set(
       (db.prepare('SELECT DISTINCT ticketId FROM ai_actions').all() as { ticketId: string }[]).map((r) => r.ticketId),
     );
@@ -980,9 +1017,122 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       const ticket = rowToTicket(row);
       if (actioned.has(ticket.id)) continue;
       const firstContact = getMessages(db, ticket.id).find((m) => m.authorKind === 'contact');
-      if (runAgentsOnTicket(ticket, firstContact?.body ?? '') !== null) created += 1;
+      if ((await runAgentsOnTicket(ticket, firstContact?.body ?? '')) !== null) created += 1;
     }
     return c.json({ created });
+  });
+
+  // --- Model provider config (the API key never leaves the server) ---
+
+  app.get('/api/ai/provider', (c) => c.json(toPublicProvider(getAiProviderConfig(db))));
+
+  app.put('/api/ai/provider', async (c) => {
+    let input: Record<string, unknown>;
+    try {
+      input = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const current = getAiProviderConfig(db);
+    const temp = typeof input.temperature === 'number' ? input.temperature : current.temperature;
+    const cfg: AiProviderConfig = {
+      enabled: typeof input.enabled === 'boolean' ? input.enabled : current.enabled,
+      baseUrl: typeof input.baseUrl === 'string' && input.baseUrl.trim() !== '' ? input.baseUrl.trim() : current.baseUrl,
+      model: typeof input.model === 'string' && input.model.trim() !== '' ? input.model.trim() : current.model,
+      temperature: Math.min(2, Math.max(0, temp)),
+      // apiKey absent → keep the stored key; a string (even empty) replaces it.
+      apiKey: typeof input.apiKey === 'string' ? input.apiKey.trim() : current.apiKey,
+    };
+    setAiProviderConfig(db, cfg);
+    return c.json(toPublicProvider(cfg));
+  });
+
+  app.post('/api/ai/provider/test', async (c) => {
+    let override: Record<string, unknown> = {};
+    try {
+      override = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      // no body — test the stored config
+    }
+    const stored = getAiProviderConfig(db);
+    const cfg: LlmConfig = {
+      baseUrl: typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl.trim() : stored.baseUrl,
+      model: typeof override.model === 'string' && override.model.trim() !== '' ? override.model.trim() : stored.model,
+      apiKey: typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey.trim() : stored.apiKey,
+      temperature: 0,
+    };
+    if (cfg.apiKey === '') return c.json({ ok: false, error: 'Add an API key first' }, 400);
+    const started = Date.now();
+    try {
+      await ping(cfg);
+      return c.json({ ok: true, model: cfg.model, latencyMs: Date.now() - started });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : 'request failed' });
+    }
+  });
+
+  // --- Copilot: model-backed with a rule-based fallback ---
+
+  app.post('/api/ai/draft', async (c) => {
+    let input: { ticketId?: unknown };
+    try {
+      input = (await c.req.json()) as { ticketId?: unknown };
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.ticketId !== 'string') return c.json({ error: 'ticketId is required' }, 400);
+    const ticket = getTicket(db, input.ticketId);
+    if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    const contact = getContact(db, ticket.requesterId);
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(currentAgentId()) as Agent | undefined;
+    const canned = db.prepare('SELECT * FROM canned_replies').all() as unknown as CannedReply[];
+    const kb = db.prepare("SELECT * FROM kb_articles WHERE status = 'published'").all() as unknown as KbArticle[];
+    const thread = threadOf(ticket.id);
+    const contactName = contact?.name ?? 'there';
+    const agentName = agent?.name ?? 'there';
+    const lastCustomer = [...thread].reverse().find((m) => m.role === 'customer')?.body ?? '';
+    const fallback = draftReply({ subject: ticket.subject, contactName, agentName, lastCustomerMessage: lastCustomer, canned });
+    const result = await draftReplyAI(
+      getAiProviderConfig(db),
+      { subject: ticket.subject, contactName, agentName, signature: agent?.signature ?? '', thread, canned, kb },
+      fallback,
+    );
+    return c.json(result);
+  });
+
+  app.post('/api/ai/triage', async (c) => {
+    let input: { ticketId?: unknown };
+    try {
+      input = (await c.req.json()) as { ticketId?: unknown };
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.ticketId !== 'string') return c.json({ error: 'ticketId is required' }, 400);
+    const ticket = getTicket(db, input.ticketId);
+    if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    const thread = threadOf(ticket.id);
+    const bodyText = thread.filter((m) => m.role === 'customer').map((m) => m.body).join('\n') || ticket.lastMessagePreview;
+    const triageCtx = { subject: ticket.subject, bodyText, currentPriority: ticket.priority, currentTags: ticket.tags };
+    const fallback = suggestTriage(triageCtx);
+    const result = await suggestTriageAI(getAiProviderConfig(db), triageCtx, fallback);
+    return c.json(result);
+  });
+
+  app.post('/api/ai/summarize', async (c) => {
+    let input: { ticketId?: unknown };
+    try {
+      input = (await c.req.json()) as { ticketId?: unknown };
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.ticketId !== 'string') return c.json({ error: 'ticketId is required' }, 400);
+    const ticket = getTicket(db, input.ticketId);
+    if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    const contact = getContact(db, ticket.requesterId);
+    const contactName = contact?.name ?? 'there';
+    const fallback = summarizeThread({ contactName, messages: getMessages(db, ticket.id) });
+    const result = await summarizeThreadAI(getAiProviderConfig(db), { contactName, thread: threadOf(ticket.id) }, fallback);
+    return c.json(result);
   });
 
   app.post('/api/ai/actions/:id/approve', (c) => {
@@ -1132,7 +1282,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
-    runAgentsOnTicket(ticket, body);
+    await runAgentsOnTicket(ticket, body);
     return c.json({ ticketId: ticket.id });
   });
 
