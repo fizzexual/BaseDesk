@@ -1,14 +1,38 @@
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { usePortal } from './store';
 import { Avatar } from '../components/Avatar';
+import { Menu } from '../components/Menu';
 import { cx } from '../components/util';
-import { IconLogo } from '../icons';
+import { IconBook, IconChevronDown, IconInbox, IconLogo, IconPlus, IconUser } from '../icons';
 
-const NAV = [
-  { to: '/portal', label: 'My tickets', end: true },
-  { to: '/portal/new', label: 'New ticket', end: false },
-  { to: '/portal/help', label: 'Help center', end: false },
+type NavItem = { to: string; label: string; end: boolean; icon: (p: { size?: number; className?: string }) => React.ReactNode };
+
+const NAV: NavItem[] = [
+  { to: '/portal', label: 'My tickets', end: true, icon: IconInbox },
+  { to: '/portal/new', label: 'New ticket', end: false, icon: IconPlus },
+  { to: '/portal/help', label: 'Help center', end: false, icon: IconBook },
 ];
+
+const firstName = (name: string): string => name.trim().split(/\s+/)[0] || name;
+
+function NavPill({ item }: { item: NavItem }) {
+  const Icon = item.icon;
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      className={({ isActive }) =>
+        cx(
+          'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors',
+          isActive ? 'bg-surface-2 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
+        )
+      }
+    >
+      <Icon size={15} className="shrink-0" />
+      {item.label}
+    </NavLink>
+  );
+}
 
 export function PortalLayout() {
   const contact = usePortal((s) => s.contact);
@@ -22,45 +46,54 @@ export function PortalLayout() {
 
   return (
     <div className="flex min-h-full flex-col bg-bg">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-4 px-4">
-          <NavLink to="/portal" className="flex items-center gap-2 font-semibold">
-            <IconLogo size={22} />
-            <span>Support</span>
+      <header className="sticky top-0 z-20 border-b border-line bg-surface">
+        <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-4">
+          <NavLink to="/portal" className="mr-1 flex shrink-0 items-center gap-2.5" aria-label="Support home">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
+              <IconLogo size={18} />
+            </span>
+            <span className="text-[15px] font-semibold tracking-tight">Support Center</span>
           </NavLink>
-          <nav className="flex items-center gap-1">
-            {NAV.map((n) => (
-              <NavLink
-                key={n.to}
-                to={n.to}
-                end={n.end}
-                className={({ isActive }) =>
-                  cx(
-                    'rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors',
-                    isActive ? 'bg-surface-2 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
-                  )
-                }
-              >
-                {n.label}
-              </NavLink>
+
+          <nav className="ml-2 hidden items-center gap-0.5 sm:flex">
+            {NAV.map((item) => (
+              <NavPill key={item.to} item={item} />
             ))}
           </nav>
+
           <div className="flex-1" />
+
           {contact && (
-            <NavLink to="/portal/profile" className="flex items-center gap-2" aria-label="Profile">
-              <span className="hidden text-[13px] text-text-2 sm:block">{contact.name}</span>
-              <Avatar name={contact.name} hue={contact.avatarHue} size={28} />
-            </NavLink>
+            <Menu
+              align="end"
+              triggerLabel="Account menu"
+              triggerClassName="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-surface-2"
+              trigger={
+                <>
+                  <Avatar name={contact.name} hue={contact.avatarHue} size={28} />
+                  <span className="hidden max-w-[10rem] truncate text-[13px] font-medium sm:block">
+                    {firstName(contact.name)}
+                  </span>
+                  <IconChevronDown size={14} className="shrink-0 text-text-3" />
+                </>
+              }
+              items={[
+                { label: 'Your profile', icon: <IconUser size={15} />, onSelect: () => navigate('/portal/profile') },
+                { separator: true },
+                { label: 'Log out', danger: true, onSelect: onLogout },
+              ]}
+            />
           )}
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
-          >
-            Log out
-          </button>
         </div>
+
+        {/* On narrow screens the nav drops to its own scrollable row. */}
+        <nav className="flex items-center gap-0.5 overflow-x-auto border-t border-line px-3 py-2 sm:hidden">
+          {NAV.map((item) => (
+            <NavPill key={item.to} item={item} />
+          ))}
+        </nav>
       </header>
+
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
         <Outlet />
       </main>
