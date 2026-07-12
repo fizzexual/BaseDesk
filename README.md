@@ -37,6 +37,10 @@ Revenue pipeline — deals logged from conversations, rolled up per account:
 
 ![Revenue pipeline](docs/screenshots/revenue-light.png)
 
+Knowledge base — a categorized help center with a reader and editor:
+
+![Knowledge base](docs/screenshots/kb-light.png)
+
 <details>
 <summary>Dark theme</summary>
 
@@ -87,6 +91,8 @@ npm run typecheck  # strict TS, both workspaces
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
 - **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, bring-your-own model provider optional
+- **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; automation rules that shape tickets on arrival
+- **Knowledge base**: a categorized help center with a reader and editor, draft/published articles, and search
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
 - **Reports**: created vs solved, priority mix, status distribution, per-agent load, first-reply/resolution medians
@@ -100,8 +106,9 @@ The web app talks to a plain REST API you can use directly — see the route tab
 
 - [x] **Support → Revenue** — deals, pipeline, account health, revenue reporting *(v0.2)*
 - [x] **AI copilot** — drafts, triage, summaries; rule-based and offline today, model-provider hook for later *(v0.2)*
-- [ ] Automation rules + SLA engine (business hours, holidays, timezones)
-- [ ] Knowledge base
+- [x] **SLA + automation** — targets, breach indicators, attainment; create-time automation rules *(v0.3)*
+- [x] **Knowledge base** — categorized articles, reader/editor, draft/published, search *(v0.3)*
+- [ ] Business-hours/holiday-aware SLA clocks
 - [ ] Auth & team management
 - [ ] Transparency portal — customer portal + status page + roadmap/feedback voting
 - [ ] Email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) — bulletproof threading or nothing
