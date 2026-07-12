@@ -53,6 +53,10 @@ Connect a model — pick a provider and model from a catalog with per-1M pricing
 
 ![AI model provider](docs/screenshots/ai-provider-light.png)
 
+Every AI action shows its token count and estimated cost:
+
+![AI token usage](docs/screenshots/ai-usage-light.png)
+
 Customer portal — end-users sign in to track and reply to their own tickets:
 
 | Sign in | My tickets | A conversation |
@@ -111,12 +115,12 @@ npm run typecheck  # strict TS, both workspaces
 - **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts — switchable between a compact **list** and a **card** layout
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
-- **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing), priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, and connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama). Your API key is stored on your server, never in the browser, and it always falls back to the rule-based engine
+- **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** by default (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing; a settings toggle relaxes this to general knowledge), priority/tag triage suggestions, and one-line thread summaries. Connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama), with **per-generation token counts and dollar cost** shown to admins, and always falls back to the rule-based engine. Your API key stays on your server, never in the browser
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
 - **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
 - **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
 - **Team**: invite teammates with shareable links, admin/agent roles, and per-agent reply signatures (the last active admin is protected)
-- **Customer portal** (`/portal`): a separate customer-facing app where end-users sign in (email + password, scrypt-hashed) to see only their own tickets, reply, open new tickets, edit their profile, and browse the help center — replies reopen solved tickets and internal notes stay hidden
+- **Customer portal** (`/portal`, served on its own port): a separate customer-facing app where end-users sign in (email + password, scrypt-hashed) to see only their own tickets, reply, open new tickets, edit their profile, and browse the help center — replies reopen solved tickets, internal notes stay hidden, and the ticket view **updates live with a notification chime** when support replies
 - **Knowledge base**: a categorized help center with a reader and editor, draft/published articles, and search
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
