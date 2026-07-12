@@ -49,7 +49,7 @@ Team — invite teammates with roles and shareable links:
 
 ![Team settings](docs/screenshots/settings-team-light.png)
 
-Connect a model — bring any OpenAI-compatible provider (DeepSeek shown) to power the copilot:
+Connect a model — pick a provider and model from a catalog with per-1M pricing and reasoning info, or type any custom id:
 
 ![AI model provider](docs/screenshots/ai-provider-light.png)
 
@@ -128,7 +128,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Business-hours-aware SLA clocks** — pause outside working hours *(v0.4)*
 - [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
 - [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
-- [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents, key kept server-side, rule-based fallback *(v0.5)*
+- [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents; a model catalog (8 providers) with per-1M pricing, context, and reasoning info; key kept server-side; rule-based fallback *(v0.5)*
 - [ ] Holiday calendars for SLA clocks
 - [ ] Native email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) and outbound delivery — bulletproof threading or nothing
 - [ ] Native Slack & Discord connectors with two-way sync
