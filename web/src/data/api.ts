@@ -1,6 +1,6 @@
 import type {
-  CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  Message, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -90,5 +90,13 @@ export class ApiRepository implements Repository {
 
   async deleteDeal(id: string): Promise<void> {
     await request<{ ok: true }>(`/deals/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  saveSlaTargets(targets: SlaTargets): Promise<SlaTargets> {
+    return request('/settings/sla', jsonInit('PUT', targets));
+  }
+
+  saveAutomation(rules: AutomationRule[]): Promise<AutomationRule[]> {
+    return request('/settings/automation', jsonInit('PUT', rules));
   }
 }

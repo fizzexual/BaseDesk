@@ -13,6 +13,27 @@ export interface Ticket {
   requesterId: string; assigneeId: string | null; tags: string[];
   channel: Channel; createdAt: string; updatedAt: string;
   snoozedUntil: string | null; lastMessageAt: string; lastMessagePreview: string;
+  firstRespondedAt: string | null; resolvedAt: string | null;
+}
+
+export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
+export type SlaTargets = Record<TicketPriority, SlaTarget>;
+
+export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is';
+export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign';
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  condition: { type: AutomationConditionType; value: string };
+  action: { type: AutomationActionType; value: string };
+}
+
+export type SlaState = 'met' | 'breached' | 'due_soon' | 'on_track' | 'paused';
+export interface TicketSla {
+  state: SlaState;
+  label: string;
+  clock: 'first_response' | 'resolution' | 'done';
 }
 export interface Message {
   id: string; ticketId: string;

@@ -1,11 +1,12 @@
 import type {
-  Agent, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  Message, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  Agent, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
+  sla: SlaTargets; automation: AutomationRule[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -22,4 +23,6 @@ export interface Repository {
   createDeal(input: DealCreate): Promise<Deal>;
   updateDeal(id: string, patch: DealPatch): Promise<Deal>;
   deleteDeal(id: string): Promise<void>;
+  saveSlaTargets(targets: SlaTargets): Promise<SlaTargets>;
+  saveAutomation(rules: AutomationRule[]): Promise<AutomationRule[]>;
 }

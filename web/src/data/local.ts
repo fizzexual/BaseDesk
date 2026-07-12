@@ -1,10 +1,41 @@
 import type {
-  Agent, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  Message, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
+  Agent, AutomationRule, CannedReply, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
+import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults';
 import seedJson from '../../../shared/seed.json';
+
+const RESOLVED: TicketStatus[] = ['solved', 'closed'];
+
+/** Mirrors the server's create-time automation. */
+function applyAutomationLocal(
+  rules: AutomationRule[],
+  ticket: { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null },
+  body: string,
+): void {
+  const subject = ticket.subject.toLowerCase();
+  const bodyLc = body.toLowerCase();
+  const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const v = rule.condition.value.toLowerCase();
+    const matches =
+      rule.condition.type === 'subject_contains' ? subject.includes(v)
+      : rule.condition.type === 'body_contains' ? bodyLc.includes(v)
+      : rule.condition.type === 'priority_is' ? ticket.priority === rule.condition.value
+      : false;
+    if (!matches) continue;
+    if (rule.action.type === 'set_priority' && PRIORITIES.includes(rule.action.value as TicketPriority)) {
+      ticket.priority = rule.action.value as TicketPriority;
+    } else if (rule.action.type === 'add_tag') {
+      if (!ticket.tags.includes(rule.action.value)) ticket.tags.push(rule.action.value);
+    } else if (rule.action.type === 'assign') {
+      ticket.assigneeId = rule.action.value;
+    }
+  }
+}
 
 const STORAGE_KEY = 'basedesk-data-v1';
 const CURRENT_AGENT_ID = 'a_1';
@@ -24,6 +55,8 @@ interface LocalData {
   agents: Agent[];
   canned: CannedReply[];
   deals: Deal[];
+  sla: SlaTargets;
+  automation: AutomationRule[];
 }
 
 const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
@@ -88,6 +121,8 @@ function seedData(): LocalData {
     agents: seed.agents.map((a) => ({ ...a })),
     canned: seed.canned.map((c) => ({ ...c })),
     deals: seed.deals.map((d) => ({ ...d })),
+    sla: DEFAULT_SLA_TARGETS,
+    automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
   };
 }
 
@@ -112,6 +147,22 @@ export class LocalRepository implements Repository {
         this.data.deals = seed.deals.map((d) => ({ ...d }));
         for (const c of this.data.contacts) {
           if (c.mrr === undefined) c.mrr = mrrByContact.get(c.id) ?? null;
+        }
+        this.persist();
+      }
+      // Backfill v0.3 fields (SLA settings + per-ticket SLA timestamps).
+      if (this.data.sla === undefined || this.data.automation === undefined) {
+        this.data.sla = DEFAULT_SLA_TARGETS;
+        this.data.automation = DEFAULT_AUTOMATION.map((r) => ({ ...r }));
+        const firstAgentReply = new Map<string, string>();
+        for (const m of [...this.data.messages].sort((a, b) => a.at.localeCompare(b.at))) {
+          if (m.authorKind === 'agent' && m.kind === 'reply' && !firstAgentReply.has(m.ticketId)) {
+            firstAgentReply.set(m.ticketId, m.at);
+          }
+        }
+        for (const t of this.data.tickets) {
+          if (t.firstRespondedAt === undefined) t.firstRespondedAt = firstAgentReply.get(t.id) ?? null;
+          if (t.resolvedAt === undefined) t.resolvedAt = RESOLVED.includes(t.status) ? t.updatedAt : null;
         }
         this.persist();
       }
@@ -147,6 +198,8 @@ export class LocalRepository implements Repository {
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((d) => ({ ...d })),
       currentAgentId: CURRENT_AGENT_ID,
+      sla: this.data.sla,
+      automation: this.data.automation.map((r) => ({ ...r })),
     };
   }
 
@@ -160,22 +213,26 @@ export class LocalRepository implements Repository {
   async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
     const now = new Date().toISOString();
     const number = this.data.tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1;
+    const shaped = { subject: input.subject, priority: input.priority, tags: [] as string[], assigneeId: null as string | null };
+    applyAutomationLocal(this.data.automation, shaped, input.body);
     const ticket: Ticket = {
       id: nextId(this.data.tickets, 't_', 3),
       number,
-      subject: input.subject,
+      subject: shaped.subject,
       status: 'open',
-      priority: input.priority,
+      priority: shaped.priority,
       bucket: 'inbox',
       requesterId: input.requesterId,
-      assigneeId: null,
-      tags: [],
+      assigneeId: shaped.assigneeId,
+      tags: shaped.tags,
       channel: 'web',
       createdAt: now,
       updatedAt: now,
       snoozedUntil: null,
       lastMessageAt: now,
       lastMessagePreview: preview(input.body),
+      firstRespondedAt: null,
+      resolvedAt: null,
     };
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),
@@ -197,7 +254,13 @@ export class LocalRepository implements Repository {
     for (const [key, value] of Object.entries(patch)) {
       if (value !== undefined) (t as unknown as Record<string, unknown>)[key] = value;
     }
-    t.updatedAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    // Maintain resolvedAt for the SLA resolution clock.
+    if (patch.status !== undefined) {
+      if (RESOLVED.includes(patch.status) && t.resolvedAt === null) t.resolvedAt = now;
+      else if (!RESOLVED.includes(patch.status) && t.resolvedAt !== null) t.resolvedAt = null;
+    }
+    t.updatedAt = now;
     this.persist();
     return { ...t, tags: [...t.tags] };
   }
@@ -220,6 +283,7 @@ export class LocalRepository implements Repository {
     if (input.kind === 'reply') {
       t.lastMessagePreview = preview(input.body);
       if (t.status === 'open') t.status = 'pending';
+      if (t.firstRespondedAt === null) t.firstRespondedAt = now;
     }
     this.persist();
     return { message: { ...message }, ticket: { ...t, tags: [...t.tags] } };
@@ -337,6 +401,18 @@ export class LocalRepository implements Repository {
   async deleteDeal(id: string): Promise<void> {
     this.data.deals = this.data.deals.filter((d) => d.id !== id);
     this.persist();
+  }
+
+  async saveSlaTargets(targets: SlaTargets): Promise<SlaTargets> {
+    this.data.sla = targets;
+    this.persist();
+    return targets;
+  }
+
+  async saveAutomation(rules: AutomationRule[]): Promise<AutomationRule[]> {
+    this.data.automation = rules.map((r) => ({ ...r }));
+    this.persist();
+    return this.data.automation.map((r) => ({ ...r }));
   }
 
   async getStats(): Promise<StatsOverview> {

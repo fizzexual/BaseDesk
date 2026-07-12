@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, Agent, CannedReply, Contact, Counts, Deal, DealCreate, DealPatch,
-  Message, Ticket, TicketPatch, TicketPriority, ViewId,
+  AccountHealth, Agent, AutomationRule, CannedReply, Contact, Counts, Deal, DealCreate, DealPatch,
+  Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
+import { DEFAULT_SLA_TARGETS } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -12,6 +13,8 @@ export interface AppState {
   tickets: Record<string, Ticket>; contacts: Record<string, Contact>;
   agents: Record<string, Agent>; canned: CannedReply[];
   deals: Record<string, Deal>;
+  sla: SlaTargets;
+  automation: AutomationRule[];
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -30,6 +33,8 @@ export interface AppState {
   dealsForTicket(ticketId: string): Deal[];                     // updatedAt desc
   dealsForContact(contactId: string): Deal[];                   // updatedAt desc
   accounts(): AccountHealth[];                                  // grouped by company
+  saveSlaTargets(targets: SlaTargets): Promise<void>;
+  saveAutomation(rules: AutomationRule[]): Promise<void>;
   setTheme(t: 'light' | 'dark' | 'system'): void;
   searchLocal(q: string): Ticket[];  // subject/preview/requester name+email/tags, max 20
 }
@@ -91,6 +96,8 @@ export function createAppStore(repository: Repository) {
     agents: {},
     canned: [],
     deals: {},
+    sla: DEFAULT_SLA_TARGETS,
+    automation: [],
     messages: {},
     currentAgentId: '',
     theme: initialTheme(),
@@ -104,6 +111,8 @@ export function createAppStore(repository: Repository) {
         agents: Object.fromEntries(data.agents.map((a) => [a.id, a])),
         canned: data.canned,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
+        sla: data.sla,
+        automation: data.automation,
         currentAgentId: data.currentAgentId,
       });
     },
@@ -357,6 +366,30 @@ export function createAppStore(repository: Repository) {
       });
       list.sort((a, b) => rank[a.status] - rank[b.status] || b.mrr - a.mrr || a.company.localeCompare(b.company));
       return list;
+    },
+
+    async saveSlaTargets(targets) {
+      const prev = get().sla;
+      set({ sla: targets });
+      try {
+        const saved = await repository.saveSlaTargets(targets);
+        set({ sla: saved });
+      } catch (err) {
+        set({ sla: prev });
+        throw err;
+      }
+    },
+
+    async saveAutomation(rules) {
+      const prev = get().automation;
+      set({ automation: rules });
+      try {
+        const saved = await repository.saveAutomation(rules);
+        set({ automation: saved });
+      } catch (err) {
+        set({ automation: prev });
+        throw err;
+      }
     },
 
     setTheme(t) {
