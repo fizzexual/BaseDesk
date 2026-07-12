@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router';
 import { useCounts } from '../data/hooks';
+import { useApp } from '../data/store';
 import type { Counts, ViewId } from '../data/types';
 import { cx } from '../components/util';
 import { requestNewTicket } from '../features/palette/shortcuts';
@@ -112,8 +113,24 @@ function GroupHeader({
   );
 }
 
+const aiLinkClass = ({ isActive }: { isActive: boolean }) =>
+  cx(
+    'flex h-8 items-center gap-2.5 rounded-md px-2 text-[14px] font-medium transition-colors',
+    isActive ? 'bg-surface-3 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
+  );
+
 export function Sidebar() {
   const counts = useCounts();
+  const aiActions = useApp((s) => s.aiActions);
+  const aiCounts = useMemo(() => {
+    let drafts = 0;
+    let resolved = 0;
+    for (const a of Object.values(aiActions)) {
+      if (a.kind === 'draft' && a.status === 'pending') drafts += 1;
+      if (a.kind === 'resolve') resolved += 1;
+    }
+    return { drafts, resolved };
+  }, [aiActions]);
   const [ticketsOpen, setTicketsOpen] = useState(() => readBool('basedesk-nav-tickets', true));
   const [aiOpen, setAiOpen] = useState(() => readBool('basedesk-nav-ai', true));
   const [more, setMore] = useState(() => readBool('basedesk-nav-more', true));
@@ -179,28 +196,24 @@ export function Sidebar() {
       />
       {aiOpen && (
         <>
-          <NavLink
-            to="/ai"
-            className={({ isActive }) =>
-              cx(
-                'flex h-8 items-center gap-2.5 rounded-md px-2 text-[14px] font-medium transition-colors',
-                isActive ? 'bg-surface-3 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
-              )
-            }
-          >
+          <NavLink to="/ai" end className={aiLinkClass}>
             <IconSparkle size={17} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">Overview</span>
           </NavLink>
-          <div className="flex h-8 items-center gap-2.5 rounded-md px-2 text-[14px] font-medium text-text-3">
+          <NavLink to="/ai/drafts" className={aiLinkClass}>
             <IconNote size={17} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">Drafts</span>
-            <span className="rounded-full bg-surface-3 px-1.5 text-[11px] font-medium">soon</span>
-          </div>
-          <div className="flex h-8 items-center gap-2.5 rounded-md px-2 text-[14px] font-medium text-text-3">
+            {aiCounts.drafts > 0 && (
+              <span className="text-[13px] font-normal text-text-3 tabular-nums">{aiCounts.drafts}</span>
+            )}
+          </NavLink>
+          <NavLink to="/ai/resolved" className={aiLinkClass}>
             <IconCheckCircle size={17} className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">Resolved by AI</span>
-            <span className="rounded-full bg-surface-3 px-1.5 text-[11px] font-medium">soon</span>
-          </div>
+            {aiCounts.resolved > 0 && (
+              <span className="text-[13px] font-normal text-text-3 tabular-nums">{aiCounts.resolved}</span>
+            )}
+          </NavLink>
         </>
       )}
     </aside>

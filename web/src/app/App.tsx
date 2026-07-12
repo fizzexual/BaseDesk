@@ -12,6 +12,8 @@ import { ReportsPage } from '../features/reports/ReportsPage';
 import { RevenuePage } from '../features/revenue/RevenuePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { AiPage } from '../features/ai/AiPage';
+import { DraftsPage } from '../features/ai/DraftsPage';
+import { ResolvedPage } from '../features/ai/ResolvedPage';
 import { KbPage } from '../features/kb/KbPage';
 
 function Boot({ children }: { children: React.ReactNode }) {
@@ -61,6 +63,8 @@ export function App() {
             <Route path="/revenue" element={<RevenuePage />} />
             <Route path="/revenue/:tab" element={<RevenuePage />} />
             <Route path="/ai" element={<AiPage />} />
+            <Route path="/ai/drafts" element={<DraftsPage />} />
+            <Route path="/ai/resolved" element={<ResolvedPage />} />
             <Route path="/kb" element={<KbPage />} />
             <Route path="/kb/:id" element={<KbPage />} />
             <Route path="/settings" element={<SettingsPage />} />
