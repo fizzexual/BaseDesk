@@ -91,7 +91,10 @@ npm run typecheck  # strict TS, both workspaces
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
 - **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, bring-your-own model provider optional
-- **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; automation rules that shape tickets on arrival
+- **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
+- **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
+- **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
+- **Team**: invite teammates with shareable links, admin/agent roles, and per-agent reply signatures (the last active admin is protected)
 - **Knowledge base**: a categorized help center with a reader and editor, draft/published articles, and search
 - **Command palette** (`Ctrl/⌘ K`): jump to any ticket, view, contact, or action
 - **Keyboard-first**: `j/k` navigate · `e` solve · `u` assign to me · `1–4` priority · `s` snooze · `r` reply · `n` note · `?` all shortcuts
@@ -108,11 +111,15 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **AI copilot** — drafts, triage, summaries; rule-based and offline today, model-provider hook for later *(v0.2)*
 - [x] **SLA + automation** — targets, breach indicators, attainment; create-time automation rules *(v0.3)*
 - [x] **Knowledge base** — categorized articles, reader/editor, draft/published, search *(v0.3)*
-- [ ] Business-hours/holiday-aware SLA clocks
-- [ ] Auth & team management
+- [x] **AI agents** — autonomous triage/draft/auto-resolve with scoped autonomy and approval queues *(v0.4)*
+- [x] **Channels** — web-chat widget + inbound webhook live; email/Discord/Slack/WhatsApp via forwarding *(v0.4)*
+- [x] **Business-hours-aware SLA clocks** — pause outside working hours *(v0.4)*
+- [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
+- [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
+- [ ] Holiday calendars for SLA clocks
+- [ ] Native email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) and outbound delivery — bulletproof threading or nothing
+- [ ] Native Slack & Discord connectors with two-way sync
 - [ ] Transparency portal — customer portal + status page + roadmap/feedback voting
-- [ ] Email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) — bulletproof threading or nothing
-- [ ] Slack shared-channel support, then chat widget & WhatsApp
 - [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
 - [ ] Single-binary packaging
 
