@@ -1,14 +1,15 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconFilter, IconNote, IconSparkle, IconSun, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconNote, IconSparkle, IconSun, IconUser } from '../../icons';
 import { Profile } from './Profile';
+import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
 import { CannedReplies } from './CannedReplies';
 import { SlaSettings } from './SlaSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
 
-type TabId = 'profile' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'sla' | 'automation' | 'ai';
 
 const TABS: Array<{
   id: TabId;
@@ -16,6 +17,7 @@ const TABS: Array<{
   icon: (p: { size?: number; className?: string }) => React.ReactNode;
 }> = [
   { id: 'profile', label: 'Profile', icon: IconUser },
+  { id: 'team', label: 'Team', icon: IconContacts },
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
   { id: 'sla', label: 'SLA', icon: IconClock },
@@ -26,6 +28,7 @@ const TABS: Array<{
 export function SettingsPage() {
   const params = useParams<{ tab?: string }>();
   const tab: TabId =
+    params.tab === 'team' ||
     params.tab === 'appearance' ||
     params.tab === 'canned' ||
     params.tab === 'sla' ||
@@ -58,6 +61,7 @@ export function SettingsPage() {
       </nav>
       <div className="min-w-0 max-w-[560px] flex-1 overflow-y-auto p-6">
         {tab === 'profile' && <Profile />}
+        {tab === 'team' && <TeamSettings />}
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
         {tab === 'sla' && <SlaSettings />}

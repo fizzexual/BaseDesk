@@ -81,7 +81,8 @@ export function ReportsPage() {
   const agents = useApp((s) => s.agents);
   const tickets = useApp((s) => s.tickets);
   const slaTargets = useApp((s) => s.sla);
-  const sla = useMemo(() => slaAttainment(Object.values(tickets), slaTargets), [tickets, slaTargets]);
+  const slaHours = useApp((s) => s.slaHours);
+  const sla = useMemo(() => slaAttainment(Object.values(tickets), slaTargets, slaHours), [tickets, slaTargets, slaHours]);
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [failed, setFailed] = useState(false);
 

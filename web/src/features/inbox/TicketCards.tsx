@@ -22,6 +22,7 @@ export function TicketCards({
   const contacts = useApp((s) => s.contacts);
   const patchTicket = useApp((s) => s.patchTicket);
   const slaTargets = useApp((s) => s.sla);
+  const slaHours = useApp((s) => s.slaHours);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const nowMs = Date.now();
 
@@ -71,7 +72,7 @@ export function TicketCards({
               </div>
               <div className="flex flex-col items-end gap-0.5">
                 <TimeAgo iso={t.lastMessageAt} />
-                <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs))} />
+                <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours))} />
               </div>
             </div>
 
