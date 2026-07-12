@@ -136,19 +136,57 @@ describe('copilot with a model provider', () => {
     const draft = await (await app.request('/api/ai/draft', json('POST', { ticketId }))).json();
     expect(draft.source).toBe('rules');
   });
+
+  it('falls back to rules when the model returns empty text', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    const url = await mockProvider(() => ({ json: { choices: [{ message: { content: '' } }] } }));
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+
+    const draft = await (await app.request('/api/ai/draft', json('POST', { ticketId }))).json();
+    expect(draft.source).toBe('rules');
+  });
+
+  it('reads reasoning_content when a reasoning model leaves content empty', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    const url = await mockProvider(() => ({ json: { choices: [{ message: { content: '', reasoning_content: 'Reasoned reply.' } }] } }));
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+
+    const draft = await (await app.request('/api/ai/draft', json('POST', { ticketId }))).json();
+    expect(draft.source).toBe('model');
+    expect(draft.body).toBe('Reasoned reply.');
+  });
 });
 
 describe('test connection', () => {
-  it('reports failure with no key and success against a live provider', async () => {
+  it('reports failure with no key', async () => {
     const app = makeApp();
     const noKey = await app.request('/api/ai/provider/test', json('POST', {}));
     expect(noKey.status).toBe(400);
+  });
 
-    const url = await mockProvider(() => completion('pong'));
-    const ok = await (await app.request('/api/ai/provider/test', json('POST', {
-      baseUrl: url, model: 'm', apiKey: 'k',
-    }))).json();
+  it('succeeds against a live provider', async () => {
+    const app = makeApp();
+    const url = await mockProvider(() => completion('ok'));
+    const ok = await (await app.request('/api/ai/provider/test', json('POST', { baseUrl: url, model: 'm', apiKey: 'k' }))).json();
     expect(ok.ok).toBe(true);
     expect(ok.model).toBe('m');
+    expect(ok.empty).toBe(false);
+  });
+
+  it('tolerates a reasoning model that returns no visible text', async () => {
+    const app = makeApp();
+    const url = await mockProvider(() => ({ json: { choices: [{ message: { content: '' } }] } }));
+    const res = await (await app.request('/api/ai/provider/test', json('POST', { baseUrl: url, model: 'm', apiKey: 'k' }))).json();
+    expect(res.ok).toBe(true);
+    expect(res.empty).toBe(true);
+  });
+
+  it('fails when the provider returns no chat completion', async () => {
+    const app = makeApp();
+    const url = await mockProvider(() => ({ json: { id: 'x', choices: [] } }));
+    const res = await (await app.request('/api/ai/provider/test', json('POST', { baseUrl: url, model: 'm', apiKey: 'k' }))).json();
+    expect(res.ok).toBe(false);
   });
 });

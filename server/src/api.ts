@@ -1064,8 +1064,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (cfg.apiKey === '') return c.json({ ok: false, error: 'Add an API key first' }, 400);
     const started = Date.now();
     try {
-      await ping(cfg);
-      return c.json({ ok: true, model: cfg.model, latencyMs: Date.now() - started });
+      const { reply } = await ping(cfg);
+      return c.json({ ok: true, model: cfg.model, latencyMs: Date.now() - started, empty: reply.trim() === '' });
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : 'request failed' });
     }

@@ -109,7 +109,7 @@ export type AiProviderSave = {
   temperature?: number;
   apiKey?: string;
 };
-export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string }
+export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string; empty?: boolean }
 export type AiSource = 'model' | 'rules';
 export interface DraftResult { body: string; source: AiSource }
 export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource }

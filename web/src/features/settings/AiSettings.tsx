@@ -212,12 +212,16 @@ export function AiSettings() {
         <div
           className={cx(
             'mt-3 rounded-md border px-3 py-2 text-[13px]',
-            test.ok ? 'border-green/30 bg-green-bg text-green' : 'border-red/30 bg-red-bg text-red',
+            !test.ok && 'border-red/30 bg-red-bg text-red',
+            test.ok && test.empty && 'border-amber/30 bg-amber-bg text-amber',
+            test.ok && !test.empty && 'border-green/30 bg-green-bg text-green',
           )}
         >
-          {test.ok
-            ? `Connected to ${test.model ?? model}${test.latencyMs !== undefined ? ` · ${test.latencyMs} ms` : ''}`
-            : `Connection failed: ${test.error ?? 'unknown error'}`}
+          {!test.ok
+            ? `Connection failed: ${test.error ?? 'unknown error'}`
+            : test.empty
+              ? `Reached ${test.model ?? model}, but it returned no text. Double-check the model id — for DeepSeek try deepseek-chat or deepseek-reasoner.`
+              : `Connected to ${test.model ?? model}${test.latencyMs !== undefined ? ` · ${test.latencyMs} ms` : ''}`}
         </div>
       )}
 

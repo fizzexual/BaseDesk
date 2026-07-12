@@ -20,6 +20,7 @@ export interface ChatOptions {
   maxTokens?: number;
   timeoutMs?: number;
   temperature?: number;
+  allowEmpty?: boolean; // return '' instead of throwing when the model emits no text
 }
 
 export class LlmError extends Error {
@@ -63,12 +64,21 @@ async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: 
     throw new LlmError(`provider returned ${res.status}${detail ? `: ${detail}` : ''}`, res.status);
   }
 
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = data.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || content.trim() === '') {
-    throw new LlmError('provider returned an empty completion');
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string | null; reasoning_content?: string | null } }[];
+  };
+  if (!Array.isArray(data.choices) || data.choices.length === 0) {
+    throw new LlmError('provider did not return a chat completion — check the base URL and model id');
   }
-  return content.trim();
+  // Some reasoning models (DeepSeek reasoner-style) put the answer in `content`
+  // and chain-of-thought in `reasoning_content`; fall back to the latter only if
+  // `content` is empty so a short/low-budget response still yields text.
+  const message = data.choices[0]?.message;
+  const content = (message?.content ?? '').trim() || (message?.reasoning_content ?? '').trim();
+  if (content === '' && opts.allowEmpty !== true) {
+    throw new LlmError('the model returned an empty completion — check the model id or raise max tokens');
+  }
+  return content;
 }
 
 /**
@@ -87,15 +97,20 @@ export async function chat(cfg: LlmConfig, messages: ChatMessage[], opts: ChatOp
   }
 }
 
-/** A tiny round-trip used by the "Test connection" button. */
+/**
+ * A tiny round-trip used by the "Test connection" button. Uses a comfortable
+ * token budget (reasoning models burn tokens before emitting visible text) and
+ * tolerates an empty reply so connectivity still verifies — the caller decides
+ * how to present an empty completion.
+ */
 export async function ping(cfg: LlmConfig): Promise<{ ok: true; reply: string }> {
   const reply = await chat(
     cfg,
     [
-      { role: 'system', content: 'You are a connectivity check. Reply with the single word: pong.' },
-      { role: 'user', content: 'ping' },
+      { role: 'system', content: 'You are a connectivity check for a support tool.' },
+      { role: 'user', content: 'Reply with the single word: ok' },
     ],
-    { maxTokens: 8, timeoutMs: 12_000, temperature: 0 },
+    { maxTokens: 64, timeoutMs: 15_000, temperature: 0, allowEmpty: true },
   );
   return { ok: true, reply };
 }
