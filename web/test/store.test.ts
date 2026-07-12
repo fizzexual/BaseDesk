@@ -156,4 +156,29 @@ describe('store', () => {
     expect(results.length).toBeLessThanOrEqual(20);
     expect(results.some((t) => t.requesterId === contact.id)).toBe(true);
   });
+
+  it('hydrates business hours (disabled by default in the seed)', async () => {
+    const store = await freshStore();
+    const hours = store.getState().slaHours;
+    expect(hours.enabled).toBe(false);
+    expect(hours.days).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('invites, re-roles, and removes teammates — guarding the last admin', async () => {
+    const store = await freshStore();
+    const id = await store.getState().inviteAgent({ name: 'Dana Lux', email: 'dana@acme.com', role: 'agent' });
+    const invited = store.getState().agents[id];
+    expect(invited.status).toBe('invited');
+    expect(invited.inviteToken).toMatch(/^inv_/);
+
+    await store.getState().updateAgent(id, { role: 'admin' });
+    expect(store.getState().agents[id].role).toBe('admin');
+
+    await store.getState().deleteAgent('a_2');
+    expect(store.getState().agents['a_2']).toBeUndefined();
+
+    // a_1 is the only active admin (the invited Dana does not count) — removal must fail and roll back.
+    await expect(store.getState().deleteAgent('a_1')).rejects.toThrow();
+    expect(store.getState().agents['a_1']).toBeDefined();
+  });
 });

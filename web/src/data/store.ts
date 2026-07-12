@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, AutomationRule,
-  CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Counts, Deal, DealCreate, DealPatch, KbArticle,
-  Message, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate,
+  ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Counts, Deal,
+  DealCreate, DealPatch, KbArticle, Message, SlaHours, SlaTargets, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
-import { DEFAULT_SLA_TARGETS } from './defaults';
+import { DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -15,6 +15,7 @@ export interface AppState {
   agents: Record<string, Agent>; canned: CannedReply[];
   deals: Record<string, Deal>;
   sla: SlaTargets;
+  slaHours: SlaHours;
   automation: AutomationRule[];
   kb: Record<string, KbArticle>;
   aiAgents: Record<string, AiAgent>;
@@ -39,7 +40,11 @@ export interface AppState {
   dealsForContact(contactId: string): Deal[];                   // updatedAt desc
   accounts(): AccountHealth[];                                  // grouped by company
   saveSlaTargets(targets: SlaTargets): Promise<void>;
+  saveSlaHours(hours: SlaHours): Promise<void>;
   saveAutomation(rules: AutomationRule[]): Promise<void>;
+  inviteAgent(input: AgentInvite): Promise<string>;             // returns id
+  updateAgent(id: string, patch: AgentPatch): Promise<void>;    // optimistic + rollback
+  deleteAgent(id: string): Promise<void>;                       // optimistic + rollback
   createArticle(input: ArticleCreate): Promise<string>;
   updateArticle(id: string, patch: ArticlePatch): Promise<void>;
   deleteArticle(id: string): Promise<void>;
@@ -114,6 +119,7 @@ export function createAppStore(repository: Repository) {
     canned: [],
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
+    slaHours: DEFAULT_SLA_HOURS,
     automation: [],
     kb: {},
     aiAgents: {},
@@ -133,6 +139,7 @@ export function createAppStore(repository: Repository) {
         canned: data.canned,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
+        slaHours: data.slaHours,
         automation: data.automation,
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
@@ -405,6 +412,18 @@ export function createAppStore(repository: Repository) {
       }
     },
 
+    async saveSlaHours(hours) {
+      const prev = get().slaHours;
+      set({ slaHours: hours });
+      try {
+        const saved = await repository.saveSlaHours(hours);
+        set({ slaHours: saved });
+      } catch (err) {
+        set({ slaHours: prev });
+        throw err;
+      }
+    },
+
     async saveAutomation(rules) {
       const prev = get().automation;
       set({ automation: rules });
@@ -413,6 +432,41 @@ export function createAppStore(repository: Repository) {
         set({ automation: saved });
       } catch (err) {
         set({ automation: prev });
+        throw err;
+      }
+    },
+
+    async inviteAgent(input) {
+      const agent = await repository.inviteAgent(input);
+      set((s) => ({ agents: { ...s.agents, [agent.id]: agent } }));
+      return agent.id;
+    },
+
+    async updateAgent(id, patch) {
+      const prev = get().agents[id] as Agent | undefined;
+      if (!prev) throw new Error('Agent not found');
+      set((s) => ({ agents: { ...s.agents, [id]: { ...prev, ...patch } } }));
+      try {
+        const agent = await repository.updateAgent(id, patch);
+        set((s) => ({ agents: { ...s.agents, [id]: agent } }));
+      } catch (err) {
+        set((s) => ({ agents: { ...s.agents, [id]: prev } }));
+        throw err;
+      }
+    },
+
+    async deleteAgent(id) {
+      const prev = get().agents[id] as Agent | undefined;
+      if (!prev) return;
+      set((s) => {
+        const next = { ...s.agents };
+        delete next[id];
+        return { agents: next };
+      });
+      try {
+        await repository.deleteAgent(id);
+      } catch (err) {
+        set((s) => ({ agents: { ...s.agents, [id]: prev } }));
         throw err;
       }
     },

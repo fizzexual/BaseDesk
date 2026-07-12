@@ -28,14 +28,26 @@ export type ChannelPatch = Partial<Pick<ChannelConn, 'name' | 'enabled' | 'addre
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }
 export type SlaTargets = Record<TicketPriority, SlaTarget>;
 
-export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is';
-export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign';
+export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is' | 'channel_is' | 'from_contains';
+export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign' | 'set_status';
+export interface AutomationCondition { type: AutomationConditionType; value: string }
+export interface AutomationAction { type: AutomationActionType; value: string }
 export interface AutomationRule {
   id: string;
   name: string;
   enabled: boolean;
-  condition: { type: AutomationConditionType; value: string };
-  action: { type: AutomationActionType; value: string };
+  match: 'all' | 'any';
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  runOn: 'create' | 'create_update';
+}
+
+export interface SlaHours {
+  enabled: boolean;
+  timezone: string;
+  days: number[];
+  start: string;
+  end: string;
 }
 
 export type SlaState = 'met' | 'breached' | 'due_soon' | 'on_track' | 'paused';
@@ -90,7 +102,13 @@ export interface Contact {
   avatarHue: number; location: string | null; timezone: string | null; createdAt: string;
   mrr: number | null;
 }
-export interface Agent { id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent'; }
+export type AgentStatus = 'active' | 'invited';
+export interface Agent {
+  id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent';
+  status: AgentStatus; inviteToken: string | null; signature: string;
+}
+export type AgentInvite = { name: string; email: string; role: 'admin' | 'agent' };
+export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature'>>;
 export interface CannedReply { id: string; title: string; body: string; }
 
 export type DealType = 'expansion' | 'retention' | 'inbound';

@@ -1,7 +1,7 @@
 import type {
-  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply,
-  ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle,
-  Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate, ArticlePatch,
+  AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch,
+  DealStage, DealType, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -140,5 +140,18 @@ export class ApiRepository implements Repository {
   }
   async deleteChannel(id: string): Promise<void> {
     await request<{ ok: true }>(`/channels/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  inviteAgent(input: AgentInvite): Promise<Agent> {
+    return request('/agents', jsonInit('POST', input));
+  }
+  updateAgent(id: string, patch: AgentPatch): Promise<Agent> {
+    return request(`/agents/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+  async deleteAgent(id: string): Promise<void> {
+    await request<{ ok: true }>(`/agents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  saveSlaHours(hours: SlaHours): Promise<SlaHours> {
+    return request('/settings/sla-hours', jsonInit('PUT', hours));
   }
 }

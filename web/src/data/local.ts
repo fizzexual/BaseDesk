@@ -1,42 +1,57 @@
 import type {
-  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, ArticleCreate, ArticlePatch, ArticleStatus, AutomationRule,
-  CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact, Deal, DealCreate, DealPatch, DealStage, DealType,
-  KbArticle, Message, SlaTargets, StatsOverview, Ticket, TicketPatch, TicketPriority, TicketStatus,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, Agent, AgentInvite, AgentPatch, ArticleCreate, ArticlePatch,
+  ArticleStatus, AutomationCondition, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, Contact,
+  Deal, DealCreate, DealPatch, DealStage, DealType, KbArticle, Message, SlaHours, SlaTargets, StatsOverview, Ticket,
+  TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AUTOMATION, DEFAULT_SLA_TARGETS } from './defaults';
+import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults';
 import { runAgent } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
 const AUTONOMY_RANK: Record<string, number> = { resolve: 3, draft: 2, suggest: 1 };
 
 const RESOLVED: TicketStatus[] = ['solved', 'closed'];
+const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
+const AUTO_STATUSES: TicketStatus[] = ['open', 'pending', 'on_hold', 'solved', 'closed'];
 
-/** Mirrors the server's create-time automation. */
-function applyAutomationLocal(
-  rules: AutomationRule[],
-  ticket: { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null },
-  body: string,
-): void {
-  const subject = ticket.subject.toLowerCase();
-  const bodyLc = body.toLowerCase();
-  const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
+/** Fields automation reads and may mutate on a freshly created ticket. */
+interface AutoMut {
+  subject: string; priority: TicketPriority; tags: string[];
+  assigneeId: string | null; status: TicketStatus;
+}
+interface AutoCtx { body: string; channelType: string; from: string; }
+
+function evalCondition(cond: AutomationCondition, mut: AutoMut, ctx: AutoCtx): boolean {
+  const v = cond.value.toLowerCase();
+  switch (cond.type) {
+    case 'subject_contains': return mut.subject.toLowerCase().includes(v);
+    case 'body_contains': return ctx.body.toLowerCase().includes(v);
+    case 'priority_is': return mut.priority === cond.value;
+    case 'channel_is': return ctx.channelType === cond.value;
+    case 'from_contains': return ctx.from.toLowerCase().includes(v);
+    default: return false;
+  }
+}
+
+/** Mirrors the server's runAutomation — multi-condition, multi-action rules. */
+function applyAutomationLocal(rules: AutomationRule[], mut: AutoMut, ctx: AutoCtx): void {
   for (const rule of rules) {
-    if (!rule.enabled) continue;
-    const v = rule.condition.value.toLowerCase();
-    const matches =
-      rule.condition.type === 'subject_contains' ? subject.includes(v)
-      : rule.condition.type === 'body_contains' ? bodyLc.includes(v)
-      : rule.condition.type === 'priority_is' ? ticket.priority === rule.condition.value
-      : false;
-    if (!matches) continue;
-    if (rule.action.type === 'set_priority' && PRIORITIES.includes(rule.action.value as TicketPriority)) {
-      ticket.priority = rule.action.value as TicketPriority;
-    } else if (rule.action.type === 'add_tag') {
-      if (!ticket.tags.includes(rule.action.value)) ticket.tags.push(rule.action.value);
-    } else if (rule.action.type === 'assign') {
-      ticket.assigneeId = rule.action.value;
+    if (!rule.enabled || rule.conditions.length === 0) continue;
+    const results = rule.conditions.map((c) => evalCondition(c, mut, ctx));
+    const ok = rule.match === 'any' ? results.some(Boolean) : results.every(Boolean);
+    if (!ok) continue;
+    for (const action of rule.actions) {
+      if (action.type === 'set_priority' && PRIORITIES.includes(action.value as TicketPriority)) {
+        mut.priority = action.value as TicketPriority;
+      } else if (action.type === 'add_tag') {
+        if (!mut.tags.includes(action.value)) mut.tags.push(action.value);
+      } else if (action.type === 'assign') {
+        mut.assigneeId = action.value;
+      } else if (action.type === 'set_status' && AUTO_STATUSES.includes(action.value as TicketStatus)) {
+        mut.status = action.value as TicketStatus;
+      }
     }
   }
 }
@@ -60,6 +75,7 @@ interface LocalData {
   canned: CannedReply[];
   deals: Deal[];
   sla: SlaTargets;
+  slaHours: SlaHours;
   automation: AutomationRule[];
   kb: KbArticle[];
   aiAgents: AiAgent[];
@@ -101,6 +117,17 @@ function djb2(s: string): number {
   return h >>> 0;
 }
 
+/** Random lowercase-hex token of `len` characters, for demo-mode invite links. */
+function randomToken(len: number): string {
+  const bytes = new Uint8Array(Math.ceil(len / 2));
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').slice(0, len);
+}
+
 /** First 90 chars of the body with all whitespace collapsed to single spaces. */
 function preview(body: string): string {
   return body.replace(/\s+/g, ' ').trim().slice(0, 90);
@@ -134,6 +161,7 @@ function seedData(): LocalData {
     canned: seed.canned.map((c) => ({ ...c })),
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
+    slaHours: { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days] },
     automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
     kb: seed.kb.map((a) => ({ ...a })),
     aiAgents: seed.aiAgents.map((a) => ({ ...a })),
@@ -202,6 +230,18 @@ export class LocalRepository implements Repository {
         }
         this.persist();
       }
+      // Backfill business-hours SLA + richer agent fields, and migrate v0.3
+      // single-condition automation to the v0.4 multi-condition shape.
+      if (this.data.slaHours === undefined) {
+        this.data.slaHours = { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days] };
+        for (const a of this.data.agents) {
+          if (a.status === undefined) a.status = 'active';
+          if (a.inviteToken === undefined) a.inviteToken = null;
+          if (a.signature === undefined) a.signature = '';
+        }
+        this.data.automation = normalizeAutomation(this.data.automation);
+        this.persist();
+      }
     } else {
       this.data = seedData();
       this.persist();
@@ -235,6 +275,7 @@ export class LocalRepository implements Repository {
         .map((d) => ({ ...d })),
       currentAgentId: CURRENT_AGENT_ID,
       sla: this.data.sla,
+      slaHours: { ...this.data.slaHours, days: [...this.data.slaHours.days] },
       automation: this.data.automation.map((r) => ({ ...r })),
       kb: this.data.kb.map((a) => ({ ...a })),
       aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
@@ -253,13 +294,13 @@ export class LocalRepository implements Repository {
   async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
     const now = new Date().toISOString();
     const number = this.data.tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1;
-    const shaped = { subject: input.subject, priority: input.priority, tags: [] as string[], assigneeId: null as string | null };
-    applyAutomationLocal(this.data.automation, shaped, input.body);
+    const shaped: AutoMut = { subject: input.subject, priority: input.priority, tags: [], assigneeId: null, status: 'open' };
+    applyAutomationLocal(this.data.automation, shaped, { body: input.body, channelType: 'web', from: '' });
     const ticket: Ticket = {
       id: nextId(this.data.tickets, 't_', 3),
       number,
       subject: shaped.subject,
-      status: 'open',
+      status: shaped.status,
       priority: shaped.priority,
       bucket: 'inbox',
       requesterId: input.requesterId,
@@ -496,6 +537,57 @@ export class LocalRepository implements Repository {
     this.data.automation = rules.map((r) => ({ ...r }));
     this.persist();
     return this.data.automation.map((r) => ({ ...r }));
+  }
+
+  async saveSlaHours(hours: SlaHours): Promise<SlaHours> {
+    this.data.slaHours = { ...hours, days: [...hours.days] };
+    this.persist();
+    return { ...this.data.slaHours, days: [...this.data.slaHours.days] };
+  }
+
+  async inviteAgent(input: AgentInvite): Promise<Agent> {
+    if (input.name.trim() === '') throw new Error('name is required');
+    if (input.email.trim() === '') throw new Error('email is required');
+    const agent: Agent = {
+      id: nextId(this.data.agents, 'a_', 1),
+      name: input.name.trim(),
+      email: input.email.trim(),
+      avatarHue: djb2(input.email.trim()) % 360,
+      role: input.role === 'admin' ? 'admin' : 'agent',
+      status: 'invited',
+      inviteToken: `inv_${randomToken(16)}`,
+      signature: '',
+    };
+    this.data.agents.push(agent);
+    this.persist();
+    return { ...agent };
+  }
+
+  async updateAgent(id: string, patch: AgentPatch): Promise<Agent> {
+    const a = this.data.agents.find((x) => x.id === id);
+    if (!a) throw new Error(`agent not found: ${id}`);
+    if (patch.name !== undefined) {
+      if (patch.name.trim() === '') throw new Error('invalid name');
+      a.name = patch.name.trim();
+    }
+    if (patch.role !== undefined) {
+      if (patch.role !== 'admin' && patch.role !== 'agent') throw new Error('invalid role');
+      a.role = patch.role;
+    }
+    if (patch.signature !== undefined) a.signature = patch.signature;
+    this.persist();
+    return { ...a };
+  }
+
+  async deleteAgent(id: string): Promise<void> {
+    const a = this.data.agents.find((x) => x.id === id);
+    if (!a) throw new Error(`agent not found: ${id}`);
+    const activeAdmins = this.data.agents.filter((x) => x.role === 'admin' && x.status === 'active').length;
+    if (a.role === 'admin' && a.status === 'active' && activeAdmins <= 1) {
+      throw new Error('cannot remove the last admin');
+    }
+    this.data.agents = this.data.agents.filter((x) => x.id !== id);
+    this.persist();
   }
 
   async createArticle(input: ArticleCreate): Promise<KbArticle> {
