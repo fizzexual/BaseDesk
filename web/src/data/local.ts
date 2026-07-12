@@ -172,7 +172,7 @@ function seedData(): LocalData {
     kb: seed.kb.map((a) => ({ ...a })),
     aiAgents: seed.aiAgents.map((a) => ({ ...a })),
     aiActions: seed.aiActions.map((a) => ({ ...a })),
-    channels: seed.channels.map((c) => ({ ...c, outboundUrl: c.outboundUrl ?? null, hasOutboundSecret: c.hasOutboundSecret ?? false })),
+    channels: seed.channels.map((c) => ({ ...c, outboundUrl: c.outboundUrl ?? null, hasOutboundSecret: c.hasOutboundSecret ?? false, hasInboundSecret: c.hasInboundSecret ?? false })),
     aiProvider: { ...DEFAULT_AI_PROVIDER },
     smtp: { ...DEFAULT_SMTP },
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
@@ -234,7 +234,7 @@ export class LocalRepository implements Repository {
       }
       // Backfill channels + per-ticket channelId for blobs written before v0.4.
       if (!Array.isArray(this.data.channels)) {
-        this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch, outboundUrl: ch.outboundUrl ?? null, hasOutboundSecret: ch.hasOutboundSecret ?? false }));
+        this.data.channels = (seedJson as unknown as LocalData).channels.map((ch) => ({ ...ch, outboundUrl: ch.outboundUrl ?? null, hasOutboundSecret: ch.hasOutboundSecret ?? false, hasInboundSecret: ch.hasInboundSecret ?? false }));
         for (const t of this.data.tickets) {
           if (t.channelId === undefined) t.channelId = t.channel === 'chat' ? 'ch_1' : t.channel === 'email' ? 'ch_2' : null;
         }
@@ -883,6 +883,7 @@ export class LocalRepository implements Repository {
       createdAt: new Date().toISOString(),
       outboundUrl: input.outboundUrl?.trim() ? input.outboundUrl.trim() : null,
       hasOutboundSecret: Boolean(input.outboundSecret?.trim()),
+      hasInboundSecret: Boolean(input.inboundSecret?.trim()),
     };
     this.data.channels.push(channel);
     this.persist();
@@ -897,6 +898,7 @@ export class LocalRepository implements Repository {
     if (patch.address !== undefined) ch.address = patch.address && patch.address.trim() !== '' ? patch.address.trim() : null;
     if (patch.outboundUrl !== undefined) ch.outboundUrl = patch.outboundUrl && patch.outboundUrl.trim() !== '' ? patch.outboundUrl.trim() : null;
     if (patch.outboundSecret !== undefined) ch.hasOutboundSecret = patch.outboundSecret !== null && patch.outboundSecret.trim() !== '';
+    if (patch.inboundSecret !== undefined) ch.hasInboundSecret = patch.inboundSecret !== null && patch.inboundSecret.trim() !== '';
     this.persist();
     return { ...ch };
   }

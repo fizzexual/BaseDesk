@@ -47,7 +47,7 @@ export type CustomFieldPatch = Partial<Pick<CustomFieldDef, 'label' | 'type' | '
 export type ChannelType =
   | 'webchat' | 'webhook' | 'email' | 'discord' | 'slack'
   | 'whatsapp' | 'telegram' | 'messenger' | 'sms';
-/** Full channel row, including the write-only outbound secret (server-side only). */
+/** Full channel row, including write-only secrets (server-side only). */
 export interface ChannelConn {
   id: string; type: ChannelType; name: string; enabled: boolean;
   inboundToken: string; address: string | null; createdAt: string;
@@ -55,12 +55,14 @@ export interface ChannelConn {
   outboundUrl: string | null;
   /** Optional bearer token / bot secret for the outbound endpoint. Never sent to the client. */
   outboundSecret: string | null;
+  /** Optional HMAC-SHA256 signing secret for inbound webhooks/commands. Never sent to the client. */
+  inboundSecret: string | null;
 }
-/** Client-safe channel shape: outbound secret is masked to a boolean. */
+/** Client-safe channel shape: secrets are masked to booleans. */
 export interface PublicChannel {
   id: string; type: ChannelType; name: string; enabled: boolean;
   inboundToken: string; address: string | null; createdAt: string;
-  outboundUrl: string | null; hasOutboundSecret: boolean;
+  outboundUrl: string | null; hasOutboundSecret: boolean; hasInboundSecret: boolean;
 }
 
 export interface SlaTarget { firstResponseMins: number; resolutionMins: number; }

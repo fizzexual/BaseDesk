@@ -44,14 +44,16 @@ export interface ChannelConn {
   outboundUrl: string | null;
   /** Whether an outbound auth token is stored server-side (the value never reaches the client). */
   hasOutboundSecret: boolean;
+  /** Whether an inbound HMAC signing secret is stored server-side. */
+  hasInboundSecret: boolean;
 }
 export type ChannelCreate = {
   type: ChannelType; name: string; address?: string;
-  outboundUrl?: string; outboundSecret?: string;
+  outboundUrl?: string; outboundSecret?: string; inboundSecret?: string;
 };
 export type ChannelPatch =
   Partial<Pick<ChannelConn, 'name' | 'enabled' | 'address' | 'outboundUrl'>>
-  & { outboundSecret?: string | null };
+  & { outboundSecret?: string | null; inboundSecret?: string | null };
 /** Result of an outbound channel test send. */
 export type ChannelTestResult = { ok: boolean; status?: number; error?: string };
 

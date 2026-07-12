@@ -222,6 +222,8 @@ export function ChannelDialog({
   const [outboundUrl, setOutboundUrl] = useState(channel?.outboundUrl ?? '');
   const [outboundSecret, setOutboundSecret] = useState('');
   const [hasSecret, setHasSecret] = useState(channel?.hasOutboundSecret ?? false);
+  const [inboundSecret, setInboundSecret] = useState('');
+  const [hasInbound, setHasInbound] = useState(channel?.hasInboundSecret ?? false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -237,6 +239,11 @@ export function ChannelDialog({
     return fields;
   }
 
+  /** Write-only inbound signing secret — only sent when the admin typed one. */
+  function inboundFields(): { inboundSecret?: string } {
+    return inboundSecret.trim() !== '' ? { inboundSecret: inboundSecret.trim() } : {};
+  }
+
   /** Save the form. Shared by the primary button and the test button. */
   async function persist() {
     const trimmedAddress = address.trim();
@@ -246,6 +253,7 @@ export function ChannelDialog({
         enabled,
         address: trimmedAddress === '' ? null : trimmedAddress,
         ...outboundFields(),
+        ...inboundFields(),
       });
     } else {
       await createChannel({
@@ -253,11 +261,16 @@ export function ChannelDialog({
         name: name.trim(),
         ...(trimmedAddress === '' ? {} : { address: trimmedAddress }),
         ...outboundFields(),
+        ...inboundFields(),
       });
     }
     if (outboundSecret.trim() !== '') {
       setHasSecret(true);
       setOutboundSecret('');
+    }
+    if (inboundSecret.trim() !== '') {
+      setHasInbound(true);
+      setInboundSecret('');
     }
   }
 
@@ -394,6 +407,27 @@ export function ChannelDialog({
             <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-[12px] text-text-3">{ob.help}</p>
           )
         )}
+
+        <div className="rounded-md border border-line p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <IconChannels size={14} className="text-text-3" />
+            <span className="text-[13px] font-medium">Inbound security</span>
+          </div>
+          <label className={LABEL} htmlFor="channel-inbound-secret">Signing secret (optional)</label>
+          <input
+            id="channel-inbound-secret"
+            type="password"
+            className={FIELD}
+            placeholder={hasInbound ? '•••••••••• (stored — leave blank to keep)' : 'HMAC-SHA256 secret'}
+            value={inboundSecret}
+            onChange={(e) => setInboundSecret(e.target.value)}
+            autoComplete="off"
+          />
+          <p className="mt-1.5 text-[12px] text-text-3">
+            When set, inbound and command requests must carry an <code className="font-mono">X-BaseDesk-Signature</code>{' '}
+            HMAC of the body. The inbound token alone still works without it.
+          </p>
+        </div>
 
         {editing && (
           <div className="flex items-center justify-between rounded-md border border-line px-3 py-2.5">

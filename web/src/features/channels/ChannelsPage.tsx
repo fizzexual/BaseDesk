@@ -13,6 +13,10 @@ function inboundUrl(channel: ChannelConn): string {
   return `${window.location.origin}/api/channels/${channel.id}/inbound?token=${channel.inboundToken}`;
 }
 
+function commandUrl(channel: ChannelConn): string {
+  return `${window.location.origin}/api/channels/${channel.id}/command?token=${channel.inboundToken}`;
+}
+
 function widgetUrl(channel: ChannelConn): string {
   return `${window.location.origin}/widget.html?channel=${channel.id}&token=${channel.inboundToken}`;
 }
@@ -114,6 +118,26 @@ function ConnectedChannel({
           </Button>
         </div>
       </div>
+
+      {channel.type !== 'webchat' && (
+        <div className="mt-2">
+          <span className="mb-1 block text-[12px] font-medium text-text-3">
+            Command URL <span className="text-text-3">· manage tickets from a bot</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              aria-label={`Command URL for ${channel.name}`}
+              value={commandUrl(channel)}
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface-2 px-2.5 font-mono text-[12px] text-text-2 outline-none focus:border-line-2"
+            />
+            <Button variant="subtle" size="sm" onClick={() => void copy(commandUrl(channel), 'Command URL copied')}>
+              Copy
+            </Button>
+          </div>
+        </div>
+      )}
 
       {channel.type === 'webchat' && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">

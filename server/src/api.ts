@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getChannel, getChannels, getContact,
   getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
@@ -101,6 +102,19 @@ function preview(body: string): string {
 
 function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Constant-time check that `provided` is a valid HMAC-SHA256 of `rawBody` under
+ * `secret`. Accepts a bare hex digest or a `sha256=…` prefix (Slack/Meta style).
+ */
+function verifyHmac(secret: string, rawBody: string, provided: string | undefined): boolean {
+  if (provided === undefined || provided.trim() === '') return false;
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const got = provided.replace(/^sha256=/i, '').trim();
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(got, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function insertTicketRow(db: DatabaseSync, t: Ticket): void {
@@ -1597,7 +1611,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   });
 
   app.post('/api/channels', async (c) => {
-    let input: { type?: unknown; name?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown };
+    let input: { type?: unknown; name?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown; inboundSecret?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -1614,9 +1628,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       createdAt: new Date().toISOString(),
       outboundUrl: cleanStr(input.outboundUrl),
       outboundSecret: cleanStr(input.outboundSecret),
+      inboundSecret: cleanStr(input.inboundSecret),
     };
-    db.prepare('INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt, outboundUrl, outboundSecret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(channel.id, channel.type, channel.name, 1, channel.inboundToken, channel.address, channel.createdAt, channel.outboundUrl, channel.outboundSecret);
+    db.prepare('INSERT INTO channels (id, type, name, enabled, inboundToken, address, createdAt, outboundUrl, outboundSecret, inboundSecret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(channel.id, channel.type, channel.name, 1, channel.inboundToken, channel.address, channel.createdAt, channel.outboundUrl, channel.outboundSecret, channel.inboundSecret);
     return c.json(toPublicChannel(channel));
   });
 
@@ -1624,7 +1639,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     const existing = getChannel(db, id);
     if (existing === null) return c.json({ error: `channel not found: ${id}` }, 404);
-    let patch: { name?: unknown; enabled?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown };
+    let patch: { name?: unknown; enabled?: unknown; address?: unknown; outboundUrl?: unknown; outboundSecret?: unknown; inboundSecret?: unknown };
     try {
       patch = await c.req.json();
     } catch {
@@ -1651,10 +1666,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       sets.push('outboundUrl = ?');
       params.push(cleanStr(patch.outboundUrl));
     }
-    // Write-only: only touch the secret when the key is present (blank clears it).
+    // Write-only: only touch a secret when its key is present (blank clears it).
     if ('outboundSecret' in patch) {
       sets.push('outboundSecret = ?');
       params.push(cleanStr(patch.outboundSecret));
+    }
+    if ('inboundSecret' in patch) {
+      sets.push('inboundSecret = ?');
+      params.push(cleanStr(patch.inboundSecret));
     }
     if (sets.length === 0) return c.json(toPublicChannel(existing));
     db.prepare(`UPDATE channels SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
@@ -1687,34 +1706,87 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(result);
   });
 
-  // Public, token-gated inbound: a real forwarder / widget POSTs a message here.
+  // Verify a channel's inbound token (query) and, if set, an HMAC signature over
+  // the raw body. Returns an error Response to short-circuit, or null when valid.
+  const checkInbound = (c: Context, channel: ChannelConn, raw: string): Response | null => {
+    if (!channel.enabled) return c.json({ error: 'channel disabled' }, 403);
+    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
+    const secret = channel.inboundSecret?.trim();
+    if (secret) {
+      const sig =
+        c.req.header('x-basedesk-signature') ?? c.req.header('x-hub-signature-256') ?? c.req.header('x-signature-256');
+      if (!verifyHmac(secret, raw, sig)) return c.json({ error: 'invalid signature' }, 401);
+    }
+    return null;
+  };
+
+  const insertMessageRow = (m: Message): void => {
+    db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(m.id, m.ticketId, m.authorKind, m.authorId, m.kind, m.body, m.at);
+  };
+
+  // Public inbound: a forwarder / bot / widget POSTs a customer message here. A
+  // sender (by email or externalId) threads into their one open ticket on this
+  // channel — a running conversation, not a new ticket per message.
   app.post('/api/channels/:id/inbound', async (c) => {
     const id = c.req.param('id');
     const channel = getChannel(db, id);
     if (channel === null) return c.json({ error: 'channel not found' }, 404);
-    if (!channel.enabled) return c.json({ error: 'channel disabled' }, 403);
-    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
-    let input: { from?: { name?: unknown; email?: unknown }; subject?: unknown; body?: unknown };
+    const raw = await c.req.text();
+    const bad = checkInbound(c, channel, raw);
+    if (bad !== null) return bad;
+
+    let input: { from?: { name?: unknown; email?: unknown; externalId?: unknown }; subject?: unknown; body?: unknown };
     try {
-      input = await c.req.json();
+      input = JSON.parse(raw);
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
-    const email = input.from?.email;
     const body = input.body;
-    if (typeof email !== 'string' || email.trim() === '') return c.json({ error: 'from.email is required' }, 400);
     if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
+    const email = typeof input.from?.email === 'string' ? input.from.email.trim() : '';
+    const externalId = typeof input.from?.externalId === 'string' ? input.from.externalId.trim() : '';
+    if (email === '' && externalId === '') return c.json({ error: 'from.email or from.externalId is required' }, 400);
+
+    // A stable identity so the same sender maps to one contact + threads together.
+    const identity = email !== '' ? email : `ext_${channel.type}_${externalId}@basedesk.local`;
+    const displayName =
+      typeof input.from?.name === 'string' && input.from.name.trim() !== ''
+        ? input.from.name.trim()
+        : email !== '' ? email : `${channel.name} user`;
     const now = new Date().toISOString();
 
-    let contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(email.trim()) as Contact | undefined;
+    let contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(identity) as Contact | undefined;
     if (contact === undefined) {
-      const name = typeof input.from?.name === 'string' && input.from.name.trim() !== '' ? input.from.name.trim() : email.trim();
       contact = {
-        id: newId('c_'), name, email: email.trim(), company: null, avatarHue: djb2(email.trim()) % 360,
+        id: newId('c_'), name: displayName, email: identity, company: null, avatarHue: djb2(identity) % 360,
         location: null, timezone: null, createdAt: now, mrr: null,
       };
       db.prepare('INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
+    }
+
+    // Thread into this sender's most recent still-open ticket on this channel.
+    const openRow = db
+      .prepare(
+        "SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? AND bucket = 'inbox' AND status NOT IN ('solved', 'closed') ORDER BY lastMessageAt DESC LIMIT 1",
+      )
+      .get(channel.id, contact.id) as TicketRow | undefined;
+
+    if (openRow !== undefined) {
+      const existing = rowToTicket(openRow);
+      const message: Message = { id: newId('m_'), ticketId: existing.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
+      db.exec('BEGIN');
+      try {
+        insertMessageRow(message);
+        db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+          .run(now, now, preview(body), existing.id);
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+      return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true });
     }
 
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
@@ -1725,21 +1797,80 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
       firstRespondedAt: null, resolvedAt: null, channelId: channel.id, customFields: {},
     };
-    const message: Message = {
-      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
-    };
+    const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
     db.exec('BEGIN');
     try {
       insertTicketRow(db, ticket);
-      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      insertMessageRow(message);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
       throw err;
     }
     await runAgentsOnTicket(ticket, body);
-    return c.json({ ticketId: ticket.id });
+    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
+  });
+
+  // Manage a ticket from the channel side (e.g. a Discord slash command relayed
+  // by a bot): reply, solve/close, reopen, or read status. Same token + optional
+  // signature auth as inbound. A reply is delivered back out to the channel too.
+  app.post('/api/channels/:id/command', async (c) => {
+    const id = c.req.param('id');
+    const channel = getChannel(db, id);
+    if (channel === null) return c.json({ error: 'channel not found' }, 404);
+    const raw = await c.req.text();
+    const bad = checkInbound(c, channel, raw);
+    if (bad !== null) return bad;
+
+    let input: { action?: unknown; ticket?: unknown; text?: unknown };
+    try {
+      input = JSON.parse(raw);
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const action = input.action;
+    if (typeof action !== 'string') return c.json({ error: 'action is required' }, 400);
+
+    // Resolve the ticket by number or id — and only if it belongs to this channel.
+    let ticket: Ticket | null = null;
+    if (typeof input.ticket === 'number') {
+      const row = db.prepare('SELECT * FROM tickets WHERE number = ? AND channelId = ?').get(input.ticket, channel.id) as TicketRow | undefined;
+      ticket = row ? rowToTicket(row) : null;
+    } else if (typeof input.ticket === 'string') {
+      const t = getTicket(db, input.ticket);
+      ticket = t !== null && t.channelId === channel.id ? t : null;
+    }
+    if (ticket === null) return c.json({ error: 'ticket not found on this channel' }, 404);
+
+    const now = new Date().toISOString();
+    if (action === 'reply') {
+      const text = input.text;
+      if (typeof text !== 'string' || text.trim() === '') return c.json({ error: 'text is required for a reply' }, 400);
+      if (ticket.status === 'closed') return c.json({ error: 'ticket is closed — reopen it first' }, 409);
+      const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'agent', authorId: currentAgentId(), kind: 'reply', body: text, at: now };
+      const nextStatus = ticket.status === 'open' ? 'pending' : ticket.status;
+      db.exec('BEGIN');
+      try {
+        insertMessageRow(message);
+        db.prepare('UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
+          .run(nextStatus, now, now, preview(text), ticket.firstRespondedAt ?? now, ticket.id);
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+      deliverReply(ticket, text);
+    } else if (action === 'solve' || action === 'close') {
+      const status = action === 'close' ? 'closed' : 'solved';
+      db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ? WHERE id = ?').run(status, ticket.resolvedAt ?? now, now, ticket.id);
+    } else if (action === 'reopen') {
+      db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ? WHERE id = ?').run('open', null, now, ticket.id);
+    } else if (action !== 'status') {
+      return c.json({ error: `unknown action: ${action}` }, 400);
+    }
+
+    const updated = getTicket(db, ticket.id) ?? ticket;
+    return c.json({ ok: true, ticket: { id: updated.id, number: updated.number, subject: updated.subject, status: updated.status, assigneeId: updated.assigneeId } });
   });
 
   // ── Custom fields ────────────────────────────────────────────────────────

@@ -166,7 +166,8 @@ export function openDb(dataDir: string): DatabaseSync {
       address TEXT,
       createdAt TEXT NOT NULL,
       outboundUrl TEXT,
-      outboundSecret TEXT
+      outboundSecret TEXT,
+      inboundSecret TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_bucket ON tickets(bucket);
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
@@ -204,6 +205,7 @@ export function openDb(dataDir: string): DatabaseSync {
   const channelCols = db.prepare('PRAGMA table_info(channels)').all() as { name: string }[];
   if (!channelCols.some((c) => c.name === 'outboundUrl')) db.exec('ALTER TABLE channels ADD COLUMN outboundUrl TEXT');
   if (!channelCols.some((c) => c.name === 'outboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN outboundSecret TEXT');
+  if (!channelCols.some((c) => c.name === 'inboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN inboundSecret TEXT');
 
   if (!ticketCols.some((c) => c.name === 'customFields')) db.exec("ALTER TABLE tickets ADD COLUMN customFields TEXT NOT NULL DEFAULT '{}'");
   if (!ticketCols.some((c) => c.name === 'satisfactionScore')) db.exec('ALTER TABLE tickets ADD COLUMN satisfactionScore INTEGER');
@@ -427,12 +429,17 @@ export function rowToChannel(row: ChannelRow): ChannelConn {
     enabled: row.enabled === 1,
     outboundUrl: row.outboundUrl ?? null,
     outboundSecret: row.outboundSecret ?? null,
+    inboundSecret: row.inboundSecret ?? null,
   };
 }
-/** Strip the outbound secret before a channel crosses the wire to the client. */
+/** Strip write-only secrets before a channel crosses the wire to the client. */
 export function toPublicChannel(ch: ChannelConn): PublicChannel {
-  const { outboundSecret, ...rest } = ch;
-  return { ...rest, hasOutboundSecret: (outboundSecret ?? '').trim() !== '' };
+  const { outboundSecret, inboundSecret, ...rest } = ch;
+  return {
+    ...rest,
+    hasOutboundSecret: (outboundSecret ?? '').trim() !== '',
+    hasInboundSecret: (inboundSecret ?? '').trim() !== '',
+  };
 }
 export function getChannels(db: DatabaseSync): ChannelConn[] {
   return (db.prepare('SELECT * FROM channels ORDER BY createdAt').all() as unknown as ChannelRow[]).map(rowToChannel);
