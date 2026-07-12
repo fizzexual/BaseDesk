@@ -6,7 +6,11 @@ import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { AiTestResult } from '../../data/types';
+import {
+  formatContext, formatPrice, modelInfo, PRICES_NOTE, providerForBaseUrl, PROVIDERS,
+} from '../../data/model-catalog';
 import { aiEnabled, setAiEnabled } from '../ai/engine';
+import { ModelPicker } from './ModelPicker';
 
 const FIELD =
   'h-9 w-full rounded-md border border-line bg-bg px-2.5 text-[14px] outline-none focus:border-line-2 placeholder:text-text-3';
@@ -14,13 +18,6 @@ const FIELD =
 const TOGGLE_OPTIONS: { value: 'on' | 'off'; label: string }[] = [
   { value: 'on', label: 'On' },
   { value: 'off', label: 'Off' },
-];
-
-const PRESETS: { label: string; baseUrl: string; model: string }[] = [
-  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-chat' },
-  { label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1' },
 ];
 
 export function AiSettings() {
@@ -32,6 +29,7 @@ export function AiSettings() {
   const [enabled, setEnabled] = useState<boolean>(provider.enabled);
   const [baseUrl, setBaseUrl] = useState<string>(provider.baseUrl);
   const [model, setModel] = useState<string>(provider.model);
+  const [reasoning, setReasoning] = useState<boolean>(provider.reasoning);
   const [temperature, setTemperature] = useState<string>(String(provider.temperature));
   const [key, setKey] = useState<string>('');
   const [hasKey, setHasKey] = useState<boolean>(provider.hasKey);
@@ -39,15 +37,22 @@ export function AiSettings() {
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<AiTestResult | null>(null);
 
+  const currentProvider = providerForBaseUrl(baseUrl);
+  const selectedInfo = modelInfo(baseUrl, model);
+
   function onCopilot(value: 'on' | 'off') {
     const on = value === 'on';
     setAiEnabled(on);
     setCopilot(on);
   }
 
-  function applyPreset(p: (typeof PRESETS)[number]) {
+  function applyPreset(p: (typeof PROVIDERS)[number]) {
     setBaseUrl(p.baseUrl);
-    setModel(p.model);
+    const first = p.models[0];
+    if (first) {
+      setModel(first.id);
+      setReasoning(first.reasoning);
+    }
     setTest(null);
   }
 
@@ -57,6 +62,7 @@ export function AiSettings() {
       enabled,
       baseUrl: baseUrl.trim(),
       model: model.trim(),
+      reasoning,
       temperature: Number.isFinite(temp) ? temp : 0.4,
       // Only send the key when the user typed one, so blank keeps the stored key.
       ...(key.trim() !== '' ? { apiKey: key.trim() } : {}),
@@ -81,8 +87,7 @@ export function AiSettings() {
     setTesting(true);
     setTest(null);
     try {
-      const result = await testAiProvider(payload());
-      setTest(result);
+      setTest(await testAiProvider(payload()));
     } catch (err) {
       setTest({ ok: false, error: err instanceof Error ? err.message : 'request failed' });
     } finally {
@@ -125,8 +130,8 @@ export function AiSettings() {
           <h2 className="text-[15px] font-semibold">Model provider</h2>
           <p className="mt-2 text-[13px] text-text-3">
             BaseDesk works fully offline with a rule-based engine. Connect any OpenAI-compatible
-            provider — DeepSeek, OpenAI, OpenRouter, or a local model — to power the copilot with a
-            real model. Your key is stored on your server and never sent to the browser.
+            provider to power the copilot with a real model. Your key is stored on your server and
+            never sent to the browser.
           </p>
         </div>
         <div className="mt-0.5 shrink-0">
@@ -136,16 +141,16 @@ export function AiSettings() {
 
       <div className={cx('mt-5 flex flex-col gap-4', !enabled && 'opacity-60')}>
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium">Preset</span>
+          <span className="text-[13px] font-medium">Provider</span>
           <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map((p) => (
+            {PROVIDERS.map((p) => (
               <button
-                key={p.label}
+                key={p.key}
                 type="button"
                 onClick={() => applyPreset(p)}
                 className={cx(
                   'h-8 rounded-md border px-2.5 text-[13px] font-medium transition-colors',
-                  baseUrl === p.baseUrl ? 'border-transparent bg-accent text-accent-fg' : 'border-line text-text-2 hover:bg-surface-2',
+                  currentProvider?.key === p.key ? 'border-transparent bg-accent text-accent-fg' : 'border-line text-text-2 hover:bg-surface-2',
                 )}
               >
                 {p.label}
@@ -159,11 +164,47 @@ export function AiSettings() {
           <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com/v1" className={`${FIELD} font-mono text-[13px]`} />
         </label>
 
-        <label className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium">Model</span>
-          <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder="deepseek-chat" className={`${FIELD} font-mono text-[13px]`} />
-          <span className="text-[12px] text-text-3">
-            The provider's model id, e.g. <code className="font-mono">deepseek-chat</code>. Use whatever id your provider lists.
+          <ModelPicker
+            models={currentProvider?.models ?? []}
+            value={model}
+            onChange={(id, info) => {
+              setModel(id);
+              if (info) setReasoning(info.reasoning);
+              setTest(null);
+            }}
+          />
+          {selectedInfo ? (
+            <span className="text-[12px] text-text-3">
+              {selectedInfo.inputPer1M === 0 && selectedInfo.outputPer1M === 0
+                ? 'Runs locally · free'
+                : `≈ ${formatPrice(selectedInfo.inputPer1M)} in · ${formatPrice(selectedInfo.outputPer1M)} out per 1M tokens`}
+              {' · '}{formatContext(selectedInfo.contextK)} context{selectedInfo.reasoning ? ' · reasoning' : ''}
+            </span>
+          ) : (
+            <span className="text-[12px] text-text-3">Custom model id — sent to the provider as-is.</span>
+          )}
+          {currentProvider && (
+            <span className="text-[12px] text-text-3">
+              {PRICES_NOTE.replace(/’/g, "'")}{' '}
+              <span className="font-mono text-[11px] text-text-2">{currentProvider.pricingUrl}</span>
+            </span>
+          )}
+        </div>
+
+        <label className="flex items-start gap-2.5 rounded-md border border-line p-2.5">
+          <input
+            type="checkbox"
+            checked={reasoning}
+            onChange={(e) => setReasoning(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-green"
+          />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-medium">Reasoning model</span>
+            <span className="block text-[12px] text-text-3">
+              Allocates a much larger response budget so chain-of-thought models still return a full answer. Set automatically when you pick a known reasoning model.
+            </span>
           </span>
         </label>
 
