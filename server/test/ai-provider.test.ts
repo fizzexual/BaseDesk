@@ -16,7 +16,7 @@ const json = (method: string, body: unknown) => ({
 
 /** A stand-in OpenAI-compatible provider. `handler` shapes each response. */
 let mock: Server | null = null;
-function mockProvider(handler: (body: { messages: { role: string; content: string }[] }) => { status?: number; json: unknown }): Promise<string> {
+function mockProvider(handler: (body: { messages: { role: string; content: string }[]; max_tokens?: number }) => { status?: number; json: unknown }): Promise<string> {
   return new Promise((resolve) => {
     mock = createServer((req, res) => {
       let data = '';
@@ -78,6 +78,14 @@ describe('provider config', () => {
     await app.request('/api/ai/provider', json('PUT', { enabled: true, apiKey: 'sk-secret' }));
     const cleared = await (await app.request('/api/ai/provider', json('PUT', { apiKey: '' }))).json();
     expect(cleared.hasKey).toBe(false);
+  });
+
+  it('persists the reasoning flag', async () => {
+    const app = makeApp();
+    const saved = await (await app.request('/api/ai/provider', json('PUT', { enabled: true, reasoning: true, apiKey: 'k' }))).json();
+    expect(saved.reasoning).toBe(true);
+    const boot = await (await app.request('/api/bootstrap')).json();
+    expect(boot.aiProvider.reasoning).toBe(true);
   });
 });
 
@@ -156,6 +164,24 @@ describe('copilot with a model provider', () => {
     const draft = await (await app.request('/api/ai/draft', json('POST', { ticketId }))).json();
     expect(draft.source).toBe('model');
     expect(draft.body).toBe('Reasoned reply.');
+  });
+
+  it('gives reasoning models a much larger output budget', async () => {
+    const app = makeApp();
+    const ticketId = await firstTicketId(app);
+    let standard = 0;
+    let reasoning = 0;
+    const url1 = await mockProvider((body) => { standard = body.max_tokens ?? 0; return completion('reply'); });
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url1, model: 'm', apiKey: 'k', reasoning: false }));
+    await app.request('/api/ai/draft', json('POST', { ticketId }));
+    mock?.close();
+
+    const url2 = await mockProvider((body) => { reasoning = body.max_tokens ?? 0; return completion('reply'); });
+    await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url2, model: 'm', apiKey: 'k', reasoning: true }));
+    await app.request('/api/ai/draft', json('POST', { ticketId }));
+
+    expect(standard).toBeGreaterThan(0);
+    expect(reasoning).toBeGreaterThan(standard * 2);
   });
 });
 

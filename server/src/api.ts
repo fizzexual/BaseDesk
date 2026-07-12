@@ -1040,6 +1040,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       baseUrl: typeof input.baseUrl === 'string' && input.baseUrl.trim() !== '' ? input.baseUrl.trim() : current.baseUrl,
       model: typeof input.model === 'string' && input.model.trim() !== '' ? input.model.trim() : current.model,
       temperature: Math.min(2, Math.max(0, temp)),
+      reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : current.reasoning,
       // apiKey absent → keep the stored key; a string (even empty) replaces it.
       apiKey: typeof input.apiKey === 'string' ? input.apiKey.trim() : current.apiKey,
     };

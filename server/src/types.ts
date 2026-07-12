@@ -93,6 +93,7 @@ export interface AiProviderConfig {
   baseUrl: string;
   model: string;
   temperature: number;
+  reasoning: boolean; // reasoning model — gets a larger output budget
   apiKey: string;
 }
 /** Client-facing provider status — identical but with the key replaced by a flag. */
@@ -101,6 +102,7 @@ export interface AiProvider {
   baseUrl: string;
   model: string;
   temperature: number;
+  reasoning: boolean;
   hasKey: boolean;
 }
 export interface Contact {

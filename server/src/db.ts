@@ -185,6 +185,7 @@ export function getAiProviderConfig(db: DatabaseSync): AiProviderConfig {
       baseUrl: typeof p.baseUrl === 'string' && p.baseUrl.trim() !== '' ? p.baseUrl : DEFAULT_AI_PROVIDER.baseUrl,
       model: typeof p.model === 'string' && p.model.trim() !== '' ? p.model : DEFAULT_AI_PROVIDER.model,
       temperature: typeof p.temperature === 'number' && p.temperature >= 0 ? p.temperature : DEFAULT_AI_PROVIDER.temperature,
+      reasoning: Boolean(p.reasoning),
       apiKey: typeof p.apiKey === 'string' ? p.apiKey : '',
     };
   } catch {
@@ -200,7 +201,7 @@ export function setAiProviderConfig(db: DatabaseSync, cfg: AiProviderConfig): vo
 export function toPublicProvider(cfg: AiProviderConfig): AiProvider {
   return {
     enabled: cfg.enabled, baseUrl: cfg.baseUrl, model: cfg.model,
-    temperature: cfg.temperature, hasKey: cfg.apiKey.trim() !== '',
+    temperature: cfg.temperature, reasoning: cfg.reasoning, hasKey: cfg.apiKey.trim() !== '',
   };
 }
 
