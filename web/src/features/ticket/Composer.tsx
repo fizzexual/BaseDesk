@@ -7,7 +7,7 @@ import { Menu, type MenuItem } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
-import { IconBook, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+import { IconBook, IconCheckCircle, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
 import { aiEnabled } from '../ai/engine';
 import { TokenCost } from '../ai/TokenCost';
@@ -29,6 +29,8 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const canned = useApp((s) => s.canned);
   const aiDraft = useApp((s) => s.aiDraft);
   const uploadAttachment = useApp((s) => s.uploadAttachment);
+  const composerPrefill = useApp((s) => s.composerPrefill);
+  const setComposerPrefill = useApp((s) => s.setComposerPrefill);
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
   const [drafting, setDrafting] = useState(false);
@@ -50,6 +52,15 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   function focusTextarea() {
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
+
+  // Pull an AI draft (or other prefill) into the composer when requested.
+  useEffect(() => {
+    if (composerPrefill === null) return;
+    setBody(composerPrefill);
+    setMode('reply');
+    setComposerPrefill(null);
+    focusTextarea();
+  }, [composerPrefill, setComposerPrefill]);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -133,6 +144,28 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     canned.length > 0
       ? canned.map((c) => ({ label: c.title, onSelect: () => insertAtCursor(c.body) }))
       : [{ label: 'No canned replies yet', disabled: true, onSelect: () => {} }];
+
+  // A closed ticket is read-only for everyone — reopen it to write.
+  if (ticket.status === 'closed') {
+    return (
+      <div className="shrink-0 border-t border-line p-3">
+        <div className="flex items-center gap-3 rounded-md bg-surface-2 px-3 py-2.5 text-[13px]">
+          <IconCheckCircle size={15} className="shrink-0 text-text-3" />
+          <span className="text-text-2">This ticket is closed. Reopen it to reply or add a note.</span>
+          <div className="flex-1" />
+          <Button
+            variant="subtle"
+            size="sm"
+            onClick={() =>
+              useApp.getState().patchTicket(ticket.id, { status: 'open' }).catch(() => toast('Could not reopen the ticket'))
+            }
+          >
+            Reopen
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="shrink-0 border-t border-line p-3">

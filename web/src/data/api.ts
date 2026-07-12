@@ -50,6 +50,13 @@ export class ApiRepository implements Repository {
   addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, jsonInit('POST', input));
   }
+  async deleteMessage(ticketId: string, messageId: string): Promise<Message> {
+    const { message } = await request<{ message: Message }>(
+      `/tickets/${encodeURIComponent(ticketId)}/messages/${encodeURIComponent(messageId)}`,
+      { method: 'DELETE' },
+    );
+    return message;
+  }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();
     form.append('file', file);

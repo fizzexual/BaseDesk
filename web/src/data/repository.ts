@@ -20,6 +20,7 @@ export interface Repository {
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }>;
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket>;
   addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }>;
+  deleteMessage(ticketId: string, messageId: string): Promise<Message>;
   uploadAttachment(file: File): Promise<Attachment>;
   createContact(input: { name: string; email: string; company?: string }): Promise<Contact>;
   saveCanned(c: CannedReply): Promise<CannedReply>;

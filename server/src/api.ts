@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getChannel, getChannels, getContact,
-  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
+  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
   insertAiAction, insertAttachment, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
@@ -521,6 +521,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     const ticket = getTicket(db, id);
     if (ticket === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    // A closed ticket is locked: no one — not even an admin — can post to it until it is reopened.
+    if (ticket.status === 'closed') return c.json({ error: 'ticket is closed — reopen it to reply' }, 409);
 
     let input: { kind?: unknown; body?: unknown; attachmentIds?: unknown };
     try {
@@ -570,6 +572,20 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (kind === 'reply') deliverReply(ticket, body.trim() !== '' ? body : '(sent an attachment)');
     const saved = getMessages(db, id).find((m) => m.id === message.id) ?? message;
     return c.json({ message: saved, ticket: getTicket(db, id) });
+  });
+
+  // Soft-delete a message: the row stays (audit trail) and we stamp who removed
+  // it and when, so the thread shows a tombstone instead of the content.
+  app.delete('/api/tickets/:tid/messages/:mid', (c) => {
+    const tid = c.req.param('tid');
+    const mid = c.req.param('mid');
+    const msg = getMessage(db, mid);
+    if (msg === null || msg.ticketId !== tid) return c.json({ error: 'message not found' }, 404);
+    if (!msg.deletedAt) {
+      db.prepare('UPDATE messages SET deletedAt = ?, deletedBy = ? WHERE id = ?')
+        .run(new Date().toISOString(), currentAgentId(), mid);
+    }
+    return c.json({ message: getMessages(db, tid).find((m) => m.id === mid) ?? null });
   });
 
   // Upload a file (unattached until a message references it), then serve it back.
@@ -1304,6 +1320,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (action.kind !== 'draft' || action.status !== 'pending') return c.json({ error: 'not an approvable draft' }, 400);
     const ticket = getTicket(db, action.ticketId);
     if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    if (ticket.status === 'closed') return c.json({ error: 'ticket is closed — reopen it to reply' }, 409);
     const now = new Date().toISOString();
     const body = action.draftBody ?? '';
     const message: Message = {

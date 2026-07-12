@@ -77,7 +77,9 @@ export function openDb(dataDir: string): DatabaseSync {
       authorId TEXT NOT NULL,
       kind TEXT NOT NULL,
       body TEXT NOT NULL,
-      at TEXT NOT NULL
+      at TEXT NOT NULL,
+      deletedAt TEXT,
+      deletedBy TEXT
     );
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
@@ -201,6 +203,10 @@ export function openDb(dataDir: string): DatabaseSync {
   if (!channelCols.some((c) => c.name === 'outboundSecret')) db.exec('ALTER TABLE channels ADD COLUMN outboundSecret TEXT');
 
   if (!ticketCols.some((c) => c.name === 'customFields')) db.exec("ALTER TABLE tickets ADD COLUMN customFields TEXT NOT NULL DEFAULT '{}'");
+
+  const messageCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[];
+  if (!messageCols.some((c) => c.name === 'deletedAt')) db.exec('ALTER TABLE messages ADD COLUMN deletedAt TEXT');
+  if (!messageCols.some((c) => c.name === 'deletedBy')) db.exec('ALTER TABLE messages ADD COLUMN deletedBy TEXT');
 
   return db;
 }
@@ -326,7 +332,6 @@ export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
   const files = db
     .prepare('SELECT * FROM attachments WHERE ticketId = ? ORDER BY createdAt ASC')
     .all(ticketId) as unknown as Attachment[];
-  if (files.length === 0) return messages;
   const byMessage = new Map<string, Attachment[]>();
   for (const f of files) {
     if (f.messageId === null) continue;
@@ -334,7 +339,17 @@ export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
     list.push(f);
     byMessage.set(f.messageId, list);
   }
-  return messages.map((m) => ({ ...m, attachments: byMessage.get(m.id) ?? [] }));
+  // A soft-deleted message keeps its tombstone (who/when) but never leaks its content.
+  return messages.map((m) =>
+    m.deletedAt
+      ? { ...m, body: '', attachments: [] }
+      : { ...m, attachments: byMessage.get(m.id) ?? [] },
+  );
+}
+
+export function getMessage(db: DatabaseSync, id: string): Message | null {
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as Message | undefined;
+  return row ?? null;
 }
 
 export function insertAttachment(db: DatabaseSync, a: Attachment): void {

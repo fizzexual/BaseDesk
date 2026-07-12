@@ -26,6 +26,7 @@ export interface AppState {
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
+  composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
   init(): Promise<void>;
@@ -34,7 +35,9 @@ export interface AppState {
   loadMessages(ticketId: string): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
+  deleteMessage(ticketId: string, messageId: string): Promise<void>;
   uploadAttachment(file: File): Promise<Attachment>;
+  setComposerPrefill(text: string | null): void;
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<string>; // returns id
   createContact(input: { name: string; email: string; company?: string }): Promise<string>;
   saveCanned(c: CannedReply): Promise<void>; deleteCanned(id: string): Promise<void>;
@@ -146,6 +149,7 @@ export function createAppStore(repository: Repository) {
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
     messages: {},
+    composerPrefill: null,
     currentAgentId: '',
     theme: initialTheme(),
 
@@ -277,8 +281,34 @@ export function createAppStore(repository: Repository) {
       }
     },
 
+    async deleteMessage(ticketId, messageId) {
+      const prev = get().messages[ticketId] ?? [];
+      const now = new Date().toISOString();
+      const by = get().currentAgentId;
+      const optimistic = prev.map((m) =>
+        m.id === messageId ? { ...m, deletedAt: now, deletedBy: by, body: '', attachments: [] } : m,
+      );
+      set((s) => ({ messages: { ...s.messages, [ticketId]: optimistic } }));
+      try {
+        const message = await repository.deleteMessage(ticketId, messageId);
+        set((s) => ({
+          messages: {
+            ...s.messages,
+            [ticketId]: (s.messages[ticketId] ?? []).map((m) => (m.id === messageId ? message : m)),
+          },
+        }));
+      } catch (err) {
+        set((s) => ({ messages: { ...s.messages, [ticketId]: prev } }));
+        throw err;
+      }
+    },
+
     async uploadAttachment(file) {
       return repository.uploadAttachment(file);
+    },
+
+    setComposerPrefill(text) {
+      set({ composerPrefill: text });
     },
 
     async createTicket(input) {

@@ -330,6 +330,17 @@ export class LocalRepository implements Repository {
       }));
   }
 
+  async deleteMessage(ticketId: string, messageId: string): Promise<Message> {
+    const m = this.data.messages.find((x) => x.id === messageId && x.ticketId === ticketId);
+    if (!m) throw new Error('Message not found');
+    if (m.deletedAt === undefined || m.deletedAt === null) {
+      m.deletedAt = new Date().toISOString();
+      m.deletedBy = CURRENT_AGENT_ID;
+    }
+    this.persist();
+    return { ...m, body: '', attachments: [] };
+  }
+
   async uploadAttachment(file: File): Promise<Attachment> {
     const attachment: Attachment = {
       id: nextId(this.data.attachments, 'at_', 4),

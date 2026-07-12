@@ -119,6 +119,9 @@ export interface Message {
   kind: 'reply' | 'note'; body: string; at: string;
   /** Populated on read (getMessages joins them); omitted on insert. */
   attachments?: Attachment[];
+  /** Soft-delete tombstone: set when a message is removed but kept for the record. */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
 }
 
 /** Model-provider config as stored server-side (includes the secret key). */

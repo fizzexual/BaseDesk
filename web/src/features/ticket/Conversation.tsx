@@ -1,11 +1,12 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
 import type { Attachment, Message, Ticket } from '../../data/types';
 import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
+import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
-import { IconPaperclip } from '../../icons';
+import { IconPaperclip, IconTrash } from '../../icons';
 
 /** Renders a message body, highlighting @mentions. */
 function Body({ text }: { text: string }) {
@@ -54,7 +55,13 @@ function Attachments({ items }: { items: Attachment[] }) {
   );
 }
 
-function MessageRow({ message }: { message: Message }) {
+function MessageRow({
+  message,
+  onContextMenu,
+}: {
+  message: Message;
+  onContextMenu: (e: MouseEvent, m: Message) => void;
+}) {
   const contacts = useApp((s) => s.contacts);
   const agents = useApp((s) => s.agents);
 
@@ -64,10 +71,26 @@ function MessageRow({ message }: { message: Message }) {
   const hue = author?.avatarHue ?? 0;
   const isNote = message.kind === 'note';
 
+  // A soft-deleted message shows a tombstone with who removed it and when.
+  if (message.deletedAt) {
+    const by = message.deletedBy ? (agents[message.deletedBy]?.name ?? 'an agent') : null;
+    return (
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-3">
+          <IconTrash size={13} />
+        </span>
+        <div className="min-w-0 rounded-lg rounded-tl-sm border border-dashed border-line px-3.5 py-2 text-[13px] italic text-text-3">
+          Message deleted{by ? ` by ${by}` : ''} · <TimeAgo iso={message.deletedAt} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-start gap-3">
       <Avatar name={name} hue={hue} size={28} className="mt-0.5" />
       <div
+        onContextMenu={(e) => onContextMenu(e, message)}
         className={cx(
           'min-w-0 max-w-[85%] rounded-lg rounded-tl-sm px-3.5 py-2.5',
           isNote
@@ -97,8 +120,11 @@ function MessageRow({ message }: { message: Message }) {
 
 export function Conversation({ ticket }: { ticket: Ticket }) {
   const messages = useApp((s) => s.messages[ticket.id]) as Message[] | undefined;
+  const deleteMessage = useApp((s) => s.deleteMessage);
   const endRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; message: Message } | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const count = messages?.length ?? 0;
 
@@ -109,6 +135,45 @@ export function Conversation({ ticket }: { ticket: Ticket }) {
     endRef.current?.scrollIntoView({ block: 'end', behavior: firstScroll ? 'auto' : 'smooth' });
   }, [ticket.id, count]);
 
+  function closeMenu() {
+    setMenu(null);
+    setConfirming(false);
+  }
+
+  useEffect(() => {
+    if (menu === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menu]);
+
+  function openMenu(e: MouseEvent, message: Message) {
+    if (message.deletedAt) return; // nothing to act on for a tombstone
+    e.preventDefault();
+    setConfirming(false);
+    setMenu({ x: Math.min(e.clientX, window.innerWidth - 190), y: e.clientY, message });
+  }
+
+  function copyText() {
+    if (menu === null) return;
+    void navigator.clipboard
+      .writeText(menu.message.body)
+      .then(() => toast('Message copied'))
+      .catch(() => toast('Could not copy'));
+    closeMenu();
+  }
+
+  function performDelete() {
+    if (menu === null) return;
+    const { message } = menu;
+    closeMenu();
+    deleteMessage(ticket.id, message.id)
+      .then(() => toast('Message deleted'))
+      .catch(() => toast('Could not delete the message'));
+  }
+
   if (messages === undefined) {
     return <div className="flex-1 overflow-y-auto px-4 py-5" />;
   }
@@ -116,9 +181,62 @@ export function Conversation({ ticket }: { ticket: Ticket }) {
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-5">
       {messages.map((m) => (
-        <MessageRow key={m.id} message={m} />
+        <MessageRow key={m.id} message={m} onContextMenu={openMenu} />
       ))}
       <div ref={endRef} />
+
+      {menu !== null && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={closeMenu}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              closeMenu();
+            }}
+          />
+          <div
+            role="menu"
+            className="fixed z-50 min-w-[170px] rounded-md border border-line bg-surface py-1 shadow-1"
+            style={{ left: menu.x, top: menu.y }}
+          >
+            {confirming ? (
+              <div className="px-3 py-2 text-[13px]">
+                <p className="text-text-2">Delete this message?</p>
+                <div className="mt-2 flex gap-3">
+                  <button type="button" className="font-medium text-red hover:underline" onClick={performDelete}>
+                    Delete
+                  </button>
+                  <button type="button" className="text-text-3 hover:text-text" onClick={closeMenu}>
+                    Cancel
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-text-3">A “message deleted” note stays as proof.</p>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center px-3 py-1.5 text-left text-[13px] text-text-2 transition-colors hover:bg-surface-2"
+                  onClick={copyText}
+                >
+                  Copy text
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-red transition-colors hover:bg-red-bg"
+                  onClick={() => setConfirming(true)}
+                >
+                  <IconTrash size={14} />
+                  Delete message
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

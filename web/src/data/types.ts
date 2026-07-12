@@ -170,6 +170,9 @@ export interface Message {
   authorKind: 'contact' | 'agent'; authorId: string;
   kind: 'reply' | 'note'; body: string; at: string;
   attachments?: Attachment[];
+  /** Soft-delete tombstone: who removed the message and when. */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
 }
 export interface Contact {
   id: string; name: string; email: string; company: string | null;
