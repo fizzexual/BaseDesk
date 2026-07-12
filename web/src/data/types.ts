@@ -247,5 +247,10 @@ export interface CsatStats {
   average: number;
   positivePct: number;
 }
+export interface SavedView {
+  id: string; name: string; view: ViewId;
+  priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
+}
+export type SavedViewCreate = Omit<SavedView, 'id'>;
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;

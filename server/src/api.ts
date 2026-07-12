@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getChannel, getChannels, getContact,
-  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSetting, getSmtpConfig, getTicket,
+  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, setSavedViews,
   insertAiAction, insertAttachment, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
@@ -24,7 +24,7 @@ import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, KbArticle, Message,
-  SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
+  SavedView, SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -357,6 +357,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       aiActions: getAiActions(db),
       channels: getChannels(db).map(toPublicChannel),
       customFields: getCustomFields(db),
+      savedViews: getSavedViews(db),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -2005,6 +2006,36 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     if (getCustomField(db, id) === null) return c.json({ error: `custom field not found: ${id}` }, 404);
     db.prepare('DELETE FROM custom_fields WHERE id = ?').run(id);
+    return c.json({ ok: true });
+  });
+
+  // ── Saved views ───────────────────────────────────────────────────────────
+  app.post('/api/saved-views', async (c) => {
+    let input: { name?: unknown; view?: unknown; priority?: unknown; assigneeId?: unknown; tag?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.name !== 'string' || input.name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    if (typeof input.view !== 'string' || input.view.trim() === '') return c.json({ error: 'view is required' }, 400);
+    const view: SavedView = {
+      id: newId('sv_'),
+      name: input.name.trim().slice(0, 60),
+      view: input.view as ViewId,
+      priority: PRIORITIES.includes(input.priority as TicketPriority) ? (input.priority as TicketPriority) : null,
+      assigneeId: typeof input.assigneeId === 'string' && input.assigneeId.trim() !== '' ? input.assigneeId.trim() : null,
+      tag: typeof input.tag === 'string' && input.tag.trim() !== '' ? input.tag.trim() : null,
+    };
+    setSavedViews(db, [...getSavedViews(db), view]);
+    return c.json(view);
+  });
+
+  app.delete('/api/saved-views/:id', (c) => {
+    const id = c.req.param('id');
+    const views = getSavedViews(db);
+    if (!views.some((v) => v.id === id)) return c.json({ error: `saved view not found: ${id}` }, 404);
+    setSavedViews(db, views.filter((v) => v.id !== id));
     return c.json({ ok: true });
   });
 

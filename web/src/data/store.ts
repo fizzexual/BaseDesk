@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -23,6 +23,7 @@ export interface AppState {
   aiActions: Record<string, AiAction>;
   channels: Record<string, ChannelConn>;
   customFields: CustomFieldDef[]; // ordered by entity + position
+  savedViews: SavedView[];
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
@@ -70,6 +71,8 @@ export interface AppState {
   createCustomField(input: CustomFieldCreate): Promise<void>;
   updateCustomField(id: string, patch: CustomFieldPatch): Promise<void>;
   deleteCustomField(id: string): Promise<void>;
+  createSavedView(input: SavedViewCreate): Promise<void>;
+  deleteSavedView(id: string): Promise<void>;
   setTicketField(ticketId: string, fieldId: string, value: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
@@ -147,6 +150,7 @@ export function createAppStore(repository: Repository) {
     aiActions: {},
     channels: {},
     customFields: [],
+    savedViews: [],
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
     messages: {},
@@ -171,6 +175,7 @@ export function createAppStore(repository: Repository) {
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         customFields: data.customFields,
+        savedViews: data.savedViews,
         aiProvider: data.aiProvider,
         smtp: data.smtp,
         currentAgentId: data.currentAgentId,
@@ -724,6 +729,22 @@ export function createAppStore(repository: Repository) {
         await repository.deleteCustomField(id);
       } catch (err) {
         set({ customFields: prev });
+        throw err;
+      }
+    },
+
+    async createSavedView(input) {
+      const view = await repository.createSavedView(input);
+      set((s) => ({ savedViews: [...s.savedViews, view] }));
+    },
+
+    async deleteSavedView(id) {
+      const prev = get().savedViews;
+      set((s) => ({ savedViews: s.savedViews.filter((v) => v.id !== id) }));
+      try {
+        await repository.deleteSavedView(id);
+      } catch (err) {
+        set({ savedViews: prev });
         throw err;
       }
     },

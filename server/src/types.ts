@@ -237,6 +237,12 @@ export interface StatsOverview {
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;
 
+/** A named, pinned inbox filter. */
+export interface SavedView {
+  id: string; name: string; view: ViewId;
+  priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
+}
+
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
@@ -246,4 +252,5 @@ export interface BootstrapData {
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   customFields: CustomFieldDef[];
+  savedViews: SavedView[];
 }

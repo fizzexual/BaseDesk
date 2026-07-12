@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, Message, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -222,6 +222,20 @@ export function openDb(dataDir: string): DatabaseSync {
 export function getSetting(db: DatabaseSync, key: string): string | null {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? null;
+}
+
+export function getSavedViews(db: DatabaseSync): SavedView[] {
+  const raw = getSetting(db, 'saved_views');
+  if (raw === null) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as SavedView[]) : [];
+  } catch {
+    return [];
+  }
+}
+export function setSavedViews(db: DatabaseSync, views: SavedView[]): void {
+  setSetting(db, 'saved_views', JSON.stringify(views));
 }
 
 export function setSetting(db: DatabaseSync, key: string, value: string): void {

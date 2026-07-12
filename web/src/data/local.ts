@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
-  Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   DraftResult, KbArticle, Message, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
@@ -87,6 +87,7 @@ interface LocalData {
   smtp: SmtpSettings;
   customFields: CustomFieldDef[];
   attachments: Attachment[];
+  savedViews: SavedView[];
 }
 
 function slugify(title: string): string {
@@ -177,6 +178,7 @@ function seedData(): LocalData {
     smtp: { ...DEFAULT_SMTP },
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
     attachments: [],
+    savedViews: [],
   };
 }
 
@@ -253,6 +255,10 @@ export class LocalRepository implements Repository {
         this.data.attachments = [];
         this.persist();
       }
+      if (!Array.isArray(this.data.savedViews)) {
+        this.data.savedViews = [];
+        this.persist();
+      }
       // Backfill business-hours SLA + richer agent fields, and migrate v0.3
       // single-condition automation to the v0.4 multi-condition shape.
       if (this.data.slaHours === undefined) {
@@ -317,6 +323,7 @@ export class LocalRepository implements Repository {
       aiProvider: { ...this.data.aiProvider },
       smtp: { ...this.data.smtp },
       customFields: this.data.customFields.map((f) => ({ ...f, options: [...f.options] })),
+      savedViews: this.data.savedViews.map((v) => ({ ...v })),
     };
   }
 
@@ -963,6 +970,18 @@ export class LocalRepository implements Repository {
 
   async deleteCustomField(id: string): Promise<void> {
     this.data.customFields = this.data.customFields.filter((f) => f.id !== id);
+    this.persist();
+  }
+
+  async createSavedView(input: SavedViewCreate): Promise<SavedView> {
+    const view: SavedView = { id: nextId(this.data.savedViews, 'sv_', 1), ...input };
+    this.data.savedViews.push(view);
+    this.persist();
+    return { ...view };
+  }
+
+  async deleteSavedView(id: string): Promise<void> {
+    this.data.savedViews = this.data.savedViews.filter((v) => v.id !== id);
     this.persist();
   }
 

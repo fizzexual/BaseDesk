@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType, type MouseEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useApp } from '../../data/store';
 import { useTicketsForView } from '../../data/hooks';
 import type { Contact, Ticket, TicketPatch, TicketPriority, ViewId } from '../../data/types';
@@ -105,10 +105,15 @@ export function InboxPage() {
   const agents = useApp((s) => s.agents);
   const currentAgentId = useApp((s) => s.currentAgentId);
   const patchTicket = useApp((s) => s.patchTicket);
+  const savedViews = useApp((s) => s.savedViews);
+  const createSavedView = useApp((s) => s.createSavedView);
+  const [searchParams] = useSearchParams();
+  const svId = searchParams.get('sv');
 
   const [query, setQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [snooze, setSnooze] = useState<{ ticket: Ticket; rect: DOMRect } | null>(null);
@@ -135,6 +140,7 @@ export function InboxPage() {
     return ticketsInView.filter((t) => {
       if (priorityFilter !== null && t.priority !== priorityFilter) return false;
       if (assigneeFilter !== null && t.assigneeId !== assigneeFilter) return false;
+      if (tagFilter !== null && !t.tags.includes(tagFilter)) return false;
       if (q === '') return true;
       const contact = contacts[t.requesterId] as Contact | undefined;
       return (
@@ -143,7 +149,7 @@ export function InboxPage() {
         (contact !== undefined && contact.name.toLowerCase().includes(q))
       );
     });
-  }, [ticketsInView, contacts, query, priorityFilter, assigneeFilter]);
+  }, [ticketsInView, contacts, query, priorityFilter, assigneeFilter, tagFilter]);
 
   const selected: Ticket | undefined = selectedIndex >= 0 ? visible[selectedIndex] : undefined;
 
@@ -189,6 +195,15 @@ export function InboxPage() {
     setCtx(null);
     setCheckedIds(new Set());
   }, [view]);
+
+  // Apply a saved view's filters when one is opened; clear them on a plain view.
+  useEffect(() => {
+    const sv = svId ? savedViews.find((v) => v.id === svId) : undefined;
+    setPriorityFilter(sv ? sv.priority : null);
+    setAssigneeFilter(sv ? sv.assigneeId : null);
+    setTagFilter(sv ? sv.tag : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [svId, view, savedViews]);
 
   // Keep the selection inside the list when it shrinks (solve, filter, …).
   useEffect(() => {
@@ -347,7 +362,8 @@ export function InboxPage() {
     !newTicketOpen,
   );
 
-  const filterCount = (priorityFilter !== null ? 1 : 0) + (assigneeFilter !== null ? 1 : 0);
+  const filterCount =
+    (priorityFilter !== null ? 1 : 0) + (assigneeFilter !== null ? 1 : 0) + (tagFilter !== null ? 1 : 0);
   const filterItems: MenuItem[] = [
     {
       label: 'All priorities',
@@ -374,7 +390,25 @@ export function InboxPage() {
         onSelect: () => setAssigneeFilter(a.id),
       }),
     ),
+    ...(allTags.length > 0
+      ? ([
+          { separator: true },
+          { label: 'All tags', checked: tagFilter === null, onSelect: () => setTagFilter(null) },
+          ...allTags.map((tag): MenuItem => ({ label: tag, checked: tagFilter === tag, onSelect: () => setTagFilter(tag) })),
+        ] as MenuItem[])
+      : []),
   ];
+
+  async function saveCurrentView() {
+    const name = window.prompt('Name this view:');
+    if (name === null || name.trim() === '') return;
+    try {
+      await createSavedView({ name: name.trim(), view, priority: priorityFilter, assigneeId: assigneeFilter, tag: tagFilter });
+      toast('View saved to the sidebar');
+    } catch {
+      toast('Could not save the view');
+    }
+  }
 
   const total = ticketsInView.length;
   const countLabel =
@@ -428,6 +462,15 @@ export function InboxPage() {
           }
           items={filterItems}
         />
+        {filterCount > 0 && (
+          <button
+            type="button"
+            className="h-8 shrink-0 select-none rounded-sm px-2.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+            onClick={() => void saveCurrentView()}
+          >
+            Save view
+          </button>
+        )}
         <div className="flex h-8 items-center rounded-md bg-surface-2 p-0.5" role="group" aria-label="Ticket layout">
           {([
             { mode: 'list' as const, Icon: IconList, label: 'List view' },

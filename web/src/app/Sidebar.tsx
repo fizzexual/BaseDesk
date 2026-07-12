@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { NavLink } from 'react-router';
+import { NavLink, useSearchParams } from 'react-router';
 import { useCounts } from '../data/hooks';
 import { useApp } from '../data/store';
 import type { Counts, ViewId } from '../data/types';
@@ -13,6 +13,7 @@ import {
   IconChevronDown,
   IconCircle,
   IconClock,
+  IconFilter,
   IconNote,
   IconPause,
   IconPlus,
@@ -22,6 +23,7 @@ import {
   IconTrash,
   IconUser,
   IconUserPlus,
+  IconX,
 } from '../icons';
 
 type Item = {
@@ -131,7 +133,12 @@ export function Sidebar() {
     }
     return { drafts, resolved };
   }, [aiActions]);
+  const savedViews = useApp((s) => s.savedViews);
+  const deleteSavedView = useApp((s) => s.deleteSavedView);
+  const [searchParams] = useSearchParams();
+  const activeSv = searchParams.get('sv');
   const [ticketsOpen, setTicketsOpen] = useState(() => readBool('basedesk-nav-tickets', true));
+  const [savedOpen, setSavedOpen] = useState(() => readBool('basedesk-nav-saved', true));
   const [aiOpen, setAiOpen] = useState(() => readBool('basedesk-nav-ai', true));
   const [more, setMore] = useState(() => readBool('basedesk-nav-more', true));
 
@@ -182,6 +189,43 @@ export function Sidebar() {
             <IconChevronDown size={16} className={cx('transition-transform', more && 'rotate-180')} />
             {more ? 'Less' : 'More'}
           </button>
+        </>
+      )}
+
+      {savedViews.length > 0 && (
+        <>
+          <div className="mt-3" />
+          <GroupHeader
+            label="Saved"
+            open={savedOpen}
+            onToggle={() => {
+              setSavedOpen(!savedOpen);
+              writeBool('basedesk-nav-saved', !savedOpen);
+            }}
+          />
+          {savedOpen &&
+            savedViews.map((v) => (
+              <div key={v.id} className="group flex items-center">
+                <NavLink
+                  to={`/view/${v.view}?sv=${v.id}`}
+                  className={cx(
+                    'flex h-8 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-[14px] font-medium transition-colors',
+                    activeSv === v.id ? 'bg-surface-3 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
+                  )}
+                >
+                  <IconFilter size={16} className="shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                </NavLink>
+                <button
+                  type="button"
+                  aria-label={`Delete saved view ${v.name}`}
+                  className="ml-0.5 hidden size-6 shrink-0 items-center justify-center rounded-sm text-text-3 hover:bg-surface-2 hover:text-red group-hover:flex"
+                  onClick={() => void deleteSavedView(v.id).catch(() => {})}
+                >
+                  <IconX size={13} />
+                </button>
+              </div>
+            ))}
         </>
       )}
 

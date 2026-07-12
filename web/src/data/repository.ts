@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -13,6 +13,7 @@ export interface BootstrapData {
   aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
   slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
   customFields: CustomFieldDef[];
+  savedViews: SavedView[];
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -50,6 +51,8 @@ export interface Repository {
   createCustomField(input: CustomFieldCreate): Promise<CustomFieldDef>;
   updateCustomField(id: string, patch: CustomFieldPatch): Promise<CustomFieldDef>;
   deleteCustomField(id: string): Promise<void>;
+  createSavedView(input: SavedViewCreate): Promise<SavedView>;
+  deleteSavedView(id: string): Promise<void>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;
   deleteAgent(id: string): Promise<void>;
