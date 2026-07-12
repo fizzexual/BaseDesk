@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar';
 import { Tooltip } from '../components/Tooltip';
 import {
   IconBook,
+  IconChannels,
   IconChart,
   IconContacts,
   IconInbox,
@@ -17,6 +18,7 @@ import { ThemeToggle } from './ThemeToggle';
 
 const NAV = [
   { to: '/view/all', label: 'Inbox', icon: IconInbox, matches: ['/view', '/ticket'] },
+  { to: '/channels', label: 'Channels', icon: IconChannels, matches: ['/channels'] },
   { to: '/contacts', label: 'Contacts', icon: IconContacts, matches: ['/contacts'] },
   { to: '/revenue', label: 'Revenue', icon: IconRevenue, matches: ['/revenue'] },
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },

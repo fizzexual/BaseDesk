@@ -5,6 +5,7 @@ export { IconContacts } from './IconContacts';
 export { IconUser } from './IconUser';
 export { IconUserPlus } from './IconUserPlus';
 export { IconPlay } from './IconPlay';
+export { IconChannels } from './IconChannels';
 export { IconChart } from './IconChart';
 export { IconSearch } from './IconSearch';
 export { IconFilter } from './IconFilter';

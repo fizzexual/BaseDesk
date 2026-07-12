@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useApp } from '../../data/store';
-import type { Ticket, TicketPatch, TicketStatus } from '../../data/types';
+import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { Menu, type MenuItem } from '../../components/Menu';
@@ -31,6 +31,7 @@ import {
   IconX,
 } from '../../icons';
 import { useShortcuts } from '../palette/shortcuts';
+import { CHANNEL_META } from '../channels/ChannelDialog';
 import { Conversation } from './Conversation';
 import { Composer } from './Composer';
 import { ContextPanel } from './ContextPanel';
@@ -223,6 +224,8 @@ export function TicketPage() {
   const ticket = useApp((s) => s.tickets[id]) as Ticket | undefined;
   const agents = useApp((s) => s.agents);
   const slaTargets = useApp((s) => s.sla);
+  const slaHours = useApp((s) => s.slaHours);
+  const channels = useApp((s) => s.channels);
   const exists = ticket !== undefined;
 
   useEffect(() => {
@@ -254,6 +257,10 @@ export function TicketPage() {
 
   const assignee = ticket.assigneeId !== null ? agents[ticket.assigneeId] : undefined;
   const agentList = Object.values(agents);
+
+  const sourceChannel: ChannelConn | undefined =
+    ticket.channelId !== null ? channels[ticket.channelId] : undefined;
+  const SourceGlyph = sourceChannel ? CHANNEL_META[sourceChannel.type].glyph : null;
 
   const assigneeItems: MenuItem[] = agentList.map((a) => ({
     label: a.name,
@@ -317,9 +324,18 @@ export function TicketPage() {
             </button>
           </Tooltip>
           <span className="shrink-0 text-[13px] text-text-3 tabular-nums">#{ticket.number}</span>
+          {sourceChannel && SourceGlyph && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 text-[12px] text-text-3"
+              title={`Source: ${CHANNEL_META[sourceChannel.type].label}`}
+            >
+              <SourceGlyph size={12} className="shrink-0" />
+              <span className="max-w-[140px] truncate">{sourceChannel.name}</span>
+            </span>
+          )}
           <SubjectTitle ticket={ticket} onRename={(subject) => patch({ subject })} />
           <div className="flex shrink-0 items-center gap-2">
-            <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now())} className="mr-1" />
+            <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now(), slaHours)} className="mr-1" />
             <Menu
               triggerLabel="Change status"
               triggerClassName="rounded-full transition-opacity hover:opacity-80"

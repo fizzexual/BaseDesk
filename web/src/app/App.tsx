@@ -15,6 +15,7 @@ import { AiPage } from '../features/ai/AiPage';
 import { DraftsPage } from '../features/ai/DraftsPage';
 import { ResolvedPage } from '../features/ai/ResolvedPage';
 import { KbPage } from '../features/kb/KbPage';
+import { ChannelsPage } from '../features/channels/ChannelsPage';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -67,6 +68,7 @@ export function App() {
             <Route path="/ai/resolved" element={<ResolvedPage />} />
             <Route path="/kb" element={<KbPage />} />
             <Route path="/kb/:id" element={<KbPage />} />
+            <Route path="/channels" element={<ChannelsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/:tab" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/view/all" replace />} />
