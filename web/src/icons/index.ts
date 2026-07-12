@@ -8,6 +8,8 @@ export { IconPlay } from './IconPlay';
 export { IconChart } from './IconChart';
 export { IconSearch } from './IconSearch';
 export { IconFilter } from './IconFilter';
+export { IconGrid } from './IconGrid';
+export { IconList } from './IconList';
 export { IconPlus } from './IconPlus';
 export { IconChevronDown } from './IconChevronDown';
 export { IconChevronUp } from './IconChevronUp';

@@ -12,7 +12,9 @@ import {
   IconAlert,
   IconCheck,
   IconFilter,
+  IconGrid,
   IconInbox,
+  IconList,
   IconPlus,
   IconSearch,
   IconSnooze,
@@ -22,6 +24,17 @@ import { useShortcuts } from '../palette/shortcuts';
 import { NewTicketDialog } from './NewTicketDialog';
 import { SnoozePopover } from './SnoozePopover';
 import { TicketTable } from './TicketTable';
+import { TicketCards } from './TicketCards';
+
+type ViewMode = 'list' | 'cards';
+
+function readViewMode(): ViewMode {
+  try {
+    return localStorage.getItem('basedesk-inbox-view') === 'cards' ? 'cards' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 const VIEW_TITLES: Record<ViewId, string> = {
   all: 'All tickets',
@@ -83,6 +96,16 @@ export function InboxPage() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [snooze, setSnooze] = useState<{ ticket: Ticket; rect: DOMRect } | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+
+  function chooseViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('basedesk-inbox-view', mode);
+    } catch {
+      /* ignore */
+    }
+  }
 
   const agentList = useMemo(
     () => Object.values(agents).sort((a, b) => a.name.localeCompare(b.name)),
@@ -274,6 +297,26 @@ export function InboxPage() {
           }
           items={filterItems}
         />
+        <div className="flex h-8 items-center rounded-md bg-surface-2 p-0.5" role="group" aria-label="Ticket layout">
+          {([
+            { mode: 'list' as const, Icon: IconList, label: 'List view' },
+            { mode: 'cards' as const, Icon: IconGrid, label: 'Card view' },
+          ]).map(({ mode, Icon, label }) => (
+            <button
+              key={mode}
+              type="button"
+              aria-label={label}
+              aria-pressed={viewMode === mode}
+              className={cx(
+                'inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors',
+                viewMode === mode ? 'bg-surface text-text shadow-1' : 'text-text-2 hover:text-text',
+              )}
+              onClick={() => chooseViewMode(mode)}
+            >
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
         <Button variant="primary" size="sm" onClick={() => setNewTicketOpen(true)}>
           <IconPlus size={15} className="shrink-0" />
           New ticket
@@ -282,7 +325,11 @@ export function InboxPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length > 0 ? (
-          <TicketTable tickets={visible} selectedId={selected?.id ?? null} />
+          viewMode === 'cards' ? (
+            <TicketCards tickets={visible} selectedId={selected?.id ?? null} />
+          ) : (
+            <TicketTable tickets={visible} selectedId={selected?.id ?? null} />
+          )
         ) : total > 0 ? (
           <EmptyState
             icon={IconSearch}
