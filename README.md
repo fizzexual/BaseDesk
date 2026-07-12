@@ -49,6 +49,10 @@ Team — invite teammates with roles and shareable links:
 
 ![Team settings](docs/screenshots/settings-team-light.png)
 
+Connect a model — bring any OpenAI-compatible provider (DeepSeek shown) to power the copilot:
+
+![AI model provider](docs/screenshots/ai-provider-light.png)
+
 <details>
 <summary>Dark theme</summary>
 
@@ -98,7 +102,7 @@ npm run typecheck  # strict TS, both workspaces
 - **Inbox views**: All / Unassigned / My open / Snoozed / per-status / Archive / Spam / Trash, with live counts — switchable between a compact **list** and a **card** layout
 - **Ticket workspace**: threaded conversation, internal notes with @mentions, canned replies, tags, snooze presets, customer-360 side panel
 - **Revenue**: log expansion/retention/inbound deals from a conversation; pipeline, account-health rollup, revenue reporting, and a live "closed this week" figure
-- **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, bring-your-own model provider optional
+- **AI copilot** (human-in-the-loop): reply drafts grounded in the thread + your canned replies, priority/tag triage suggestions, and one-line thread summaries — runs locally with no key, and connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama) to power drafts with a real model. Your API key is stored on your server, never in the browser, and it always falls back to the rule-based engine
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; drafts queue for approval and KB-grounded deflections send automatically
 - **Channels**: a multi-source inbox — a live web-chat widget and generic inbound webhook work out of the box; email/Discord/Slack/WhatsApp connect via forwarding or webhook now (native connectors and outbound delivery are a hosted-deploy concern). Each ticket shows its source
 - **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
@@ -124,6 +128,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Business-hours-aware SLA clocks** — pause outside working hours *(v0.4)*
 - [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
 - [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
+- [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents, key kept server-side, rule-based fallback *(v0.5)*
 - [ ] Holiday calendars for SLA clocks
 - [ ] Native email ingestion (IMAP/SMTP + Gmail/MS365 OAuth) and outbound delivery — bulletproof threading or nothing
 - [ ] Native Slack & Discord connectors with two-way sync
