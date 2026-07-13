@@ -166,6 +166,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **CSV import** — bring **contacts** and **tickets** in from any CSV (Zendesk/Freshdesk export, spreadsheet, …): columns auto-map by header with manual override, a dry-run preview shows what will be created/skipped/errored before you commit, and invalid/duplicate rows are reported per-row *(v0.6)*
 - [x] **Auto-assignment** — route new unassigned tickets to your active agents automatically, **round-robin** (cycle in turn) or **least-busy** (fewest open tickets); toggle it under Settings → Automation *(v0.6)*
 - [x] **Activity log** — a ticket's status, priority, assignee, and tag changes (plus merges and auto-assignments) are recorded and shown inline in the conversation timeline, with who did it and when *(v0.6)*
+- [x] **CSV export** — download all contacts or tickets as a CSV (one row per record, RFC-4180 quoting) from Settings → Import, the round-trip complement to CSV import *(v0.6)*
 - [ ] Single-binary packaging
 
 ## Philosophy

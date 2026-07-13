@@ -13,8 +13,23 @@ const SAMPLE: Record<ImportType, string> = {
 
 const SELECT_CLASS = 'h-9 w-full rounded-sm border border-line bg-surface px-2 text-[13px]';
 
+/** Trigger a client-side download of CSV text. */
+function downloadCsv(filename: string, text: string) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ImportSettings() {
   const importData = useApp((s) => s.importData);
+  const exportCsv = useApp((s) => s.exportCsv);
+  const [exporting, setExporting] = useState<ImportType | null>(null);
   const [type, setType] = useState<ImportType>('contacts');
   const [csv, setCsv] = useState('');
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -62,6 +77,18 @@ export function ImportSettings() {
     }
   }
 
+  async function doExport(t: ImportType) {
+    if (exporting !== null) return;
+    setExporting(t);
+    try {
+      downloadCsv(`basedesk-${t}.csv`, await exportCsv(t));
+    } catch {
+      toast('Could not export the CSV');
+    } finally {
+      setExporting(null);
+    }
+  }
+
   function setField(key: string, header: string) {
     const next = { ...overrides, [key]: header };
     setOverrides(next);
@@ -83,6 +110,21 @@ export function ImportSettings() {
 
   return (
     <section>
+      <div className="mb-6 border-b border-line pb-6">
+        <h2 className="text-[15px] font-semibold">Export to CSV</h2>
+        <p className="mt-1 text-[13px] text-text-3">Download a snapshot of your data — one row per record.</p>
+        <div className="mt-3 flex gap-2">
+          <Button variant="subtle" size="sm" disabled={exporting !== null} onClick={() => void doExport('contacts')}>
+            <IconImport size={15} className="rotate-180" />
+            {exporting === 'contacts' ? 'Exporting…' : 'Export contacts'}
+          </Button>
+          <Button variant="subtle" size="sm" disabled={exporting !== null} onClick={() => void doExport('tickets')}>
+            <IconImport size={15} className="rotate-180" />
+            {exporting === 'tickets' ? 'Exporting…' : 'Export tickets'}
+          </Button>
+        </div>
+      </div>
+
       <h2 className="text-[15px] font-semibold">Import from CSV</h2>
       <p className="mt-1 text-[13px] text-text-3">
         Bring contacts or tickets over from another tool. Export a CSV from Zendesk, Freshdesk, a spreadsheet — anything —

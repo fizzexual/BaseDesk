@@ -23,6 +23,16 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
 export const IMPORT_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+function csvCell(value: string | number | null): string {
+  const s = value === null ? '' : String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Serialize a header row + data rows to CSV text (RFC-4180, CRLF). */
+export function toCsv(headers: string[], rows: (string | number | null)[][]): string {
+  return [headers.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\r\n');
+}
+
 function parseRecords(text: string): string[][] {
   const rows: string[][] = [];
   const s = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');

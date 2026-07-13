@@ -41,6 +41,18 @@ function parseRecords(text: string): string[][] {
   return rows;
 }
 
+/** Quote a single CSV cell when it contains a comma, quote, or newline. */
+function csvCell(value: string | number | null): string {
+  const s = value === null ? '' : String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Serialize a header row + data rows to CSV text (CRLF line endings, RFC-4180). */
+export function toCsv(headers: string[], rows: (string | number | null)[][]): string {
+  const lines = [headers.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))];
+  return lines.join('\r\n');
+}
+
 /**
  * Parse CSV text into a header list and an array of row objects keyed by header.
  * Fully blank lines are dropped; values are trimmed.

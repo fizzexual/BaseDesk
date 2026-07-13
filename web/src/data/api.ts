@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, TicketEvent, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -197,6 +197,12 @@ export class ApiRepository implements Repository {
   async importData(input: ImportInput): Promise<ImportResult> {
     const res = await fetch('/api/import', jsonInit('POST', input));
     return (await res.json()) as ImportResult;
+  }
+
+  async exportCsv(type: ImportType): Promise<string> {
+    const res = await fetch(`/api/export?type=${encodeURIComponent(type)}`);
+    if (!res.ok) throw new Error('export failed');
+    return res.text();
   }
 
   inviteAgent(input: AgentInvite): Promise<Agent> {

@@ -2,10 +2,10 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, DraftResult, ImportInput, ImportResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
-import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv } from './import';
+import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
@@ -1155,6 +1155,21 @@ export class LocalRepository implements Repository {
       .filter((n) => n.agentId === CURRENT_AGENT_ID)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((n) => ({ ...n }));
+  }
+
+  async exportCsv(type: ImportType): Promise<string> {
+    if (type === 'contacts') {
+      const rows = this.data.contacts.map((c) => [c.name, c.email, c.company, c.mrr, c.location, c.createdAt]);
+      return toCsv(['name', 'email', 'company', 'mrr', 'location', 'createdAt'], rows);
+    }
+    const agentName = (id: string | null) => (id !== null ? this.data.agents.find((a) => a.id === id)?.name ?? '' : '');
+    const rows = [...this.data.tickets]
+      .sort((a, b) => a.number - b.number)
+      .map((t) => {
+        const email = this.data.contacts.find((c) => c.id === t.requesterId)?.email ?? '';
+        return [t.number, t.subject, t.status, t.priority, email, agentName(t.assigneeId), t.tags.join(', '), t.channel, t.createdAt, t.updatedAt, t.resolvedAt];
+      });
+    return toCsv(['number', 'subject', 'status', 'priority', 'requesterEmail', 'assignee', 'tags', 'channel', 'createdAt', 'updatedAt', 'resolvedAt'], rows);
   }
 
   async importData(input: ImportInput): Promise<ImportResult> {

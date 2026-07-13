@@ -11,7 +11,7 @@ import {
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
-import { parseCsv } from './csv.js';
+import { parseCsv, toCsv } from './csv.js';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
@@ -999,6 +999,38 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   // Import contacts or tickets from CSV. With dryRun, nothing is written — it
   // returns the resolved column mapping and a per-row preview of what would
   // happen, so the UI can confirm before committing.
+  // Export contacts or tickets as a downloadable CSV.
+  app.get('/api/export', (c) => {
+    const type = c.req.query('type');
+    if (type !== 'contacts' && type !== 'tickets') return c.json({ error: "type must be 'contacts' or 'tickets'" }, 400);
+
+    let csv: string;
+    if (type === 'contacts') {
+      const rows = (db.prepare('SELECT * FROM contacts ORDER BY rowid').all() as unknown as Contact[]).map((ct) => [
+        ct.name, ct.email, ct.company, ct.mrr, ct.location, ct.createdAt,
+      ]);
+      csv = toCsv(['name', 'email', 'company', 'mrr', 'location', 'createdAt'], rows);
+    } else {
+      const tickets = (db.prepare('SELECT * FROM tickets ORDER BY number').all() as unknown as TicketRow[]).map(rowToTicket);
+      const rows = tickets.map((t) => {
+        const requester = getContact(db, t.requesterId);
+        const assignee = t.assigneeId !== null ? agentName(t.assigneeId) : '';
+        return [
+          t.number, t.subject, t.status, t.priority, requester?.email ?? '', assignee,
+          t.tags.join(', '), t.channel, t.createdAt, t.updatedAt, t.resolvedAt,
+        ];
+      });
+      csv = toCsv(
+        ['number', 'subject', 'status', 'priority', 'requesterEmail', 'assignee', 'tags', 'channel', 'createdAt', 'updatedAt', 'resolvedAt'],
+        rows,
+      );
+    }
+    return c.body(csv, 200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="basedesk-${type}.csv"`,
+    });
+  });
+
   app.post('/api/import', async (c) => {
     let input: { type?: unknown; csv?: unknown; mapping?: unknown; dryRun?: unknown };
     try {
