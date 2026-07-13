@@ -34,6 +34,15 @@ export function setApiKey(key: string | null): void {
 export function aiEnabled(): boolean {
   return read(ENABLED_STORAGE) !== '0';
 }
+
+/** Turn a server fallback `reason` into a message that tells the user what to do.
+ *  'off' (or none) means no provider is set up; anything else is a provider error. */
+export function aiFallbackMessage(reason: string | undefined): string {
+  if (reason === undefined || reason === 'off') {
+    return 'AI isn’t set up yet — add your provider key under Settings → AI to get real model-written replies.';
+  }
+  return `AI provider error: ${reason} — showing a rule-based draft. Check Settings → AI.`;
+}
 export function setAiEnabled(on: boolean): void {
   write(ENABLED_STORAGE, on ? '1' : '0');
 }

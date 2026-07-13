@@ -12,7 +12,7 @@ import { toast } from '../../components/Toast';
 import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
 import { TicketCustomFields } from './TicketCustomFields';
-import { aiEnabled } from '../ai/engine';
+import { aiEnabled, aiFallbackMessage } from '../ai/engine';
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -123,8 +123,9 @@ function RevenueAwarePanel({
     if (summarizing) return;
     setSummarizing(true);
     try {
-      const { summary: text } = await aiSummarize(ticket.id);
+      const { summary: text, source, reason } = await aiSummarize(ticket.id);
       setSummary(text);
+      if (source === 'rules') toast(aiFallbackMessage(reason));
     } catch {
       setSummary('Could not summarise this thread.');
     } finally {

@@ -12,6 +12,13 @@ export type AiSource = 'model' | 'rules';
 /** No tokens spent — the rule-based path is free. */
 const ZERO_USAGE: TokenUsage = { promptTokens: 0, completionTokens: 0 };
 
+/** Why a model-backed call degraded to rules — 'off' (provider not configured)
+ *  or the provider's error message — so the UI can guide the user. */
+const NOT_CONFIGURED = 'off';
+function failReason(err: unknown): string {
+  return err instanceof Error && err.message !== '' ? err.message : 'AI request failed';
+}
+
 const PRIORITY_ORDER: TicketPriority[] = ['low', 'medium', 'high', 'urgent'];
 const rank = (p: TicketPriority): number => PRIORITY_ORDER.indexOf(p);
 
@@ -48,6 +55,8 @@ export interface TriageResult {
   reason: string;
   source: AiSource;
   usage: TokenUsage;
+  /** Why it fell back to rules ('off' or an error message); absent on a model result. */
+  fallbackReason?: string;
 }
 
 function reasonFor(priority: TicketPriority | null, tags: string[]): string {
@@ -65,7 +74,7 @@ export async function suggestTriageAI(
   fallback: { priority: TicketPriority | null; tags: string[] },
 ): Promise<TriageResult> {
   const fb: TriageResult = { ...fallback, reason: reasonFor(fallback.priority, fallback.tags), source: 'rules', usage: ZERO_USAGE };
-  if (!providerReady(cfg)) return fb;
+  if (!providerReady(cfg)) return { ...fb, fallbackReason: NOT_CONFIGURED };
   try {
     const { text: raw, usage } = await chat(toLlm(cfg), triageMessages(ctx), { json: true, maxTokens: budget(cfg, 'triage'), temperature: 0 });
     const obj = extractJson(raw) as { priority?: unknown; tags?: unknown; reason?: unknown };
@@ -87,30 +96,30 @@ export async function suggestTriageAI(
     }
     const reason = typeof obj.reason === 'string' && obj.reason.trim() !== '' ? obj.reason.trim() : reasonFor(priority, tags);
     return { priority, tags, reason, source: 'model', usage };
-  } catch {
-    return fb;
+  } catch (err) {
+    return { ...fb, fallbackReason: failReason(err) };
   }
 }
 
 /** Model-backed reply draft; falls back to the rule-based draft string. */
-export async function draftReplyAI(cfg: AiProviderConfig, ctx: DraftCtx, fallback: string): Promise<{ body: string; source: AiSource; usage: TokenUsage }> {
-  if (!providerReady(cfg)) return { body: fallback, source: 'rules', usage: ZERO_USAGE };
+export async function draftReplyAI(cfg: AiProviderConfig, ctx: DraftCtx, fallback: string): Promise<{ body: string; source: AiSource; usage: TokenUsage; reason?: string }> {
+  if (!providerReady(cfg)) return { body: fallback, source: 'rules', usage: ZERO_USAGE, reason: NOT_CONFIGURED };
   try {
     const { text: body, usage } = await chat(toLlm(cfg), draftMessages(ctx, cfg.kbOnly), { maxTokens: budget(cfg, 'draft') });
     return { body, source: 'model', usage };
-  } catch {
-    return { body: fallback, source: 'rules', usage: ZERO_USAGE };
+  } catch (err) {
+    return { body: fallback, source: 'rules', usage: ZERO_USAGE, reason: failReason(err) };
   }
 }
 
 /** Model-backed one-line summary; falls back to the rule-based summary. */
-export async function summarizeThreadAI(cfg: AiProviderConfig, ctx: SummaryCtx, fallback: string): Promise<{ summary: string; source: AiSource; usage: TokenUsage }> {
-  if (!providerReady(cfg)) return { summary: fallback, source: 'rules', usage: ZERO_USAGE };
+export async function summarizeThreadAI(cfg: AiProviderConfig, ctx: SummaryCtx, fallback: string): Promise<{ summary: string; source: AiSource; usage: TokenUsage; reason?: string }> {
+  if (!providerReady(cfg)) return { summary: fallback, source: 'rules', usage: ZERO_USAGE, reason: NOT_CONFIGURED };
   try {
     const { text: summary, usage } = await chat(toLlm(cfg), summaryMessages(ctx), { maxTokens: budget(cfg, 'summary'), temperature: 0.2 });
     return { summary, source: 'model', usage };
-  } catch {
-    return { summary: fallback, source: 'rules', usage: ZERO_USAGE };
+  } catch (err) {
+    return { summary: fallback, source: 'rules', usage: ZERO_USAGE, reason: failReason(err) };
   }
 }
 

@@ -166,9 +166,10 @@ export interface SmtpTestResult { ok: boolean; to?: string; error?: string }
 export interface AiTestResult { ok: boolean; model?: string; latencyMs?: number; error?: string; empty?: boolean }
 export type AiSource = 'model' | 'rules';
 export interface TokenUsage { promptTokens: number; completionTokens: number }
-export interface DraftResult { body: string; source: AiSource; usage: TokenUsage }
-export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource; usage: TokenUsage }
-export interface SummaryResult { summary: string; source: AiSource; usage: TokenUsage }
+/** `reason`/`fallbackReason` explains a rule-based fallback: 'off' (AI not set up) or a provider error. */
+export interface DraftResult { body: string; source: AiSource; usage: TokenUsage; reason?: string }
+export interface CopilotTriage { priority: TicketPriority | null; tags: string[]; reason: string; source: AiSource; usage: TokenUsage; fallbackReason?: string }
+export interface SummaryResult { summary: string; source: AiSource; usage: TokenUsage; reason?: string }
 export interface Attachment {
   id: string; messageId: string | null; ticketId: string | null;
   filename: string; mimeType: string; size: number; createdAt: string;

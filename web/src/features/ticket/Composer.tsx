@@ -8,8 +8,9 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import { IconBook, IconCheckCircle, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+import { Link } from 'react-router';
 import { useShortcuts } from '../palette/shortcuts';
-import { aiEnabled } from '../ai/engine';
+import { aiEnabled, aiFallbackMessage } from '../ai/engine';
 import { TokenCost } from '../ai/TokenCost';
 
 const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
@@ -35,7 +36,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const [mode, setMode] = useState<Mode>('reply');
   const [body, setBody] = useState('');
   const [drafting, setDrafting] = useState(false);
-  const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage } | null>(null);
+  const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage; reason?: string } | null>(null);
   const [pending, setPending] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -126,9 +127,11 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     if (drafting) return;
     setDrafting(true);
     try {
-      const { body: draft, source, usage } = await aiDraft(ticket.id);
+      const { body: draft, source, usage, reason } = await aiDraft(ticket.id);
       setBody(draft);
-      setDraftMeta({ source, usage });
+      setDraftMeta({ source, usage, reason });
+      // It silently fell back to the rule-based draft — tell the agent why so they can fix it.
+      if (source === 'rules') toast(aiFallbackMessage(reason));
       focusTextarea();
     } catch {
       toast('Could not draft a reply');
@@ -299,7 +302,13 @@ export function Composer({ ticket }: { ticket: Ticket }) {
                 <TokenCost promptTokens={draftMeta.usage.promptTokens} completionTokens={draftMeta.usage.completionTokens} />
               </>
             ) : (
-              <span>Rule-based draft</span>
+              <span className="flex items-center gap-1.5">
+                <span>Rule-based draft</span>
+                <span aria-hidden="true">·</span>
+                <Link to="/settings/ai" className="font-medium text-accent hover:underline">
+                  {draftMeta.reason === undefined || draftMeta.reason === 'off' ? 'Set up AI' : 'Check AI settings'}
+                </Link>
+              </span>
             )}
           </span>
         )}
