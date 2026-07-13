@@ -268,5 +268,24 @@ export interface Notification {
   messageId: string; actorId: string; actorName: string; snippet: string;
   createdAt: string; readAt: string | null;
 }
+
+export type ImportType = 'contacts' | 'tickets';
+export interface ImportField { key: string; label: string; required: boolean }
+export interface ImportInput { type: ImportType; csv: string; mapping?: Record<string, string>; dryRun?: boolean }
+/** Result of a CSV import (or dry-run preview). `error` is set when a required column is unmapped. */
+export interface ImportResult {
+  type: ImportType;
+  headers: string[];
+  mapping: Record<string, string>;
+  fields: ImportField[];
+  rowCount: number;
+  dryRun: boolean;
+  created: number;
+  skippedCount: number;
+  errorCount: number;
+  skipped: { row: number; reason: string }[];
+  errors: { row: number; reason: string }[];
+  error?: string;
+}
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;

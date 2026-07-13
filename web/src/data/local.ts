@@ -2,9 +2,10 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  DraftResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  DraftResult, ImportInput, ImportResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
+import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
@@ -1075,6 +1076,81 @@ export class LocalRepository implements Repository {
       .filter((n) => n.agentId === CURRENT_AGENT_ID)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((n) => ({ ...n }));
+  }
+
+  async importData(input: ImportInput): Promise<ImportResult> {
+    const { type } = input;
+    const { headers, rows } = parseCsv(input.csv);
+    const mapping = autoMapColumns(type, headers);
+    if (input.mapping) {
+      const keys = new Set(IMPORT_FIELDS[type].map((f) => f.key));
+      for (const [k, v] of Object.entries(input.mapping)) {
+        if (keys.has(k) && typeof v === 'string' && headers.includes(v)) mapping[k] = v;
+        else if (keys.has(k) && v === '') delete mapping[k];
+      }
+    }
+    const fields = IMPORT_FIELDS[type];
+    const dryRun = input.dryRun === true;
+    const skipped: { row: number; reason: string }[] = [];
+    const errors: { row: number; reason: string }[] = [];
+    let created = 0;
+    const base: ImportResult = { type, headers, mapping, fields, rowCount: rows.length, dryRun, created: 0, skippedCount: 0, errorCount: 0, skipped, errors };
+    if (headers.length === 0) return { ...base, error: 'no columns found in the CSV' };
+    const missing = fields.filter((f) => f.required && mapping[f.key] === undefined).map((f) => f.label);
+    if (missing.length > 0) return { ...base, error: `Map a column for: ${missing.join(', ')}` };
+
+    const val = (row: Record<string, string>, key: string): string => (mapping[key] ? (row[mapping[key]] ?? '').trim() : '');
+    const now = new Date().toISOString();
+    const seen = new Set<string>();
+    const PRIOS = ['urgent', 'high', 'medium', 'low'];
+    const STATS = ['open', 'pending', 'on_hold', 'solved', 'closed'];
+
+    rows.forEach((row, idx) => {
+      const line = idx + 2;
+      if (type === 'contacts') {
+        const name = val(row, 'name');
+        const email = val(row, 'email').toLowerCase();
+        if (name === '' || email === '') return void errors.push({ row: line, reason: 'missing name or email' });
+        if (!IMPORT_EMAIL_RE.test(email)) return void errors.push({ row: line, reason: `invalid email "${email}"` });
+        if (seen.has(email) || this.data.contacts.some((c) => c.email.toLowerCase() === email)) return void skipped.push({ row: line, reason: `${email} already exists` });
+        seen.add(email);
+        if (!dryRun) {
+          this.data.contacts.push({ id: nextId(this.data.contacts, 'c_', 2), name, email, company: val(row, 'company') || null, avatarHue: djb2(email) % 360, location: null, timezone: null, createdAt: now, mrr: null });
+        }
+        created += 1;
+      } else {
+        const subject = val(row, 'subject');
+        const email = val(row, 'requesterEmail').toLowerCase();
+        if (subject === '' || email === '') return void errors.push({ row: line, reason: 'missing subject or requester email' });
+        if (!IMPORT_EMAIL_RE.test(email)) return void errors.push({ row: line, reason: `invalid email "${email}"` });
+        const rawPriority = val(row, 'priority').toLowerCase();
+        const priority = (PRIOS.includes(rawPriority) ? rawPriority : 'medium') as TicketPriority;
+        const rawStatus = val(row, 'status').toLowerCase().replace(/\s+/g, '_');
+        const status = (STATS.includes(rawStatus) ? rawStatus : 'open') as TicketStatus;
+        const tags = val(row, 'tags').split(/[,;]/).map((t) => t.trim()).filter((t) => t !== '');
+        const bodyText = val(row, 'body') || subject;
+        if (!dryRun) {
+          let contact = this.data.contacts.find((c) => c.email.toLowerCase() === email);
+          if (contact === undefined) {
+            contact = { id: nextId(this.data.contacts, 'c_', 2), name: email.split('@')[0], email, company: null, avatarHue: djb2(email) % 360, location: null, timezone: null, createdAt: now, mrr: null };
+            this.data.contacts.push(contact);
+          }
+          const number = this.data.tickets.reduce((m, t) => Math.max(m, t.number), 0) + 1;
+          const resolved = status === 'solved' || status === 'closed';
+          const ticket: Ticket = {
+            id: nextId(this.data.tickets, 't_', 3), number, subject, status, priority, bucket: 'inbox',
+            requesterId: contact.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
+            snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
+            firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, customFields: {},
+          };
+          this.data.tickets.push(ticket);
+          this.data.messages.push({ id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: bodyText, at: now });
+        }
+        created += 1;
+      }
+    });
+    if (!dryRun) this.persist();
+    return { ...base, created, skippedCount: skipped.length, errorCount: errors.length, skipped: skipped.slice(0, 100), errors: errors.slice(0, 100) };
   }
 
   async getStats(): Promise<StatsOverview> {

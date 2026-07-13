@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
   AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -58,6 +58,8 @@ export interface Repository {
   deleteSavedView(id: string): Promise<void>;
   /** Mark one notification read, or all of the current agent's when id is omitted; returns the fresh list. */
   markNotificationsRead(id?: string): Promise<Notification[]>;
+  /** Import contacts or tickets from CSV (dryRun previews without writing). */
+  importData(input: ImportInput): Promise<ImportResult>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;
   deleteAgent(id: string): Promise<void>;

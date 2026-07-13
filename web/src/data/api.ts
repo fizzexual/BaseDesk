@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -183,6 +183,13 @@ export class ApiRepository implements Repository {
 
   markNotificationsRead(id?: string): Promise<Notification[]> {
     return request('/notifications/read', jsonInit('POST', id === undefined ? {} : { id }));
+  }
+
+  // Reads the body on any status: a 400 (required column unmapped) still carries
+  // the headers + partial mapping the import UI needs to render its selectors.
+  async importData(input: ImportInput): Promise<ImportResult> {
+    const res = await fetch('/api/import', jsonInit('POST', input));
+    return (await res.json()) as ImportResult;
   }
 
   inviteAgent(input: AgentInvite): Promise<Agent> {

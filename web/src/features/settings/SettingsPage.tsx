@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconImport, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
@@ -10,8 +10,9 @@ import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
 import { EmailSettings } from './EmailSettings';
 import { CustomFieldsSettings } from './CustomFieldsSettings';
+import { ImportSettings } from './ImportSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'sla' | 'automation' | 'ai' | 'email';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -27,6 +28,7 @@ const TABS: Array<{
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
   { id: 'email', label: 'Email', icon: IconSend },
+  { id: 'import', label: 'Import', icon: IconImport },
 ];
 
 export function SettingsPage() {
@@ -39,7 +41,8 @@ export function SettingsPage() {
     params.tab === 'sla' ||
     params.tab === 'automation' ||
     params.tab === 'ai' ||
-    params.tab === 'email'
+    params.tab === 'email' ||
+    params.tab === 'import'
       ? params.tab
       : 'profile';
 
@@ -75,6 +78,7 @@ export function SettingsPage() {
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
         {tab === 'email' && <EmailSettings />}
+        {tab === 'import' && <ImportSettings />}
       </div>
     </div>
   );

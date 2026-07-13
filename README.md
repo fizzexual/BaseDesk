@@ -163,7 +163,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Two-way channels** — inbound threads into one ticket per sender, an HMAC-signed **command** endpoint manages tickets from a bot (reply/solve/reopen), all secrets server-side; connect a provider via a small relay ([docs/channels.md](docs/channels.md)) *(v0.6)*
 - [x] **Discord ticket bot** — a turnkey [`bot/`](bot/) (discord.js): drop in a token + app id, invite it, and `/ticket` opens a private thread that *is* a BaseDesk ticket — customer messages sync in, dashboard replies post back, and `/reply` `/solve` `/close` `/reopen` manage it from Discord. Auto-provisions its own channel; token stays in a git-ignored `.env` *(v0.6)*
 - [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)
-- [ ] Migration importers (osTicket, FreeScout, Zendesk CSV)
+- [x] **CSV import** — bring **contacts** and **tickets** in from any CSV (Zendesk/Freshdesk export, spreadsheet, …): columns auto-map by header with manual override, a dry-run preview shows what will be created/skipped/errored before you commit, and invalid/duplicate rows are reported per-row *(v0.6)*
 - [ ] Single-binary packaging
 
 ## Philosophy

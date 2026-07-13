@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, Notification, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -76,6 +76,7 @@ export interface AppState {
   createSavedView(input: SavedViewCreate): Promise<void>;
   deleteSavedView(id: string): Promise<void>;
   markNotificationsRead(id?: string): Promise<void>;
+  importData(input: ImportInput): Promise<ImportResult>;
   setTicketField(ticketId: string, fieldId: string, value: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
@@ -766,6 +767,15 @@ export function createAppStore(repository: Repository) {
         set({ savedViews: prev });
         throw err;
       }
+    },
+
+    async importData(input) {
+      const result = await repository.importData(input);
+      // A committed import adds contacts/tickets — re-bootstrap to pull them in.
+      if (input.dryRun !== true && result.error === undefined && result.created > 0) {
+        await get().init();
+      }
+      return result;
     },
 
     async markNotificationsRead(id) {

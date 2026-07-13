@@ -11,6 +11,7 @@ import {
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
+import { parseCsv } from './csv.js';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
@@ -83,6 +84,43 @@ const VIEW_IDS: ViewId[] = [
 const PRIORITIES: TicketPriority[] = ['urgent', 'high', 'medium', 'low'];
 const STATUSES = ['open', 'pending', 'on_hold', 'solved', 'closed'];
 const BUCKETS = ['inbox', 'archive', 'spam', 'trash'];
+
+/** Target fields for each CSV import type, in display order. */
+type ImportType = 'contacts' | 'tickets';
+interface ImportField { key: string; label: string; required: boolean }
+const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
+  contacts: [
+    { key: 'name', label: 'Name', required: true },
+    { key: 'email', label: 'Email', required: true },
+    { key: 'company', label: 'Company', required: false },
+  ],
+  tickets: [
+    { key: 'subject', label: 'Subject', required: true },
+    { key: 'requesterEmail', label: 'Requester email', required: true },
+    { key: 'body', label: 'Message', required: false },
+    { key: 'priority', label: 'Priority', required: false },
+    { key: 'status', label: 'Status', required: false },
+    { key: 'tags', label: 'Tags', required: false },
+  ],
+};
+
+const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const IMPORT_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Best-effort guess of which CSV column feeds each target field, by header name. */
+function autoMapColumns(type: ImportType, headers: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const f of IMPORT_FIELDS[type]) {
+    const target = normHeader(f.key);
+    const label = normHeader(f.label);
+    let h = headers.find((x) => normHeader(x) === target || normHeader(x) === label);
+    if (h === undefined) h = headers.find((x) => { const n = normHeader(x); return n !== '' && (n.includes(target) || target.includes(n)); });
+    if (h === undefined && f.key === 'requesterEmail') h = headers.find((x) => normHeader(x).includes('email'));
+    if (h === undefined && f.key === 'body') h = headers.find((x) => ['message', 'description', 'body', 'comment'].some((a) => normHeader(x).includes(a)));
+    if (h !== undefined) map[f.key] = h;
+  }
+  return map;
+}
 
 /**
  * Validate an untrusted macro-actions payload, keeping only known-good fields.
@@ -881,6 +919,116 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = typeof input.id === 'string' ? input.id : undefined;
     markNotificationsRead(db, currentAgentId(), new Date().toISOString(), id);
     return c.json(getNotifications(db, currentAgentId()));
+  });
+
+  // Import contacts or tickets from CSV. With dryRun, nothing is written — it
+  // returns the resolved column mapping and a per-row preview of what would
+  // happen, so the UI can confirm before committing.
+  app.post('/api/import', async (c) => {
+    let input: { type?: unknown; csv?: unknown; mapping?: unknown; dryRun?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const type: ImportType | null = input.type === 'contacts' || input.type === 'tickets' ? input.type : null;
+    if (type === null) return c.json({ error: "type must be 'contacts' or 'tickets'" }, 400);
+    if (typeof input.csv !== 'string' || input.csv.trim() === '') return c.json({ error: 'csv is required' }, 400);
+
+    const { headers, rows } = parseCsv(input.csv);
+    if (headers.length === 0) return c.json({ error: 'no columns found in the CSV' }, 400);
+
+    // Start from the auto-mapping, then apply any valid client overrides.
+    const mapping = autoMapColumns(type, headers);
+    if (input.mapping !== null && typeof input.mapping === 'object') {
+      const fieldKeys = new Set(IMPORT_FIELDS[type].map((f) => f.key));
+      for (const [k, v] of Object.entries(input.mapping as Record<string, unknown>)) {
+        if (fieldKeys.has(k) && typeof v === 'string' && headers.includes(v)) mapping[k] = v;
+        else if (fieldKeys.has(k) && v === '') delete mapping[k]; // explicit "don't map"
+      }
+    }
+
+    const meta = { type, headers, mapping, fields: IMPORT_FIELDS[type], rowCount: rows.length };
+    const missing = IMPORT_FIELDS[type].filter((f) => f.required && mapping[f.key] === undefined).map((f) => f.label);
+    if (missing.length > 0) return c.json({ error: `Map a column for: ${missing.join(', ')}`, ...meta }, 400);
+
+    const dryRun = input.dryRun === true;
+    const val = (row: Record<string, string>, key: string): string => (mapping[key] !== undefined ? (row[mapping[key]] ?? '').trim() : '');
+    const now = new Date().toISOString();
+    const seenEmails = new Set<string>();
+    let created = 0;
+    const skipped: { row: number; reason: string }[] = [];
+    const errors: { row: number; reason: string }[] = [];
+
+    const run = () => {
+      rows.forEach((row, idx) => {
+        const line = idx + 2; // 1-based, plus the header row
+        if (type === 'contacts') {
+          const name = val(row, 'name');
+          const email = val(row, 'email').toLowerCase();
+          if (name === '' || email === '') return void errors.push({ row: line, reason: 'missing name or email' });
+          if (!IMPORT_EMAIL_RE.test(email)) return void errors.push({ row: line, reason: `invalid email "${email}"` });
+          if (seenEmails.has(email) || getContactByEmail(db, email) !== null) return void skipped.push({ row: line, reason: `${email} already exists` });
+          seenEmails.add(email);
+          if (!dryRun) {
+            db.prepare('INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .run(newId('c_'), name, email, val(row, 'company') || null, djb2(email) % 360, null, null, now, null);
+          }
+          created += 1;
+        } else {
+          const subject = val(row, 'subject');
+          const email = val(row, 'requesterEmail').toLowerCase();
+          if (subject === '' || email === '') return void errors.push({ row: line, reason: 'missing subject or requester email' });
+          if (!IMPORT_EMAIL_RE.test(email)) return void errors.push({ row: line, reason: `invalid email "${email}"` });
+          const rawPriority = val(row, 'priority').toLowerCase();
+          const priority = PRIORITIES.includes(rawPriority as TicketPriority) ? (rawPriority as TicketPriority) : 'medium';
+          const rawStatus = val(row, 'status').toLowerCase().replace(/\s+/g, '_');
+          const status = STATUSES.includes(rawStatus) ? (rawStatus as TicketStatus) : 'open';
+          const tags = val(row, 'tags').split(/[,;]/).map((t) => t.trim()).filter((t) => t !== '');
+          const bodyText = val(row, 'body') || subject;
+          if (!dryRun) {
+            let contact = getContactByEmail(db, email);
+            if (contact === null) {
+              const cid = newId('c_');
+              db.prepare('INSERT INTO contacts (id, name, email, company, avatarHue, location, timezone, createdAt, mrr) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                .run(cid, email.split('@')[0], email, null, djb2(email) % 360, null, null, now, null);
+              contact = getContactByEmail(db, email);
+            }
+            const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
+            const resolved = status === 'solved' || status === 'closed';
+            const ticket: Ticket = {
+              id: newId('t_'), number: maxRow.maxNumber + 1, subject, status, priority, bucket: 'inbox',
+              requesterId: contact!.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
+              snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
+              firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, customFields: {},
+            };
+            insertTicketRow(db, ticket);
+            db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+              .run(newId('m_'), ticket.id, 'contact', contact!.id, 'reply', bodyText, now);
+          }
+          created += 1;
+        }
+      });
+    };
+
+    if (dryRun) {
+      run();
+    } else {
+      db.exec('BEGIN');
+      try {
+        run();
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    }
+
+    return c.json({
+      ...meta, dryRun, created,
+      skippedCount: skipped.length, errorCount: errors.length,
+      skipped: skipped.slice(0, 100), errors: errors.slice(0, 100),
+    });
   });
 
   app.get('/api/deals', (c) => {
