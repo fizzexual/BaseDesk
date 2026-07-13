@@ -7,9 +7,10 @@ import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { AiTestResult } from '../../data/types';
 import {
-  formatContext, formatPrice, modelInfo, PRICES_NOTE, providerForBaseUrl, PROVIDERS,
+  formatContext, formatPrice, looksLikeReasoningModel, modelInfo, PRICES_NOTE, providerForBaseUrl, PROVIDERS,
 } from '../../data/model-catalog';
 import { aiEnabled, setAiEnabled } from '../ai/engine';
+import { IconAlert } from '../../icons';
 import { ModelPicker } from './ModelPicker';
 
 const FIELD =
@@ -225,6 +226,20 @@ export function AiSettings() {
           </span>
         </label>
 
+        {looksLikeReasoningModel(model) && !reasoning && (
+          <div className="flex items-start gap-2 rounded-md border border-amber/30 bg-amber-bg px-3 py-2 text-[12px] text-amber">
+            <IconAlert size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <b>{model}</b> looks like a reasoning model, but Reasoning is off. It may spend its whole budget thinking
+              and return an empty answer — which falls back to a rule-based draft.{' '}
+              <button type="button" className="font-semibold underline" onClick={() => setReasoning(true)}>
+                Turn on Reasoning
+              </button>
+              .
+            </span>
+          </div>
+        )}
+
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium">API key</span>
           <input
@@ -278,7 +293,11 @@ export function AiSettings() {
           {!test.ok
             ? `Connection failed: ${test.error ?? 'unknown error'}`
             : test.empty
-              ? `Reached ${test.model ?? model}, but it returned no text. Double-check the model id — for DeepSeek try deepseek-chat or deepseek-reasoner.`
+              ? `Reached ${test.model ?? model}, but it returned no text. ${
+                  looksLikeReasoningModel(model) && !reasoning
+                    ? 'It looks like a reasoning model — turn on Reasoning above so it has budget to answer.'
+                    : 'Double-check the model id — for DeepSeek try deepseek-chat or deepseek-reasoner.'
+                }`
               : `Connected to ${test.model ?? model}${test.latencyMs !== undefined ? ` · ${test.latencyMs} ms` : ''}`}
         </div>
       )}

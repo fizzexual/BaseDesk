@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  formatContext, formatPrice, modelInfo, PROVIDERS, providerForBaseUrl,
+  formatContext, formatPrice, looksLikeReasoningModel, modelInfo, PROVIDERS, providerForBaseUrl,
 } from '../src/data/model-catalog';
 
 describe('model catalog', () => {
@@ -26,6 +26,15 @@ describe('model catalog', () => {
     const m = modelInfo('https://api.deepseek.com/v1', 'deepseek-reasoner');
     expect(m?.reasoning).toBe(true);
     expect(modelInfo('https://api.deepseek.com/v1', 'nope')).toBeUndefined();
+  });
+
+  it('flags reasoning-model ids so the budget warning can fire', () => {
+    for (const id of ['deepseek-reasoner', 'o1', 'o1-mini', 'o3-mini', 'gpt-o4', 'deepseek-r1', 'Qwen/QwQ-32B', 'my-reasoning-model', 'phi-4-thinking']) {
+      expect(looksLikeReasoningModel(id)).toBe(true);
+    }
+    for (const id of ['deepseek-chat', 'gpt-4o', 'claude-sonnet', 'llama-3.1-70b', 'mixtral-8x7b']) {
+      expect(looksLikeReasoningModel(id)).toBe(false);
+    }
   });
 
   it('formats price and context for display', () => {

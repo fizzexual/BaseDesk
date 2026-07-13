@@ -41,6 +41,10 @@ export function aiFallbackMessage(reason: string | undefined): string {
   if (reason === undefined || reason === 'off') {
     return 'AI isn’t set up yet — add your provider key under Settings → AI to get real model-written replies.';
   }
+  // Empty completions are almost always a reasoning model with too small a budget.
+  if (/empty/i.test(reason)) {
+    return 'The model returned no text — if it’s a reasoning model, turn on “Reasoning model” in Settings → AI so it has room to think. Showing a rule-based draft for now.';
+  }
   return `AI provider error: ${reason} — showing a rule-based draft. Check Settings → AI.`;
 }
 export function setAiEnabled(on: boolean): void {

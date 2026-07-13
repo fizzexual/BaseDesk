@@ -138,6 +138,17 @@ export function modelInfo(baseUrl: string, id: string): ModelInfo | undefined {
   return providerForBaseUrl(baseUrl)?.models.find((m) => m.id === id);
 }
 
+/**
+ * Heuristic: does this model id look like a chain-of-thought / reasoning model?
+ * Used to warn when the "Reasoning" budget toggle is off — reasoning models spend
+ * their whole visible-token budget thinking and return an empty answer otherwise.
+ * Catches custom ids the catalog doesn't know (o1/o3/o4/r1, *-reasoner, QwQ, …).
+ */
+export function looksLikeReasoningModel(id: string): boolean {
+  const m = id.toLowerCase();
+  return /reason|think|qwq/.test(m) || /(?:^|[^a-z0-9])(o1|o3|o4|r1)(?:[^a-z0-9]|$)/.test(m);
+}
+
 /** "$0.27", "$10", or "Free" for local models. */
 export function formatPrice(usdPer1M: number): string {
   if (usdPer1M === 0) return 'Free';
