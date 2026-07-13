@@ -107,13 +107,23 @@ const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
 const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const IMPORT_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/** A human, actionable message for a provider HTTP status. */
+function providerStatusHint(status: number): string {
+  if (status === 401) return 'Unauthorized (401) — your API key was rejected. Check the key is correct and matches this provider.';
+  if (status === 403) return 'Forbidden (403) — the key is valid but lacks access to this endpoint.';
+  if (status === 404) return 'Not found (404) — check the base URL (it usually ends in /v1).';
+  if (status === 429) return 'Rate limited (429) — wait a moment and try again.';
+  if (status >= 500) return `Provider error (${status}) — the provider is having trouble; try again shortly.`;
+  return `Provider returned ${status}.`;
+}
+
 /** Fetch the model ids a provider currently offers (OpenAI-compatible GET /models). Throws on failure. */
 async function fetchModelIds(baseUrl: string, apiKey: string): Promise<string[]> {
   const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
     headers: apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`provider returned ${res.status}`);
+  if (!res.ok) throw new Error(providerStatusHint(res.status));
   const data = (await res.json()) as { data?: { id?: unknown }[] };
   return Array.isArray(data.data)
     ? [...new Set(data.data.map((m) => (m && typeof m.id === 'string' ? m.id : '')).filter((id) => id !== ''))].sort()
@@ -1764,6 +1774,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const baseUrl = (typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl : stored.baseUrl).trim();
     const apiKey = (typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey : stored.apiKey).trim();
     if (baseUrl === '') return c.json({ error: 'Enter a base URL first.' });
+    // Most providers require auth for /models — a keyless request just 401s.
+    const isLocal = /localhost|127\.0\.0\.1|::1/.test(baseUrl);
+    if (apiKey === '' && !isLocal) return c.json({ error: 'Add your API key first, then load models.' });
     try {
       const models = await fetchModelIds(baseUrl, apiKey);
       setModelCache(db, { baseUrl, models, fetchedAt: new Date().toISOString() }); // a manual fetch also refreshes the cache

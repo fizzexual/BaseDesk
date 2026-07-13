@@ -14,11 +14,17 @@ function makeAppFull() {
 const json = (method: string, body: unknown) => ({ method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 let mock: Server | null = null;
-/** A stand-in provider whose GET /models lists the given ids (OpenAI shape). */
-function mockModelsServer(ids: string[]): Promise<string> {
+/** A stand-in provider whose GET /models lists the given ids (OpenAI shape), or
+ *  returns `status` when it's not 200 (to exercise 401/etc. handling). */
+function mockModelsServer(ids: string[], status = 200): Promise<string> {
   return new Promise((resolve) => {
     mock = createServer((req, res) => {
       if (req.url?.endsWith('/models')) {
+        if (status !== 200) {
+          res.writeHead(status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'nope' } }));
+          return;
+        }
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ data: ids.map((id) => ({ id })) }));
       } else {
@@ -48,6 +54,22 @@ describe('live model list', () => {
     const r = await (await app.request('/api/ai/models', json('POST', { baseUrl: 'http://127.0.0.1:1/v1', apiKey: 'x' }))).json();
     expect(typeof r.error).toBe('string');
     expect(r.models).toBeUndefined();
+  });
+
+  it('asks for a key before making a doomed unauthenticated request', async () => {
+    const app = makeApp();
+    // Stored config defaults to the DeepSeek URL with no key → guard, no network call.
+    const r = await (await app.request('/api/ai/models', json('POST', {}))).json();
+    expect(r.error).toMatch(/API key/i);
+    expect(r.models).toBeUndefined();
+  });
+
+  it('turns a 401 into an actionable message about the key', async () => {
+    const app = makeApp();
+    const base = await mockModelsServer([], 401);
+    const r = await (await app.request('/api/ai/models', json('POST', { baseUrl: base, apiKey: 'sk-bad' }))).json();
+    expect(r.error).toMatch(/401/);
+    expect(r.error).toMatch(/key/i);
   });
 });
 
