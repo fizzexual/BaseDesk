@@ -13,6 +13,9 @@ function ReasoningBadge() {
 }
 
 function PriceTag({ model }: { model: ModelInfo }) {
+  if (model.unknownPrice) {
+    return <span className="shrink-0 whitespace-nowrap text-[11px] text-text-3">price on provider</span>;
+  }
   if (model.inputPer1M === 0 && model.outputPer1M === 0) {
     return <span className="shrink-0 text-[12px] font-medium text-green">Free</span>;
   }
@@ -165,7 +168,7 @@ export function ModelPicker({
               </span>
               <span className="flex shrink-0 flex-col items-end gap-0.5">
                 <PriceTag model={m} />
-                <span className="text-[11px] tabular-nums text-text-3">{formatContext(m.contextK)} ctx</span>
+                {m.contextK > 0 && <span className="text-[11px] tabular-nums text-text-3">{formatContext(m.contextK)} ctx</span>}
               </span>
             </button>
           ))}

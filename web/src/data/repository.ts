@@ -71,6 +71,8 @@ export interface Repository {
   saveSlaHours(hours: SlaHours): Promise<SlaHours>;
   saveAiProvider(input: AiProviderSave): Promise<AiProvider>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
+  /** List the models the provider currently offers (via its /models endpoint). */
+  listProviderModels(input?: { baseUrl?: string; apiKey?: string }): Promise<{ models?: string[]; error?: string }>;
   saveSmtp(input: SmtpSave): Promise<SmtpSettings>;
   testSmtp(to?: string): Promise<SmtpTestResult>;
   aiDraft(ticketId: string): Promise<DraftResult>;

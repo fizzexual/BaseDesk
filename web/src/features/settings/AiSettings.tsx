@@ -7,7 +7,7 @@ import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { AiTestResult } from '../../data/types';
 import {
-  formatContext, formatPrice, looksLikeReasoningModel, modelInfo, PRICES_NOTE, providerForBaseUrl, PROVIDERS,
+  formatContext, formatPrice, looksLikeReasoningModel, mergeModels, modelInfo, PRICES_NOTE, providerForBaseUrl, PROVIDERS,
 } from '../../data/model-catalog';
 import { aiEnabled, setAiEnabled } from '../ai/engine';
 import { IconAlert } from '../../icons';
@@ -25,6 +25,7 @@ export function AiSettings() {
   const provider = useApp((s) => s.aiProvider);
   const saveAiProvider = useApp((s) => s.saveAiProvider);
   const testAiProvider = useApp((s) => s.testAiProvider);
+  const listProviderModels = useApp((s) => s.listProviderModels);
 
   const [copilot, setCopilot] = useState<boolean>(aiEnabled());
   const [enabled, setEnabled] = useState<boolean>(provider.enabled);
@@ -38,9 +39,32 @@ export function AiSettings() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<AiTestResult | null>(null);
+  const [fetchedIds, setFetchedIds] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const currentProvider = providerForBaseUrl(baseUrl);
   const selectedInfo = modelInfo(baseUrl, model);
+  // The picker shows curated models plus anything the provider returned live.
+  const modelList = mergeModels(currentProvider?.models ?? [], baseUrl, fetchedIds);
+
+  async function loadModels() {
+    if (loadingModels) return;
+    setLoadingModels(true);
+    try {
+      const r = await listProviderModels({ baseUrl: baseUrl.trim(), apiKey: key.trim() || undefined });
+      if (r.error !== undefined) {
+        toast(r.error);
+        return;
+      }
+      const ids = r.models ?? [];
+      setFetchedIds(ids);
+      toast(ids.length > 0 ? `Loaded ${ids.length} models from the provider` : 'The provider returned no models');
+    } catch {
+      toast('Could not load the model list');
+    } finally {
+      setLoadingModels(false);
+    }
+  }
 
   function onCopilot(value: 'on' | 'off') {
     const on = value === 'on';
@@ -56,6 +80,7 @@ export function AiSettings() {
       setReasoning(first.reasoning);
     }
     setTest(null);
+    setFetchedIds([]); // a different provider has a different model list
   }
 
   function payload() {
@@ -168,9 +193,19 @@ export function AiSettings() {
         </label>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium">Model</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-medium">Model</span>
+            <button
+              type="button"
+              onClick={() => void loadModels()}
+              disabled={loadingModels || baseUrl.trim() === ''}
+              className="text-[12px] font-medium text-accent hover:underline disabled:opacity-50"
+            >
+              {loadingModels ? 'Loading…' : fetchedIds.length > 0 ? `Reload models (${fetchedIds.length})` : 'Load models from provider'}
+            </button>
+          </div>
           <ModelPicker
-            models={currentProvider?.models ?? []}
+            models={modelList}
             value={model}
             onChange={(id, info) => {
               setModel(id);

@@ -10,10 +10,11 @@ export interface ModelInfo {
   id: string; // the exact API model id sent to the provider
   label: string;
   reasoning: boolean;
-  contextK: number; // context window, thousands of tokens
+  contextK: number; // context window, thousands of tokens (0 = unknown)
   inputPer1M: number; // USD per 1M input tokens (0 = free / local)
   outputPer1M: number; // USD per 1M output tokens
   note?: string;
+  unknownPrice?: boolean; // fetched from the provider; price/context not in the catalog
 }
 
 export interface ProviderInfo {
@@ -147,6 +148,21 @@ export function modelInfo(baseUrl: string, id: string): ModelInfo | undefined {
 export function looksLikeReasoningModel(id: string): boolean {
   const m = id.toLowerCase();
   return /reason|think|qwq/.test(m) || /(?:^|[^a-z0-9])(o1|o3|o4|r1)(?:[^a-z0-9]|$)/.test(m);
+}
+
+/** A ModelInfo for an id: the curated entry if we know it, else a minimal one
+ *  (price/context unknown, reasoning guessed from the name) for a live-fetched id. */
+export function toModelInfo(baseUrl: string, id: string): ModelInfo {
+  return modelInfo(baseUrl, id) ?? { id, label: id, reasoning: looksLikeReasoningModel(id), contextK: 0, inputPer1M: 0, outputPer1M: 0, unknownPrice: true };
+}
+
+/** Curated models for a provider, plus any live-fetched ids not already listed. */
+export function mergeModels(curated: ModelInfo[], baseUrl: string, fetchedIds: string[]): ModelInfo[] {
+  const byId = new Map(curated.map((m) => [m.id, m]));
+  for (const id of fetchedIds) {
+    if (id.trim() !== '' && !byId.has(id)) byId.set(id, toModelInfo(baseUrl, id));
+  }
+  return [...byId.values()];
 }
 
 /** "$0.27", "$10", or "Free" for local models. */

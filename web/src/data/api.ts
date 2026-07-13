@@ -224,6 +224,9 @@ export class ApiRepository implements Repository {
   testAiProvider(input: AiProviderSave = {}): Promise<AiTestResult> {
     return request('/ai/provider/test', jsonInit('POST', input));
   }
+  listProviderModels(input: { baseUrl?: string; apiKey?: string } = {}): Promise<{ models?: string[]; error?: string }> {
+    return request('/ai/models', jsonInit('POST', input));
+  }
   saveSmtp(input: SmtpSave): Promise<SmtpSettings> {
     return request('/settings/smtp', jsonInit('PUT', input));
   }

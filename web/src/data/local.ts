@@ -883,6 +883,10 @@ export class LocalRepository implements Repository {
     return { ok: false, error: 'Model calls run on the self-hosted server — demo mode uses the built-in rule-based engine.' };
   }
 
+  async listProviderModels(): Promise<{ models?: string[]; error?: string }> {
+    return { error: 'Fetching the live model list runs on the self-hosted server.' };
+  }
+
   async saveSmtp(input: SmtpSave): Promise<SmtpSettings> {
     const cur = this.data.smtp;
     const next: SmtpSettings = {

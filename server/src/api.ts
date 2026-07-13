@@ -1713,6 +1713,37 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
   });
 
+  // List the models the provider currently offers (OpenAI-compatible GET /models),
+  // so the picker shows everything available right now instead of a static list.
+  // Uses the request's baseUrl/apiKey if given (the unsaved form values), else the
+  // stored config. Returns { models } or { error } — always 200 so the UI reads it.
+  app.post('/api/ai/models', async (c) => {
+    let override: Record<string, unknown> = {};
+    try {
+      override = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      /* no body — use the stored config */
+    }
+    const stored = getAiProviderConfig(db);
+    const baseUrl = (typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl : stored.baseUrl).trim();
+    const apiKey = (typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey : stored.apiKey).trim();
+    if (baseUrl === '') return c.json({ error: 'Enter a base URL first.' });
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
+        headers: apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {},
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return c.json({ error: `Provider returned ${res.status} — check the base URL and key.` });
+      const data = (await res.json()) as { data?: { id?: unknown }[] };
+      const models = Array.isArray(data.data)
+        ? [...new Set(data.data.map((m) => (m && typeof m.id === 'string' ? m.id : '')).filter((id) => id !== ''))].sort()
+        : [];
+      return c.json({ models });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Could not reach the provider.' });
+    }
+  });
+
   // --- Copilot: model-backed with a rule-based fallback ---
 
   app.post('/api/ai/draft', async (c) => {

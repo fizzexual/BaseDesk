@@ -86,6 +86,7 @@ export interface AppState {
   setTicketField(ticketId: string, fieldId: string, value: string): Promise<void>;
   saveAiProvider(input: AiProviderSave): Promise<void>;
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
+  listProviderModels(input?: { baseUrl?: string; apiKey?: string }): Promise<{ models?: string[]; error?: string }>;
   saveSmtp(input: SmtpSave): Promise<void>;
   testSmtp(to?: string): Promise<SmtpTestResult>;
   bumpUsage(u: TokenUsage): void;
@@ -856,6 +857,10 @@ export function createAppStore(repository: Repository) {
 
     testAiProvider(input) {
       return repository.testAiProvider(input);
+    },
+
+    listProviderModels(input) {
+      return repository.listProviderModels(input);
     },
 
     async saveSmtp(input) {
