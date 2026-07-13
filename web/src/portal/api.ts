@@ -2,7 +2,7 @@
 // from the agent-side Repository/store: a customer is a different principal, sees
 // only their own data, and authenticates with a bearer token kept in localStorage.
 
-import type { Contact, KbArticle, Ticket, TicketPriority } from '../data/types';
+import type { Attachment, Contact, KbArticle, Ticket, TicketPriority } from '../data/types';
 
 const TOKEN_KEY = 'basedesk-portal-token';
 
@@ -12,6 +12,7 @@ export interface PortalMessage {
   authorName: string;
   body: string;
   at: string;
+  attachments: Attachment[];
 }
 
 export function getToken(): string | null {
@@ -77,11 +78,28 @@ export const portalApi = {
   getTicket(id: string) {
     return req<{ ticket: Ticket; messages: PortalMessage[] }>(`/tickets/${encodeURIComponent(id)}`);
   },
-  createTicket(input: { subject: string; body: string; priority: TicketPriority }) {
+  createTicket(input: { subject: string; body: string; priority: TicketPriority; attachmentIds?: string[] }) {
     return req<{ ticket: Ticket }>('/tickets', body(input));
   },
-  reply(id: string, message: string) {
-    return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/messages`, body({ body: message }));
+  reply(id: string, message: string, attachmentIds?: string[]) {
+    return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/messages`, body({ body: message, attachmentIds }));
+  },
+  /** Upload a file (unlinked until a message references it via attachmentIds). */
+  async uploadAttachment(file: File): Promise<Attachment> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/uploads', { method: 'POST', body: form });
+    if (!res.ok) {
+      let detail: string | undefined;
+      try {
+        const data = (await res.json()) as { error?: unknown };
+        if (typeof data.error === 'string') detail = data.error;
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(detail ?? res.statusText);
+    }
+    return (await res.json()) as Attachment;
   },
   rate(id: string, score: number, comment: string) {
     return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/rating`, body({ score, comment }));

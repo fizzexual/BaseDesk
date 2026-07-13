@@ -9,8 +9,45 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
 import { toast } from '../components/Toast';
 import { cx } from '../components/util';
-import type { Ticket } from '../data/types';
-import { IconChevronLeft } from '../icons';
+import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
+import type { Attachment, Ticket } from '../data/types';
+import { IconChevronLeft, IconPaperclip, IconX } from '../icons';
+
+const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
+
+/** Renders a message's attachments: images inline, everything else a download chip. */
+function PortalAttachments({ items }: { items: Attachment[] }) {
+  return (
+    <div className="mt-1.5 flex max-w-[85%] flex-wrap gap-2">
+      {items.map((a) =>
+        isImage(a) ? (
+          <a
+            key={a.id}
+            href={attachmentUrl(a)}
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-lg border border-line"
+          >
+            <img src={attachmentUrl(a)} alt={a.filename} className="max-h-40 max-w-[220px] object-cover" />
+          </a>
+        ) : (
+          <a
+            key={a.id}
+            href={attachmentUrl(a)}
+            target="_blank"
+            rel="noreferrer"
+            download={a.filename}
+            className="flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[12px] transition-colors hover:bg-surface-2"
+          >
+            <IconPaperclip size={13} className="shrink-0 text-text-3" />
+            <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+            <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
 
 function Bubble({ message, entering = false }: { message: PortalMessage; entering?: boolean }) {
   const mine = message.authorKind === 'contact';
@@ -29,16 +66,19 @@ function Bubble({ message, entering = false }: { message: PortalMessage; enterin
         <span className="text-[12px] font-medium">{mine ? 'You' : message.authorName}</span>
         <TimeAgo iso={message.at} className="text-[11px] text-text-3" />
       </div>
-      <div
-        className={cx(
-          'max-w-[85%] whitespace-pre-wrap rounded-lg px-3.5 py-2.5 text-[14px] leading-relaxed transition duration-500 ease-out',
-          mine ? 'bg-accent text-accent-fg' : 'border border-line bg-surface',
-          entering && 'ring-2 ring-blue/40',
-          revealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
-        )}
-      >
-        {message.body}
-      </div>
+      {message.body.trim() !== '' && (
+        <div
+          className={cx(
+            'max-w-[85%] whitespace-pre-wrap rounded-lg px-3.5 py-2.5 text-[14px] leading-relaxed transition duration-500 ease-out',
+            mine ? 'bg-accent text-accent-fg' : 'border border-line bg-surface',
+            entering && 'ring-2 ring-blue/40',
+            revealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+          )}
+        >
+          {message.body}
+        </div>
+      )}
+      {message.attachments.length > 0 && <PortalAttachments items={message.attachments} />}
     </div>
   );
 }
@@ -177,6 +217,9 @@ export function PortalTicket() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   // Ids of messages arriving live right now — they get a short highlight ring.
   const [highlightIds, setHighlightIds] = useState<Set<string>>(() => new Set());
 
@@ -274,18 +317,39 @@ export function PortalTicket() {
     bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
   }, [messages, state]);
 
+  async function onFiles(files: FileList | null) {
+    if (files === null || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_UPLOAD) {
+          toast(`${file.name} is over 10 MB`);
+          continue;
+        }
+        const att = await portalApi.uploadAttachment(file);
+        setPending((prev) => [...prev, att]);
+      }
+    } catch {
+      toast('Could not upload the file');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
   async function send() {
     const text = reply.trim();
-    if (text === '' || sending) return;
+    if ((text === '' && pending.length === 0) || sending) return;
     setSending(true);
     try {
-      await portalApi.reply(id, text);
+      await portalApi.reply(id, text, pending.map((a) => a.id));
       toast('Reply sent');
       setReply('');
+      setPending([]);
       await load();
       await refreshTickets();
     } catch {
-      // keep the text so the customer can retry
+      // keep the text + attachments so the customer can retry
     } finally {
       setSending(false);
     }
@@ -352,8 +416,37 @@ export function PortalTicket() {
                 }
               }}
             />
-            <div className="mt-2 flex justify-end">
-              <Button variant="primary" size="sm" disabled={reply.trim() === '' || sending} onClick={() => void send()}>
+            {pending.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {pending.map((a) => (
+                  <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-bg py-1 pl-2 pr-1 text-[12px]">
+                    <IconPaperclip size={12} className="shrink-0 text-text-3" />
+                    <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+                    <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.filename}`}
+                      onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                      className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+                    >
+                      <IconX size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+            <div className="mt-2 flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                <IconPaperclip size={14} />
+                {uploading ? 'Uploading…' : 'Attach'}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={(reply.trim() === '' && pending.length === 0) || sending}
+                onClick={() => void send()}
+              >
                 {sending ? 'Sending…' : 'Send reply'}
               </Button>
             </div>

@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { portalApi } from './api';
 import { usePortal } from './store';
 import { Button } from '../components/Button';
+import { toast } from '../components/Toast';
 import { cx } from '../components/util';
-import type { TicketPriority } from '../data/types';
-import { IconChevronLeft } from '../icons';
+import { formatBytes } from '../data/attachments';
+import type { Attachment, TicketPriority } from '../data/types';
+import { IconChevronLeft, IconPaperclip, IconX } from '../icons';
 
 const FIELD =
   'w-full rounded-md border border-line bg-bg px-3 text-[14px] outline-none focus:border-line-2 placeholder:text-text-3';
+const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
 
 // Customers choose an urgency; we never expose "urgent" to avoid inflation.
 const URGENCY: { value: TicketPriority; label: string }[] = [
@@ -24,15 +28,43 @@ export function PortalNewTicket() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const valid = subject.trim() !== '' && message.trim() !== '';
+
+  async function onFiles(files: FileList | null) {
+    if (files === null || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_UPLOAD) {
+          toast(`${file.name} is over 10 MB`);
+          continue;
+        }
+        const att = await portalApi.uploadAttachment(file);
+        setPending((prev) => [...prev, att]);
+      }
+    } catch {
+      toast('Could not upload the file');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
 
   async function submit() {
     if (!valid || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const id = await createTicket({ subject: subject.trim(), body: message.trim(), priority });
+      const id = await createTicket({
+        subject: subject.trim(),
+        body: message.trim(),
+        priority,
+        attachmentIds: pending.map((a) => a.id),
+      });
       navigate(`/portal/ticket/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the ticket');
@@ -90,6 +122,35 @@ export function PortalNewTicket() {
             className={`${FIELD} resize-y py-2.5 leading-relaxed`}
           />
         </label>
+
+        <div className="flex flex-col gap-2">
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              <IconPaperclip size={14} />
+              {uploading ? 'Uploading…' : 'Attach a file'}
+            </Button>
+          </div>
+          {pending.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {pending.map((a) => (
+                <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface py-1 pl-2 pr-1 text-[12px]">
+                  <IconPaperclip size={12} className="shrink-0 text-text-3" />
+                  <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+                  <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${a.filename}`}
+                    onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                    className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+                  >
+                    <IconX size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {error !== null && (
           <div className="rounded-md border border-red/30 bg-red-bg px-3 py-2 text-[13px] text-red">{error}</div>

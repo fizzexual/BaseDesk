@@ -11,7 +11,7 @@ export interface PortalState {
   login(input: { email: string; password: string }): Promise<void>;
   logout(): void;
   refreshTickets(): Promise<void>;
-  createTicket(input: { subject: string; body: string; priority: TicketPriority }): Promise<string>;
+  createTicket(input: { subject: string; body: string; priority: TicketPriority; attachmentIds?: string[] }): Promise<string>;
   updateProfile(patch: Partial<Pick<Contact, 'name' | 'company' | 'location' | 'timezone'>>): Promise<void>;
 }
 

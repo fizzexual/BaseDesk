@@ -149,7 +149,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Outbound email** — SMTP notifications to customers on reply (zero-dep client) *(v0.5)*
 - [ ] Inbound email ingestion (IMAP + Gmail/MS365 OAuth) — bulletproof threading or nothing
 - [x] **Custom fields** — admin-defined ticket fields (text, long text, number, dropdown, checkbox, date), managed in Settings and edited from the ticket side panel *(v0.6)*
-- [x] **Attachments** — upload files on a reply (10 MB cap), stored beside the database and served with `nosniff`/inline-image handling; images preview in-thread *(v0.6)*; portal-side upload next
+- [x] **Attachments** — upload files on a reply (10 MB cap), stored beside the database and served with `nosniff`/inline-image handling; images preview in-thread. Customers can attach too — from the **customer portal** (new ticket + replies) and the **web-chat widget** *(v0.6)*
 - [x] **Ticket workspace polish** — approve/edit/dismiss AI drafts inline, closed tickets are read-only (reopen to write), and right-click any message to soft-delete it, leaving an audit tombstone *(v0.6)*
 - [x] **CSAT** — customers rate a solved ticket (1–5 ★ + optional comment) from the portal; the score shows on the ticket side panel and rolls up into reports (average, positive %, count) *(v0.6)*
 - [x] **Right-click quick actions** — a reusable context menu on inbox rows (assign, solve/reopen, snooze, archive, trash), reusing the same menu primitive as message delete *(v0.6)*
@@ -158,6 +158,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Macros** — extend a canned reply with actions (set status/priority, add tags, assign to me) that fire when you insert it from the composer *(v0.6)*
 - [x] **@mention notifications** — @mention a teammate in an internal note and they get a notification (header bell + unread badge, click through to the ticket) *(v0.6)*
 - [x] **Merge tickets** — fold a duplicate into another ticket: its messages and attachments move over, a note records the merge, and the source becomes a read-only pointer to the target *(v0.6)*
+- [x] **Customer-side attachments** — end-users attach files from the portal (new ticket + replies) and the web-chat widget, reusing the same upload pipeline; the widget thread now serves public replies only (internal notes never leak) *(v0.6)*
 - [x] **Outbound channel delivery** — agent/AI replies posted to Discord & Slack channel webhooks, plus a generic JSON relay envelope (optional Bearer token) for Telegram/Messenger/WhatsApp/SMS, with a per-channel test send *(v0.6)*
 - [x] **Two-way channels** — inbound threads into one ticket per sender, an HMAC-signed **command** endpoint manages tickets from a bot (reply/solve/reopen), all secrets server-side; connect a provider via a small relay ([docs/channels.md](docs/channels.md)) *(v0.6)*
 - [x] **Discord ticket bot** — a turnkey [`bot/`](bot/) (discord.js): drop in a token + app id, invite it, and `/ticket` opens a private thread that *is* a BaseDesk ticket — customer messages sync in, dashboard replies post back, and `/reply` `/solve` `/close` `/reopen` manage it from Discord. Auto-provisions its own channel; token stays in a git-ignored `.env` *(v0.6)*

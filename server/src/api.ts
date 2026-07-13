@@ -1681,6 +1681,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         authorName: m.authorKind === 'contact' ? contact.name : agentName(m.authorId),
         body: m.body,
         at: m.at,
+        attachments: m.attachments ?? [],
       }));
     return c.json({ ticket, messages });
   });
@@ -1688,7 +1689,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.post('/api/portal/tickets', async (c) => {
     const contact = contactFromAuth(c.req.header('Authorization'));
     if (contact === null) return c.json({ error: 'not signed in' }, 401);
-    let input: { subject?: unknown; body?: unknown; priority?: unknown };
+    let input: { subject?: unknown; body?: unknown; priority?: unknown; attachmentIds?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -1697,6 +1698,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const { subject, body, priority } = input;
     if (typeof subject !== 'string' || subject.trim() === '') return c.json({ error: 'Subject is required' }, 400);
     if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'Message is required' }, 400);
+    const attachmentIds = Array.isArray(input.attachmentIds)
+      ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
+      : [];
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
     const ticket: Ticket = {
@@ -1714,6 +1718,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       insertTicketRow(db, ticket);
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, ticket.id);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -1728,25 +1733,31 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (contact === null) return c.json({ error: 'not signed in' }, 401);
     const ticket = getTicket(db, c.req.param('id'));
     if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
-    let input: { body?: unknown };
+    let input: { body?: unknown; attachmentIds?: unknown };
     try {
       input = await c.req.json();
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
-    if (typeof input.body !== 'string' || input.body.trim() === '') return c.json({ error: 'Message is required' }, 400);
+    const body = typeof input.body === 'string' ? input.body : '';
+    const attachmentIds = Array.isArray(input.attachmentIds)
+      ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
+      : [];
+    if (body.trim() === '' && attachmentIds.length === 0) return c.json({ error: 'a message or attachment is required' }, 400);
     const now = new Date().toISOString();
     const message: Message = {
-      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: input.body, at: now,
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
     };
+    const previewText = body.trim() !== '' ? preview(body) : 'Sent an attachment';
     // A customer reply reopens a solved ticket and clears its resolution stamp.
     const nextStatus = ticket.status === 'solved' || ticket.status === 'closed' ? 'open' : ticket.status;
     db.exec('BEGIN');
     try {
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+      if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, ticket.id);
       db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
-        .run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, preview(input.body), ticket.id);
+        .run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, previewText, ticket.id);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -1911,14 +1922,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const bad = checkInbound(c, channel, raw);
     if (bad !== null) return bad;
 
-    let input: { from?: { name?: unknown; email?: unknown; externalId?: unknown }; subject?: unknown; body?: unknown };
+    let input: { from?: { name?: unknown; email?: unknown; externalId?: unknown }; subject?: unknown; body?: unknown; attachmentIds?: unknown };
     try {
       input = JSON.parse(raw);
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
-    const body = input.body;
-    if (typeof body !== 'string' || body.trim() === '') return c.json({ error: 'body is required' }, 400);
+    const attachmentIds = Array.isArray(input.attachmentIds)
+      ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
+      : [];
+    const body = typeof input.body === 'string' ? input.body : '';
+    if (body.trim() === '' && attachmentIds.length === 0) return c.json({ error: 'body or an attachment is required' }, 400);
+    const previewText = body.trim() !== '' ? preview(body) : 'Sent an attachment';
     const email = typeof input.from?.email === 'string' ? input.from.email.trim() : '';
     const externalId = typeof input.from?.externalId === 'string' ? input.from.externalId.trim() : '';
     if (email === '' && externalId === '') return c.json({ error: 'from.email or from.externalId is required' }, 400);
@@ -1954,8 +1969,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('BEGIN');
       try {
         insertMessageRow(message);
+        if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, existing.id);
         db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
-          .run(now, now, preview(body), existing.id);
+          .run(now, now, previewText, existing.id);
         db.exec('COMMIT');
       } catch (err) {
         db.exec('ROLLBACK');
@@ -1969,7 +1985,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const ticket: Ticket = {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
       requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
-      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
+      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: previewText,
       firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, customFields: {},
     };
     const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
@@ -1977,6 +1993,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     try {
       insertTicketRow(db, ticket);
       insertMessageRow(message);
+      if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, ticket.id);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -2167,7 +2184,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       .prepare('SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? ORDER BY createdAt DESC LIMIT 1')
       .get(channel.id, contact.id) as TicketRow | undefined;
     if (ticket === undefined) return c.json([]);
-    return c.json(getMessages(db, ticket.id));
+    // Customers see public replies only — never internal notes — and get a
+    // trimmed shape (no authorId) plus each reply's attachments.
+    const messages = getMessages(db, ticket.id)
+      .filter((m) => m.kind === 'reply')
+      .map((m) => ({ id: m.id, authorKind: m.authorKind, body: m.body, at: m.at, attachments: m.attachments ?? [] }));
+    return c.json(messages);
   });
 
   app.get('/api/stats', (c) => c.json(computeStats(db, new Date())));
