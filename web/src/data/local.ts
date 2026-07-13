@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  DraftResult, ImportInput, ImportResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  AssignmentSettings, DraftResult, ImportInput, ImportResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv } from './import';
@@ -90,6 +90,8 @@ interface LocalData {
   attachments: Attachment[];
   savedViews: SavedView[];
   notifications: Notification[];
+  assignment: AssignmentSettings;
+  assignmentRr: number; // round-robin cursor
 }
 
 function slugify(title: string): string {
@@ -181,6 +183,8 @@ function seedData(): LocalData {
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
     attachments: [],
     savedViews: [],
+    assignment: { enabled: false, strategy: 'round_robin' },
+    assignmentRr: 0,
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -271,6 +275,11 @@ export class LocalRepository implements Repository {
         this.data.notifications = [];
         this.persist();
       }
+      if (this.data.assignment === undefined) {
+        this.data.assignment = { enabled: false, strategy: 'round_robin' };
+        this.data.assignmentRr = 0;
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -347,6 +356,7 @@ export class LocalRepository implements Repository {
       notifications: [...this.data.notifications]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map((n) => ({ ...n })),
+      assignment: { ...this.data.assignment },
     };
   }
 
@@ -426,8 +436,36 @@ export class LocalRepository implements Repository {
     this.data.tickets.push(ticket);
     this.data.messages.push(message);
     this.runAgentsOnTicket(ticket, input.body);
+    this.autoAssign(ticket);
     this.persist();
     return { ticket: { ...ticket, tags: [...ticket.tags] }, message: { ...message } };
+  }
+
+  /** Mirrors the server: route an unassigned new ticket to an active agent when enabled. */
+  private autoAssign(ticket: Ticket): void {
+    if (ticket.assigneeId !== null || !this.data.assignment.enabled) return;
+    const pool = this.data.agents.filter((a) => a.status === 'active');
+    if (pool.length === 0) return;
+    if (this.data.assignment.strategy === 'least_busy') {
+      let best = pool[0];
+      let bestN = Infinity;
+      for (const a of pool) {
+        const n = this.data.tickets.filter(
+          (t) => t.assigneeId === a.id && t.bucket === 'inbox' && t.mergedIntoId === null && ['open', 'pending', 'on_hold'].includes(t.status),
+        ).length;
+        if (n < bestN) { bestN = n; best = a; }
+      }
+      ticket.assigneeId = best.id;
+    } else {
+      ticket.assigneeId = pool[this.data.assignmentRr % pool.length].id;
+      this.data.assignmentRr = (this.data.assignmentRr + 1) % 1_000_000;
+    }
+  }
+
+  async saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings> {
+    this.data.assignment = { enabled: settings.enabled === true, strategy: settings.strategy === 'least_busy' ? 'least_busy' : 'round_robin' };
+    this.persist();
+    return { ...this.data.assignment };
   }
 
   /** Mirrors the server: highest-autonomy enabled agent acts on a new ticket. */

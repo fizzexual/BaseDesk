@@ -266,6 +266,12 @@ export interface Notification {
   createdAt: string; readAt: string | null;
 }
 
+/** How new unassigned tickets are routed to agents. */
+export interface AssignmentSettings {
+  enabled: boolean;
+  strategy: 'round_robin' | 'least_busy';
+}
+
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
@@ -277,4 +283,5 @@ export interface BootstrapData {
   notifications: Notification[];
   customFields: CustomFieldDef[];
   savedViews: SavedView[];
+  assignment: AssignmentSettings;
 }

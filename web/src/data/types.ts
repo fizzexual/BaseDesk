@@ -269,6 +269,12 @@ export interface Notification {
   createdAt: string; readAt: string | null;
 }
 
+/** How new unassigned tickets are routed to agents. */
+export interface AssignmentSettings {
+  enabled: boolean;
+  strategy: 'round_robin' | 'least_busy';
+}
+
 export type ImportType = 'contacts' | 'tickets';
 export interface ImportField { key: string; label: string; required: boolean }
 export interface ImportInput { type: ImportType; csv: string; mapping?: Record<string, string>; dryRun?: boolean }

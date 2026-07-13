@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -120,6 +120,10 @@ export class ApiRepository implements Repository {
 
   saveAutomation(rules: AutomationRule[]): Promise<AutomationRule[]> {
     return request('/settings/automation', jsonInit('PUT', rules));
+  }
+
+  saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings> {
+    return request('/settings/assignment', jsonInit('PUT', settings));
   }
 
   createArticle(input: ArticleCreate): Promise<KbArticle> {

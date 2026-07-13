@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
-  AgentPatch, ArticleCreate, ArticlePatch, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -15,6 +15,7 @@ export interface BootstrapData {
   customFields: CustomFieldDef[];
   savedViews: SavedView[];
   notifications: Notification[];
+  assignment: AssignmentSettings;
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
@@ -60,6 +61,7 @@ export interface Repository {
   markNotificationsRead(id?: string): Promise<Notification[]>;
   /** Import contacts or tickets from CSV (dryRun previews without writing). */
   importData(input: ImportInput): Promise<ImportResult>;
+  saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;
   deleteAgent(id: string): Promise<void>;

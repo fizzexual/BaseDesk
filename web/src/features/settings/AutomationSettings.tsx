@@ -16,6 +16,7 @@ import type {
   TicketStatus,
 } from '../../data/types';
 import { IconChevronDown, IconFilter, IconPlus, IconTrash, IconX } from '../../icons';
+import { AutoAssignSection } from './AutoAssignSettings';
 
 const CONDITION_TYPES: { value: AutomationConditionType; label: string }[] = [
   { value: 'subject_contains', label: 'Subject contains' },
@@ -203,6 +204,7 @@ export function AutomationSettings() {
 
   return (
     <section>
+      <AutoAssignSection />
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">Automation</h2>
         <Button variant="subtle" size="sm" onClick={addRule}>

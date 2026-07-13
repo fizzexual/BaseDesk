@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AssignmentSettings,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
@@ -16,6 +16,7 @@ export interface AppState {
   agents: Record<string, Agent>; canned: CannedReply[];
   deals: Record<string, Deal>;
   sla: SlaTargets;
+  assignment: AssignmentSettings;
   slaHours: SlaHours;
   automation: AutomationRule[];
   kb: Record<string, KbArticle>;
@@ -54,6 +55,7 @@ export interface AppState {
   saveSlaTargets(targets: SlaTargets): Promise<void>;
   saveSlaHours(hours: SlaHours): Promise<void>;
   saveAutomation(rules: AutomationRule[]): Promise<void>;
+  saveAssignment(settings: AssignmentSettings): Promise<void>;
   inviteAgent(input: AgentInvite): Promise<string>;             // returns id
   updateAgent(id: string, patch: AgentPatch): Promise<void>;    // optimistic + rollback
   deleteAgent(id: string): Promise<void>;                       // optimistic + rollback
@@ -147,6 +149,7 @@ export function createAppStore(repository: Repository) {
     canned: [],
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
+    assignment: { enabled: false, strategy: 'round_robin' },
     slaHours: DEFAULT_SLA_HOURS,
     automation: [],
     kb: {},
@@ -173,6 +176,7 @@ export function createAppStore(repository: Repository) {
         canned: data.canned,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
+        assignment: data.assignment,
         slaHours: data.slaHours,
         automation: data.automation,
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
@@ -543,6 +547,18 @@ export function createAppStore(repository: Repository) {
         set({ automation: saved });
       } catch (err) {
         set({ automation: prev });
+        throw err;
+      }
+    },
+
+    async saveAssignment(settings) {
+      const prev = get().assignment;
+      set({ assignment: settings });
+      try {
+        const saved = await repository.saveAssignment(settings);
+        set({ assignment: saved });
+      } catch (err) {
+        set({ assignment: prev });
         throw err;
       }
     },

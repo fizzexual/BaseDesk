@@ -164,6 +164,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Discord ticket bot** — a turnkey [`bot/`](bot/) (discord.js): drop in a token + app id, invite it, and `/ticket` opens a private thread that *is* a BaseDesk ticket — customer messages sync in, dashboard replies post back, and `/reply` `/solve` `/close` `/reopen` manage it from Discord. Auto-provisions its own channel; token stays in a git-ignored `.env` *(v0.6)*
 - [ ] Transparency portal — status page + roadmap/feedback voting (the customer portal itself shipped in v0.5)
 - [x] **CSV import** — bring **contacts** and **tickets** in from any CSV (Zendesk/Freshdesk export, spreadsheet, …): columns auto-map by header with manual override, a dry-run preview shows what will be created/skipped/errored before you commit, and invalid/duplicate rows are reported per-row *(v0.6)*
+- [x] **Auto-assignment** — route new unassigned tickets to your active agents automatically, **round-robin** (cycle in turn) or **least-busy** (fewest open tickets); toggle it under Settings → Automation *(v0.6)*
 - [ ] Single-binary packaging
 
 ## Philosophy

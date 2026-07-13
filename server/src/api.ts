@@ -22,7 +22,7 @@ import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThrea
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, Attachment, AutomationAction, AutomationCondition, AutomationRule,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -240,6 +240,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   if (getSetting(db, 'sla') === null) setSetting(db, 'sla', JSON.stringify(DEFAULT_SLA_TARGETS));
   if (getSetting(db, 'automation') === null) setSetting(db, 'automation', JSON.stringify(DEFAULT_AUTOMATION));
   if (getSetting(db, 'sla_hours') === null) setSetting(db, 'sla_hours', JSON.stringify(DEFAULT_SLA_HOURS));
+  if (getSetting(db, 'assignment') === null) setSetting(db, 'assignment', JSON.stringify({ enabled: false, strategy: 'round_robin' }));
 
   const slaTargets = (): SlaTargets => {
     try {
@@ -261,6 +262,47 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     } catch {
       return DEFAULT_SLA_HOURS;
     }
+  };
+
+  const assignmentSettings = (): AssignmentSettings => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'assignment') ?? '') as { enabled?: unknown; strategy?: unknown };
+      return { enabled: raw.enabled === true, strategy: raw.strategy === 'least_busy' ? 'least_busy' : 'round_robin' };
+    } catch {
+      return { enabled: false, strategy: 'round_robin' };
+    }
+  };
+
+  /** Choose an agent for a new ticket per the strategy, or null if no agent is active. */
+  const pickAssignee = (strategy: AssignmentSettings['strategy']): string | null => {
+    const pool = db.prepare("SELECT id FROM agents WHERE status = 'active' ORDER BY rowid").all() as { id: string }[];
+    if (pool.length === 0) return null;
+    if (strategy === 'least_busy') {
+      let best = pool[0].id;
+      let bestCount = Infinity;
+      for (const a of pool) {
+        const { n } = db
+          .prepare("SELECT COUNT(*) AS n FROM tickets WHERE assigneeId = ? AND bucket = 'inbox' AND mergedIntoId IS NULL AND status IN ('open', 'pending', 'on_hold')")
+          .get(a.id) as { n: number };
+        if (n < bestCount) { bestCount = n; best = a.id; }
+      }
+      return best;
+    }
+    // round_robin: advance a persisted counter across the active pool.
+    const counter = Number(getSetting(db, 'assignment_rr') ?? '0') || 0;
+    const pick = pool[counter % pool.length].id;
+    setSetting(db, 'assignment_rr', String((counter + 1) % 1_000_000));
+    return pick;
+  };
+
+  /** Assign an unassigned new ticket when auto-assignment is on. Returns the chosen agent id or null. */
+  const autoAssign = (ticketId: string, currentAssignee: string | null): string | null => {
+    if (currentAssignee !== null) return currentAssignee;
+    const cfg = assignmentSettings();
+    if (!cfg.enabled) return null;
+    const pick = pickAssignee(cfg.strategy);
+    if (pick !== null) db.prepare('UPDATE tickets SET assigneeId = ? WHERE id = ?').run(pick, ticketId);
+    return pick;
   };
 
   const currentAgentId = (): string => {
@@ -437,6 +479,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       customFields: getCustomFields(db),
       savedViews: getSavedViews(db),
       notifications: getNotifications(db, currentAgentId()),
+      assignment: assignmentSettings(),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -554,6 +597,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     // AI agents evaluate the new ticket (may auto-resolve it).
     await runAgentsOnTicket(ticket, body);
+    autoAssign(ticket.id, ticket.assigneeId);
     return c.json({ ticket: getTicket(db, ticket.id), message });
   });
 
@@ -1234,6 +1278,20 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(input);
   });
 
+  app.put('/api/settings/assignment', async (c) => {
+    let input: { enabled?: unknown; strategy?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.enabled !== 'boolean') return c.json({ error: 'enabled must be a boolean' }, 400);
+    if (input.strategy !== 'round_robin' && input.strategy !== 'least_busy') return c.json({ error: 'invalid strategy' }, 400);
+    const settings: AssignmentSettings = { enabled: input.enabled, strategy: input.strategy };
+    setSetting(db, 'assignment', JSON.stringify(settings));
+    return c.json(settings);
+  });
+
   app.put('/api/settings/sla-hours', async (c) => {
     let input: unknown;
     try {
@@ -1873,6 +1931,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     await runAgentsOnTicket(ticket, body);
+    autoAssign(ticket.id, null);
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
@@ -2148,6 +2207,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     await runAgentsOnTicket(ticket, body);
+    autoAssign(ticket.id, null);
     return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
   });
 
