@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AssignmentSettings,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, TicketEvent, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -29,6 +29,7 @@ export interface AppState {
   aiProvider: AiProvider;
   smtp: SmtpSettings;
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
+  ticketEvents: Record<string, TicketEvent[]>; // activity timeline, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -36,6 +37,7 @@ export interface AppState {
   ticketsForView(view: ViewId): Ticket[];      // sorted lastMessageAt desc
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
+  loadEvents(ticketId: string): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
   bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
@@ -162,6 +164,7 @@ export function createAppStore(repository: Repository) {
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
     messages: {},
+    ticketEvents: {},
     composerPrefill: null,
     currentAgentId: '',
     theme: initialTheme(),
@@ -233,8 +236,19 @@ export function createAppStore(repository: Repository) {
     },
 
     async loadMessages(ticketId) {
-      const msgs = await repository.getMessages(ticketId);
-      set((s) => ({ messages: { ...s.messages, [ticketId]: msgs } }));
+      const [msgs, events] = await Promise.all([
+        repository.getMessages(ticketId),
+        repository.getTicketEvents(ticketId).catch(() => [] as TicketEvent[]),
+      ]);
+      set((s) => ({
+        messages: { ...s.messages, [ticketId]: msgs },
+        ticketEvents: { ...s.ticketEvents, [ticketId]: events },
+      }));
+    },
+
+    async loadEvents(ticketId) {
+      const events = await repository.getTicketEvents(ticketId);
+      set((s) => ({ ticketEvents: { ...s.ticketEvents, [ticketId]: events } }));
     },
 
     async patchTicket(id, patch) {
@@ -248,6 +262,8 @@ export function createAppStore(repository: Repository) {
       try {
         const ticket = await repository.updateTicket(id, patch);
         set((s) => ({ tickets: { ...s.tickets, [id]: ticket } }));
+        // Refresh the timeline if this ticket's thread is loaded (a change logged events).
+        if (get().ticketEvents[id] !== undefined) void get().loadEvents(id).catch(() => {});
       } catch (err) {
         set((s) => ({ tickets: { ...s.tickets, [id]: prev } }));
         throw err;
@@ -350,13 +366,17 @@ export function createAppStore(repository: Repository) {
     async mergeTicket(ticketId, into) {
       const { source, target } = await repository.mergeTicket(ticketId, into);
       set((s) => {
-        // Drop cached threads for both tickets so the moved messages reload fresh.
+        // Drop cached threads + timelines for both tickets so they reload fresh.
         const messages = { ...s.messages };
+        const ticketEvents = { ...s.ticketEvents };
         delete messages[ticketId];
         delete messages[into];
+        delete ticketEvents[ticketId];
+        delete ticketEvents[into];
         return {
           tickets: { ...s.tickets, [source.id]: source, [target.id]: target },
           messages,
+          ticketEvents,
         };
       });
     },

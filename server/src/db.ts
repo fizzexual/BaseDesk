@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -107,6 +107,14 @@ export function openDb(dataDir: string): DatabaseSync {
       snippet TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       readAt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ticket_events (
+      id TEXT PRIMARY KEY,
+      ticketId TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      actorId TEXT,
+      detail TEXT NOT NULL,
+      at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -292,6 +300,45 @@ export function insertNotification(
   db.prepare(
     'INSERT INTO notifications (id, agentId, ticketId, messageId, actorId, snippet, createdAt, readAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   ).run(n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.snippet, n.createdAt, n.readAt ?? null);
+}
+
+/** A ticket's activity events, oldest first, with the actor's name resolved live. */
+export function getTicketEvents(db: DatabaseSync, ticketId: string): TicketEvent[] {
+  const rows = db
+    .prepare(
+      `SELECT e.id, e.ticketId, e.kind, e.actorId, e.detail, e.at, a.name AS actorName
+         FROM ticket_events e
+         LEFT JOIN agents a ON a.id = e.actorId
+        WHERE e.ticketId = ?
+        ORDER BY e.at ASC, e.rowid ASC`,
+    )
+    .all(ticketId) as { id: string; ticketId: string; kind: string; actorId: string | null; detail: string; at: string; actorName: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    ticketId: r.ticketId,
+    kind: r.kind as TicketEvent['kind'],
+    actorId: r.actorId,
+    actorName: r.actorName,
+    detail: safeParse(r.detail),
+    at: r.at,
+  }));
+}
+
+function safeParse(raw: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function insertTicketEvent(
+  db: DatabaseSync,
+  e: { id: string; ticketId: string; kind: TicketEvent['kind']; actorId: string | null; detail: Record<string, unknown>; at: string },
+): void {
+  db.prepare('INSERT INTO ticket_events (id, ticketId, kind, actorId, detail, at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(e.id, e.ticketId, e.kind, e.actorId, JSON.stringify(e.detail), e.at);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

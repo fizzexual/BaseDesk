@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
-import type { Attachment, Message, Ticket } from '../../data/types';
+import type { Agent, Attachment, Message, Ticket, TicketEvent } from '../../data/types';
 import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
@@ -51,6 +51,43 @@ function Attachments({ items }: { items: Attachment[] }) {
           </a>
         );
       })}
+    </div>
+  );
+}
+
+/** Human sentence for an activity event. */
+function eventText(e: TicketEvent, agents: Record<string, Agent>): string {
+  const d = e.detail;
+  const agentName = (id: unknown): string => (typeof id === 'string' && id !== '' ? agents[id]?.name ?? 'someone' : 'no one');
+  switch (e.kind) {
+    case 'status':
+      return `changed status to ${String(d.to).replace('_', ' ')}`;
+    case 'priority':
+      return `set priority to ${String(d.to)}`;
+    case 'assignee':
+      if (d.to === null || d.to === undefined) return 'unassigned the ticket';
+      return d.auto === true ? `auto-assigned to ${agentName(d.to)}` : `assigned to ${agentName(d.to)}`;
+    case 'tags': {
+      const parts: string[] = [];
+      if (Array.isArray(d.added) && d.added.length > 0) parts.push(`added ${d.added.map((t) => `#${t}`).join(' ')}`);
+      if (Array.isArray(d.removed) && d.removed.length > 0) parts.push(`removed ${d.removed.map((t) => `#${t}`).join(' ')}`);
+      return parts.length > 0 ? parts.join(', ') : 'updated tags';
+    }
+    case 'merged':
+      return `merged this into #${String(d.targetNumber)}`;
+    default:
+      return 'updated the ticket';
+  }
+}
+
+function EventRow({ event }: { event: TicketEvent }) {
+  const agents = useApp((s) => s.agents);
+  const actor = event.actorName ?? (event.actorId !== null ? agents[event.actorId]?.name : null) ?? 'Automation';
+  return (
+    <div className="flex justify-center">
+      <span className="rounded-full bg-surface-2 px-3 py-1 text-[12px] text-text-3">
+        <span className="font-medium text-text-2">{actor}</span> {eventText(event, agents)} · <TimeAgo iso={event.at} />
+      </span>
     </div>
   );
 }
@@ -120,8 +157,13 @@ function MessageRow({
   );
 }
 
+type TimelineItem =
+  | { t: 'm'; at: string; key: string; m: Message }
+  | { t: 'e'; at: string; key: string; e: TicketEvent };
+
 export function Conversation({ ticket }: { ticket: Ticket }) {
   const messages = useApp((s) => s.messages[ticket.id]) as Message[] | undefined;
+  const events = useApp((s) => s.ticketEvents[ticket.id]) as TicketEvent[] | undefined;
   const deleteMessage = useApp((s) => s.deleteMessage);
   const endRef = useRef<HTMLDivElement>(null);
   const scrolledFor = useRef<string | null>(null);
@@ -180,11 +222,21 @@ export function Conversation({ ticket }: { ticket: Ticket }) {
     return <div className="flex-1 overflow-y-auto px-4 py-5" />;
   }
 
+  // Interleave messages and activity events into one time-ordered timeline.
+  const items: TimelineItem[] = [
+    ...messages.map((m): TimelineItem => ({ t: 'm', at: m.at, key: `m${m.id}`, m })),
+    ...(events ?? []).map((e): TimelineItem => ({ t: 'e', at: e.at, key: `e${e.id}`, e })),
+  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-5">
-      {messages.map((m) => (
-        <MessageRow key={m.id} message={m} onContextMenu={openMenu} />
-      ))}
+      {items.map((it) =>
+        it.t === 'm' ? (
+          <MessageRow key={it.key} message={it.m} onContextMenu={openMenu} />
+        ) : (
+          <EventRow key={it.key} event={it.e} />
+        ),
+      )}
       <div ref={endRef} />
 
       {menu !== null && (

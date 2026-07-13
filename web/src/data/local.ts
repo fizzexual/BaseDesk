@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, DraftResult, ImportInput, ImportResult, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
-  SummaryResult, Ticket, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -92,6 +92,7 @@ interface LocalData {
   notifications: Notification[];
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
+  events: TicketEvent[];
 }
 
 function slugify(title: string): string {
@@ -185,6 +186,7 @@ function seedData(): LocalData {
     savedViews: [],
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
+    events: [],
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -278,6 +280,10 @@ export class LocalRepository implements Repository {
       if (this.data.assignment === undefined) {
         this.data.assignment = { enabled: false, strategy: 'round_robin' };
         this.data.assignmentRr = 0;
+        this.persist();
+      }
+      if (!Array.isArray(this.data.events)) {
+        this.data.events = [];
         this.persist();
       }
       // Older demo data predates macro actions; default them to a plain reply.
@@ -460,6 +466,7 @@ export class LocalRepository implements Repository {
       ticket.assigneeId = pool[this.data.assignmentRr % pool.length].id;
       this.data.assignmentRr = (this.data.assignmentRr + 1) % 1_000_000;
     }
+    this.pushEvent(ticket.id, 'assignee', null, { from: null, to: ticket.assigneeId, auto: true }, ticket.createdAt);
   }
 
   async saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings> {
@@ -512,6 +519,7 @@ export class LocalRepository implements Repository {
 
   async updateTicket(id: string, patch: TicketPatch): Promise<Ticket> {
     const t = this.ticket(id);
+    const before = { status: t.status, priority: t.priority, assigneeId: t.assigneeId, tags: [...t.tags] };
     for (const [key, value] of Object.entries(patch)) {
       if (value !== undefined) (t as unknown as Record<string, unknown>)[key] = value;
     }
@@ -522,6 +530,7 @@ export class LocalRepository implements Repository {
       else if (!RESOLVED.includes(patch.status) && t.resolvedAt !== null) t.resolvedAt = null;
     }
     t.updatedAt = now;
+    this.logPatchEvents(id, before, patch, CURRENT_AGENT_ID, now);
     this.persist();
     return { ...t, tags: [...t.tags] };
   }
@@ -532,6 +541,7 @@ export class LocalRepository implements Repository {
     for (const id of ids) {
       const t = this.data.tickets.find((x) => x.id === id);
       if (!t) continue;
+      const before = { status: t.status, priority: t.priority, assigneeId: t.assigneeId, tags: [...t.tags] };
       for (const key of ['status', 'priority', 'assigneeId', 'bucket', 'snoozedUntil'] as const) {
         if (key in patch && patch[key] !== undefined) (t as unknown as Record<string, unknown>)[key] = patch[key];
       }
@@ -541,10 +551,40 @@ export class LocalRepository implements Repository {
         else if (!RESOLVED.includes(patch.status) && t.resolvedAt !== null) t.resolvedAt = null;
       }
       t.updatedAt = now;
+      this.logPatchEvents(id, before, { ...patch, tags: t.tags }, CURRENT_AGENT_ID, now);
       out.push({ ...t, tags: [...t.tags] });
     }
     this.persist();
     return out;
+  }
+
+  private pushEvent(ticketId: string, kind: TicketEvent['kind'], actorId: string | null, detail: Record<string, unknown>, at: string): void {
+    const actorName = actorId !== null ? this.data.agents.find((a) => a.id === actorId)?.name ?? null : null;
+    this.data.events.push({ id: nextId(this.data.events, 'ev_', 1), ticketId, kind, actorId, actorName, detail, at });
+  }
+
+  private logPatchEvents(
+    ticketId: string,
+    before: { status: TicketStatus; priority: TicketPriority; assigneeId: string | null; tags: string[] },
+    patch: TicketPatch,
+    actorId: string | null,
+    at: string,
+  ): void {
+    if (patch.status !== undefined && patch.status !== before.status) this.pushEvent(ticketId, 'status', actorId, { from: before.status, to: patch.status }, at);
+    if (patch.priority !== undefined && patch.priority !== before.priority) this.pushEvent(ticketId, 'priority', actorId, { from: before.priority, to: patch.priority }, at);
+    if (patch.assigneeId !== undefined && patch.assigneeId !== before.assigneeId) this.pushEvent(ticketId, 'assignee', actorId, { from: before.assigneeId, to: patch.assigneeId }, at);
+    if (patch.tags !== undefined) {
+      const added = patch.tags.filter((x) => !before.tags.includes(x));
+      const removed = before.tags.filter((x) => !patch.tags!.includes(x));
+      if (added.length > 0 || removed.length > 0) this.pushEvent(ticketId, 'tags', actorId, { added, removed }, at);
+    }
+  }
+
+  async getTicketEvents(ticketId: string): Promise<TicketEvent[]> {
+    return this.data.events
+      .filter((e) => e.ticketId === ticketId)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .map((e) => ({ ...e }));
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
@@ -619,6 +659,7 @@ export class LocalRepository implements Repository {
     source.mergedIntoId = into;
     source.status = 'closed';
     source.updatedAt = now;
+    this.pushEvent(source.id, 'merged', CURRENT_AGENT_ID, { targetId: into, targetNumber: target.number }, now);
     const newestReply = this.data.messages
       .filter((m) => m.ticketId === into && m.kind === 'reply' && !m.deletedAt)
       .sort((a, b) => a.at.localeCompare(b.at))

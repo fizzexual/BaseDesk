@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, TicketEvent, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -63,6 +63,9 @@ export class ApiRepository implements Repository {
   }
   mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/merge`, jsonInit('POST', { into }));
+  }
+  getTicketEvents(ticketId: string): Promise<TicketEvent[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/events`);
   }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();

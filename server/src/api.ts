@@ -6,8 +6,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, markNotificationsRead, setSavedViews,
-  insertAiAction, insertAttachment, insertNotification, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
+  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setSavedViews,
+  insertAiAction, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
@@ -25,7 +25,7 @@ import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, KbArticle, MacroActions, Message,
-  SavedView, SlaTargets, Ticket, TicketPatch, TicketPriority, TicketStatus, ViewId,
+  SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -296,12 +296,32 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   };
 
   /** Assign an unassigned new ticket when auto-assignment is on. Returns the chosen agent id or null. */
+  const logEvent = (ticketId: string, kind: TicketEvent['kind'], actorId: string | null, detail: Record<string, unknown>, at: string): void => {
+    insertTicketEvent(db, { id: newId('ev_'), ticketId, kind, actorId, detail, at });
+  };
+
+  /** Log ticket_events for the fields that actually changed between a ticket and its patch. */
+  const logPatchEvents = (before: Ticket, patch: TicketPatch, actorId: string | null, at: string): void => {
+    if (patch.status !== undefined && patch.status !== before.status) logEvent(before.id, 'status', actorId, { from: before.status, to: patch.status }, at);
+    if (patch.priority !== undefined && patch.priority !== before.priority) logEvent(before.id, 'priority', actorId, { from: before.priority, to: patch.priority }, at);
+    if (patch.assigneeId !== undefined && patch.assigneeId !== before.assigneeId) logEvent(before.id, 'assignee', actorId, { from: before.assigneeId, to: patch.assigneeId }, at);
+    if (patch.tags !== undefined) {
+      const added = patch.tags.filter((t) => !before.tags.includes(t));
+      const removed = before.tags.filter((t) => !patch.tags!.includes(t));
+      if (added.length > 0 || removed.length > 0) logEvent(before.id, 'tags', actorId, { added, removed }, at);
+    }
+  };
+
   const autoAssign = (ticketId: string, currentAssignee: string | null): string | null => {
     if (currentAssignee !== null) return currentAssignee;
     const cfg = assignmentSettings();
     if (!cfg.enabled) return null;
     const pick = pickAssignee(cfg.strategy);
-    if (pick !== null) db.prepare('UPDATE tickets SET assigneeId = ? WHERE id = ?').run(pick, ticketId);
+    if (pick !== null) {
+      const now = new Date().toISOString();
+      db.prepare('UPDATE tickets SET assigneeId = ? WHERE id = ?').run(pick, ticketId);
+      logEvent(ticketId, 'assignee', null, { from: null, to: pick, auto: true }, now); // null actor = automation
+    }
     return pick;
   };
 
@@ -647,6 +667,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     sets.push('updatedAt = ?');
     params.push(now);
     db.prepare(`UPDATE tickets SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+    logPatchEvents(existing, patch, currentAgentId(), now);
     return c.json(getTicket(db, id));
   });
 
@@ -704,6 +725,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       sets.push('updatedAt = ?');
       params.push(now);
       db.prepare(`UPDATE tickets SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+      const effective: TicketPatch = { ...patch };
+      if (addTags.length > 0) effective.tags = Array.from(new Set([...existing.tags, ...addTags]));
+      logPatchEvents(existing, effective, currentAgentId(), now);
       const t = getTicket(db, id);
       if (t !== null) updated.push(t);
     }
@@ -714,6 +738,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     return c.json(getMessages(db, id));
+  });
+
+  app.get('/api/tickets/:id/events', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getTicketEvents(db, id));
   });
 
   app.post('/api/tickets/:id/messages', async (c) => {
@@ -819,6 +849,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(newId('m_'), into, 'agent', currentAgentId(), 'note', `Merged ticket #${source.number} — "${source.subject}" — into this one.`, now);
       db.prepare('UPDATE tickets SET mergedIntoId = ?, status = ?, updatedAt = ? WHERE id = ?').run(into, 'closed', now, id);
+      logEvent(id, 'merged', currentAgentId(), { targetId: into, targetNumber: target.number }, now);
       // Reflect the merged-in activity on the target from its newest customer/agent reply.
       const newestReply = db
         .prepare("SELECT body, at FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC LIMIT 1")

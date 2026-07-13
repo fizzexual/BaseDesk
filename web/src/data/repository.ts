@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, Notification, TicketEvent, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -20,6 +20,7 @@ export interface BootstrapData {
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
   getMessages(ticketId: string): Promise<Message[]>;
+  getTicketEvents(ticketId: string): Promise<TicketEvent[]>;
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }>;
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket>;
   bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]>;

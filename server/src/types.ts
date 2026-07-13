@@ -256,6 +256,20 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 
+export type TicketEventKind = 'status' | 'priority' | 'assignee' | 'tags' | 'merged';
+/**
+ * A structured change to a ticket, for its activity timeline. actorName is
+ * resolved at read time (null = a system/automation action). `detail` holds the
+ * change: { from, to } for scalar fields, { added, removed } for tags,
+ * { targetNumber } for a merge.
+ */
+export interface TicketEvent {
+  id: string; ticketId: string; kind: TicketEventKind;
+  actorId: string | null; actorName: string | null;
+  detail: Record<string, unknown>;
+  at: string;
+}
+
 /**
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.

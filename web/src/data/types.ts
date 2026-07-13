@@ -262,6 +262,15 @@ export interface SavedView {
 }
 export type SavedViewCreate = Omit<SavedView, 'id'>;
 
+export type TicketEventKind = 'status' | 'priority' | 'assignee' | 'tags' | 'merged';
+/** A structured change on a ticket's activity timeline. actorName null = automation/system. */
+export interface TicketEvent {
+  id: string; ticketId: string; kind: TicketEventKind;
+  actorId: string | null; actorName: string | null;
+  detail: Record<string, unknown>;
+  at: string;
+}
+
 /** An @mention alert for the current agent. */
 export interface Notification {
   id: string; agentId: string; ticketId: string; ticketSubject: string;
