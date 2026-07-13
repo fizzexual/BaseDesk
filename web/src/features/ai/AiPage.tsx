@@ -126,6 +126,7 @@ export function AiPage() {
 
   const aiAgents = useApp((s) => s.aiAgents);
   const aiActions = useApp((s) => s.aiActions);
+  const aiUsage = useApp((s) => s.aiUsage);
   const aiProvider = useApp((s) => s.aiProvider);
   const runAgents = useApp((s) => s.runAgents);
   const updateAiAgent = useApp((s) => s.updateAiAgent);
@@ -149,17 +150,9 @@ export function AiPage() {
   }, [aiActions]);
 
   const usage = useMemo(() => {
-    let prompt = 0;
-    let completion = 0;
-    let generations = 0;
-    for (const a of Object.values(aiActions)) {
-      prompt += a.promptTokens;
-      completion += a.completionTokens;
-      if (a.promptTokens + a.completionTokens > 0) generations += 1;
-    }
-    const cost = estimateCost(prompt, completion, aiProvider.baseUrl, aiProvider.model);
-    return { total: prompt + completion, generations, cost };
-  }, [aiActions, aiProvider]);
+    const cost = estimateCost(aiUsage.promptTokens, aiUsage.completionTokens, aiProvider.baseUrl, aiProvider.model);
+    return { total: aiUsage.promptTokens + aiUsage.completionTokens, generations: aiUsage.generations, cost };
+  }, [aiUsage, aiProvider]);
 
   async function onRun() {
     if (running) return;

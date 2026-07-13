@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AssignmentSettings,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
-  SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, ViewId,
+  SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
@@ -22,6 +22,7 @@ export interface AppState {
   kb: Record<string, KbArticle>;
   aiAgents: Record<string, AiAgent>;
   aiActions: Record<string, AiAction>;
+  aiUsage: AiUsage; // aggregate token spend across all recorded model calls
   channels: Record<string, ChannelConn>;
   customFields: CustomFieldDef[]; // ordered by entity + position
   savedViews: SavedView[];
@@ -87,6 +88,7 @@ export interface AppState {
   testAiProvider(input?: AiProviderSave): Promise<AiTestResult>;
   saveSmtp(input: SmtpSave): Promise<void>;
   testSmtp(to?: string): Promise<SmtpTestResult>;
+  bumpUsage(u: TokenUsage): void;
   aiDraft(ticketId: string): Promise<DraftResult>;
   aiTriage(ticketId: string): Promise<CopilotTriage>;
   aiSummarize(ticketId: string): Promise<SummaryResult>;
@@ -158,6 +160,7 @@ export function createAppStore(repository: Repository) {
     kb: {},
     aiAgents: {},
     aiActions: {},
+    aiUsage: { promptTokens: 0, completionTokens: 0, generations: 0 },
     channels: {},
     customFields: [],
     savedViews: [],
@@ -186,6 +189,7 @@ export function createAppStore(repository: Repository) {
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
+        aiUsage: data.aiUsage,
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         customFields: data.customFields,
         savedViews: data.savedViews,
@@ -863,16 +867,35 @@ export function createAppStore(repository: Repository) {
       return repository.testSmtp(to);
     },
 
-    aiDraft(ticketId) {
-      return repository.aiDraft(ticketId);
+    // Add a model call's returned token usage to the running total so the AI
+    // overview updates live (the server records the same call to its ledger).
+    bumpUsage(u) {
+      if (u.promptTokens + u.completionTokens <= 0) return;
+      set((s) => ({
+        aiUsage: {
+          promptTokens: s.aiUsage.promptTokens + u.promptTokens,
+          completionTokens: s.aiUsage.completionTokens + u.completionTokens,
+          generations: s.aiUsage.generations + 1,
+        },
+      }));
     },
 
-    aiTriage(ticketId) {
-      return repository.aiTriage(ticketId);
+    async aiDraft(ticketId) {
+      const r = await repository.aiDraft(ticketId);
+      get().bumpUsage(r.usage);
+      return r;
     },
 
-    aiSummarize(ticketId) {
-      return repository.aiSummarize(ticketId);
+    async aiTriage(ticketId) {
+      const r = await repository.aiTriage(ticketId);
+      get().bumpUsage(r.usage);
+      return r;
+    },
+
+    async aiSummarize(ticketId) {
+      const r = await repository.aiSummarize(ticketId);
+      get().bumpUsage(r.usage);
+      return r;
     },
 
     setTheme(t) {

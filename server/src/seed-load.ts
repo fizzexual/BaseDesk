@@ -96,8 +96,13 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const g of seed.aiAgents) {
       insertAiAgent.run(g.id, g.name, g.avatarHue, g.enabled ? 1 : 0, g.autonomy, JSON.stringify(g.scopeTags), JSON.stringify(g.scopePriorities), g.createdAt);
     }
+    const insertUsage = db.prepare('INSERT INTO ai_usage (id, kind, promptTokens, completionTokens, at) VALUES (?, ?, ?, ?, ?)');
     for (const a of seed.aiActions) {
       insertAiAction.run(a.id, a.agentId, a.ticketId, a.kind, a.status, a.draftBody, a.suggestedPriority, JSON.stringify(a.suggestedTags), a.kbArticleId, a.promptTokens ?? 0, a.completionTokens ?? 0, a.createdAt, a.resolvedAt);
+      // Mirror seeded actions into the usage ledger so the AI overview isn't empty.
+      if ((a.promptTokens ?? 0) + (a.completionTokens ?? 0) > 0) {
+        insertUsage.run(a.id, a.kind, a.promptTokens ?? 0, a.completionTokens ?? 0, a.createdAt);
+      }
     }
     for (const ch of seed.channels) {
       insertChannel.run(ch.id, ch.type, ch.name, ch.enabled ? 1 : 0, ch.inboundToken, ch.address, ch.createdAt);

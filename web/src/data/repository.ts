@@ -1,5 +1,5 @@
 import type {
-  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite, Attachment,
+  AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
@@ -10,7 +10,7 @@ export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
-  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: ChannelConn[];
+  aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: ChannelConn[];
   slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
   customFields: CustomFieldDef[];
   savedViews: SavedView[];

@@ -286,11 +286,18 @@ export interface AssignmentSettings {
   strategy: 'round_robin' | 'least_busy';
 }
 
+/** Aggregate AI token spend across every recorded model call. */
+export interface AiUsage {
+  promptTokens: number;
+  completionTokens: number;
+  generations: number;
+}
+
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
-  aiAgents: AiAgent[]; aiActions: AiAction[]; channels: PublicChannel[];
+  aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: PublicChannel[];
   slaHours: SlaHours;
   aiProvider: AiProvider;
   smtp: SmtpSettings;

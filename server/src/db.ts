@@ -116,6 +116,13 @@ export function openDb(dataDir: string): DatabaseSync {
       detail TEXT NOT NULL,
       at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ai_usage (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      promptTokens INTEGER NOT NULL,
+      completionTokens INTEGER NOT NULL,
+      at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -239,7 +246,37 @@ export function openDb(dataDir: string): DatabaseSync {
 
   if (!ticketCols.some((c) => c.name === 'mergedIntoId')) db.exec('ALTER TABLE tickets ADD COLUMN mergedIntoId TEXT');
 
+  // One-time backfill: seed the usage ledger from any pre-existing AI actions so
+  // an upgraded install keeps the token history it already recorded. New calls
+  // (interactive + autonomous) append to the ledger going forward.
+  const usageRows = (db.prepare('SELECT COUNT(*) AS n FROM ai_usage').get() as { n: number }).n;
+  if (usageRows === 0) {
+    db.exec(
+      `INSERT INTO ai_usage (id, kind, promptTokens, completionTokens, at)
+       SELECT id, kind, promptTokens, completionTokens, createdAt FROM ai_actions
+       WHERE (promptTokens + completionTokens) > 0`,
+    );
+  }
+
   return db;
+}
+
+export interface AiUsageTotals { promptTokens: number; completionTokens: number; generations: number }
+
+/** Aggregate token spend across every recorded model call (interactive + autonomous). */
+export function getAiUsage(db: DatabaseSync): AiUsageTotals {
+  const r = db
+    .prepare('SELECT COALESCE(SUM(promptTokens), 0) AS p, COALESCE(SUM(completionTokens), 0) AS c, COUNT(*) AS n FROM ai_usage')
+    .get() as { p: number; c: number; n: number };
+  return { promptTokens: r.p, completionTokens: r.c, generations: r.n };
+}
+
+export function insertAiUsage(
+  db: DatabaseSync,
+  u: { id: string; kind: string; promptTokens: number; completionTokens: number; at: string },
+): void {
+  db.prepare('INSERT INTO ai_usage (id, kind, promptTokens, completionTokens, at) VALUES (?, ?, ?, ?, ?)')
+    .run(u.id, u.kind, u.promptTokens, u.completionTokens, u.at);
 }
 
 /**

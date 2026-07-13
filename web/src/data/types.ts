@@ -284,6 +284,13 @@ export interface AssignmentSettings {
   strategy: 'round_robin' | 'least_busy';
 }
 
+/** Aggregate AI token spend across every recorded model call. */
+export interface AiUsage {
+  promptTokens: number;
+  completionTokens: number;
+  generations: number;
+}
+
 export type ImportType = 'contacts' | 'tickets';
 export interface ImportField { key: string; label: string; required: boolean }
 export interface ImportInput { type: ImportType; csv: string; mapping?: Record<string, string>; dryRun?: boolean }

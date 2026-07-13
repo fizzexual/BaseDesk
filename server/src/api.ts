@@ -6,8 +6,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setSavedViews,
-  insertAiAction, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
+  getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setSavedViews,
+  insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
@@ -325,6 +325,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return pick;
   };
 
+  /** Append a model call's token spend to the usage ledger (skips the free rule-based path). */
+  const recordUsage = (kind: string, usage: { promptTokens: number; completionTokens: number }): void => {
+    if (usage.promptTokens + usage.completionTokens <= 0) return;
+    insertAiUsage(db, { id: newId('use_'), kind, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens, at: new Date().toISOString() });
+  };
+
   const currentAgentId = (): string => {
     const row = db.prepare("SELECT id FROM agents WHERE role = 'admin' ORDER BY rowid LIMIT 1").get() as
       | { id: string }
@@ -453,6 +459,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         createdAt: now, resolvedAt: kind === 'resolve' ? now : null,
       };
       insertAiAction(db, action);
+      recordUsage(kind === 'resolve' ? 'agent_resolve' : 'agent_draft', { promptTokens, completionTokens });
       if (kind === 'resolve' && body !== null) {
         const message: Message = {
           id: newId('m_'), ticketId: ticket.id, authorKind: 'agent', authorId: currentAgentId(),
@@ -495,6 +502,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       kb,
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
+      aiUsage: getAiUsage(db),
       channels: getChannels(db).map(toPublicChannel),
       customFields: getCustomFields(db),
       savedViews: getSavedViews(db),
@@ -1733,6 +1741,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       { subject: ticket.subject, contactName, agentName, signature: agent?.signature ?? '', thread, canned, kb },
       fallback,
     );
+    recordUsage('draft', result.usage);
     return c.json(result);
   });
 
@@ -1751,6 +1760,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const triageCtx = { subject: ticket.subject, bodyText, currentPriority: ticket.priority, currentTags: ticket.tags };
     const fallback = suggestTriage(triageCtx);
     const result = await suggestTriageAI(getAiProviderConfig(db), triageCtx, fallback);
+    recordUsage('triage', result.usage);
     return c.json(result);
   });
 
@@ -1768,6 +1778,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const contactName = contact?.name ?? 'there';
     const fallback = summarizeThread({ contactName, messages: getMessages(db, ticket.id) });
     const result = await summarizeThreadAI(getAiProviderConfig(db), { contactName, thread: threadOf(ticket.id) }, fallback);
+    recordUsage('summary', result.usage);
     return c.json(result);
   });
 
