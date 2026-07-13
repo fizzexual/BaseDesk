@@ -354,6 +354,7 @@ export class LocalRepository implements Repository {
       kb: this.data.kb.map((a) => ({ ...a })),
       aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
       aiActions: this.data.aiActions.map((a) => ({ ...a })),
+      availableModels: null,
       aiUsage: this.data.aiActions.reduce(
         (acc, a) => {
           const tokens = a.promptTokens + a.completionTokens;

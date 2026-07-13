@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setSavedViews,
+  getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
@@ -106,6 +106,39 @@ const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
 
 const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const IMPORT_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** Fetch the model ids a provider currently offers (OpenAI-compatible GET /models). Throws on failure. */
+async function fetchModelIds(baseUrl: string, apiKey: string): Promise<string[]> {
+  const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
+    headers: apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {},
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`provider returned ${res.status}`);
+  const data = (await res.json()) as { data?: { id?: unknown }[] };
+  return Array.isArray(data.data)
+    ? [...new Set(data.data.map((m) => (m && typeof m.id === 'string' ? m.id : '')).filter((id) => id !== ''))].sort()
+    : [];
+}
+
+/**
+ * The "addresser": refresh the cached list of available models for the configured
+ * provider. Runs on boot and on a daily timer. Only reaches out for an enabled
+ * provider that has a key (or a local one) — so a fresh/unconfigured install and
+ * the tests never touch the network. Keeps the previous cache on any failure.
+ */
+export async function refreshModelCache(db: DatabaseSync): Promise<void> {
+  const cfg = getAiProviderConfig(db);
+  const baseUrl = cfg.baseUrl.trim();
+  const apiKey = cfg.apiKey.trim();
+  const isLocal = /localhost|127\.0\.0\.1|::1/.test(baseUrl);
+  if (!cfg.enabled || baseUrl === '' || (apiKey === '' && !isLocal)) return;
+  try {
+    const models = await fetchModelIds(baseUrl, apiKey);
+    if (models.length > 0) setModelCache(db, { baseUrl, models, fetchedAt: new Date().toISOString() });
+  } catch {
+    /* provider unreachable — keep the last known list */
+  }
+}
 
 /** Best-effort guess of which CSV column feeds each target field, by header name. */
 function autoMapColumns(type: ImportType, headers: string[]): Record<string, string> {
@@ -230,6 +263,8 @@ function viewWhere(view: ViewId, nowIso: string, currentAgentId: string): { sql:
 export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
+  // Refresh the available-model list on boot (no-op unless a provider is set up).
+  void refreshModelCache(db);
 
   // Uploaded files live next to the SQLite database, keyed by attachment id.
   const attachDir = path.join(dataDir, 'attachments');
@@ -503,6 +538,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       aiAgents: getAiAgents(db),
       aiActions: getAiActions(db),
       aiUsage: getAiUsage(db),
+      availableModels: getModelCache(db),
       channels: getChannels(db).map(toPublicChannel),
       customFields: getCustomFields(db),
       savedViews: getSavedViews(db),
@@ -1729,15 +1765,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const apiKey = (typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey : stored.apiKey).trim();
     if (baseUrl === '') return c.json({ error: 'Enter a base URL first.' });
     try {
-      const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
-        headers: apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {},
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) return c.json({ error: `Provider returned ${res.status} — check the base URL and key.` });
-      const data = (await res.json()) as { data?: { id?: unknown }[] };
-      const models = Array.isArray(data.data)
-        ? [...new Set(data.data.map((m) => (m && typeof m.id === 'string' ? m.id : '')).filter((id) => id !== ''))].sort()
-        : [];
+      const models = await fetchModelIds(baseUrl, apiKey);
+      setModelCache(db, { baseUrl, models, fetchedAt: new Date().toISOString() }); // a manual fetch also refreshes the cache
       return c.json({ models });
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Could not reach the provider.' });

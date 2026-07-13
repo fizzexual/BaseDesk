@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -23,6 +23,7 @@ export interface AppState {
   aiAgents: Record<string, AiAgent>;
   aiActions: Record<string, AiAction>;
   aiUsage: AiUsage; // aggregate token spend across all recorded model calls
+  availableModels: ModelCache | null; // provider's live model list, refreshed on boot + daily
   channels: Record<string, ChannelConn>;
   customFields: CustomFieldDef[]; // ordered by entity + position
   savedViews: SavedView[];
@@ -162,6 +163,7 @@ export function createAppStore(repository: Repository) {
     aiAgents: {},
     aiActions: {},
     aiUsage: { promptTokens: 0, completionTokens: 0, generations: 0 },
+    availableModels: null,
     channels: {},
     customFields: [],
     savedViews: [],
@@ -191,6 +193,7 @@ export function createAppStore(repository: Repository) {
         aiAgents: Object.fromEntries(data.aiAgents.map((a) => [a.id, a])),
         aiActions: Object.fromEntries(data.aiActions.map((a) => [a.id, a])),
         aiUsage: data.aiUsage,
+        availableModels: data.availableModels,
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         customFields: data.customFields,
         savedViews: data.savedViews,

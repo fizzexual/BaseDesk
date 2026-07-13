@@ -3,12 +3,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { createApp } from './api.js';
+import { createApp, refreshModelCache } from './api.js';
 
 const dataDir = process.env.DATA_DIR ?? './data';
 mkdirSync(dataDir, { recursive: true });
 
-const { app } = createApp(dataDir);
+const { app, db } = createApp(dataDir);
+
+// The model "addresser": re-check the provider's available models once a day
+// (createApp already refreshes on boot). unref() so it never blocks shutdown.
+setInterval(() => void refreshModelCache(db), 24 * 60 * 60 * 1000).unref();
 
 // Serve the built SPA in production (web/dist present). In dev (BASEDESK_DEV=1)
 // the two Vite servers serve the SPA, so the API stays API-only even if a stale

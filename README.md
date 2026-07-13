@@ -144,7 +144,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
 - [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
 - [x] **Customer portal** — end-user sign-in (scrypt-hashed passwords), scoped tickets, replies, new tickets, profile, help center *(v0.5)*; magic-link email verification next
-- [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents; a model catalog (8 providers) with per-1M pricing, context, and reasoning info; **Load models from provider** pulls the live `/models` list so anything your provider offers right now is one click away; key kept server-side; rule-based fallback *(v0.5)*
+- [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents; a model catalog (8 providers) with per-1M pricing, context, and reasoning info; an **auto-refresher** re-checks your provider's live `/models` list on startup and daily, so the picker always shows everything on offer right now (new models appear automatically, retired ones are flagged); key kept server-side; rule-based fallback *(v0.5)*
 - [ ] Holiday calendars for SLA clocks
 - [x] **Outbound email** — SMTP notifications to customers on reply (zero-dep client) *(v0.5)*
 - [ ] Inbound email ingestion (IMAP + Gmail/MS365 OAuth) — bulletproof threading or nothing

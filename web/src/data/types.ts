@@ -292,6 +292,9 @@ export interface AiUsage {
   generations: number;
 }
 
+/** The provider's live model list, cached by the daily/bootup refresher. */
+export interface ModelCache { baseUrl: string; models: string[]; fetchedAt: string }
+
 export type ImportType = 'contacts' | 'tickets';
 export interface ImportField { key: string; label: string; required: boolean }
 export interface ImportInput { type: ImportType; csv: string; mapping?: Record<string, string>; dryRun?: boolean }

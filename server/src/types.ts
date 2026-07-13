@@ -293,11 +293,15 @@ export interface AiUsage {
   generations: number;
 }
 
+/** The provider's live model list, cached by the daily/bootup refresher. */
+export interface ModelCache { baseUrl: string; models: string[]; fetchedAt: string }
+
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
   canned: CannedReply[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: PublicChannel[];
+  availableModels: ModelCache | null;
   slaHours: SlaHours;
   aiProvider: AiProvider;
   smtp: SmtpSettings;

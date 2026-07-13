@@ -23,9 +23,11 @@ const TOGGLE_OPTIONS: { value: 'on' | 'off'; label: string }[] = [
 
 export function AiSettings() {
   const provider = useApp((s) => s.aiProvider);
+  const availableModels = useApp((s) => s.availableModels);
   const saveAiProvider = useApp((s) => s.saveAiProvider);
   const testAiProvider = useApp((s) => s.testAiProvider);
   const listProviderModels = useApp((s) => s.listProviderModels);
+  const sameUrl = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 
   const [copilot, setCopilot] = useState<boolean>(aiEnabled());
   const [enabled, setEnabled] = useState<boolean>(provider.enabled);
@@ -39,13 +41,23 @@ export function AiSettings() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<AiTestResult | null>(null);
-  const [fetchedIds, setFetchedIds] = useState<string[]>([]);
+  // Seed from the addresser's cached list so the picker shows the provider's
+  // current models on open (refreshed on boot + daily), no click needed.
+  const [fetchedIds, setFetchedIds] = useState<string[]>(
+    () => (availableModels && sameUrl(availableModels.baseUrl, provider.baseUrl) ? availableModels.models : []),
+  );
   const [loadingModels, setLoadingModels] = useState(false);
 
   const currentProvider = providerForBaseUrl(baseUrl);
   const selectedInfo = modelInfo(baseUrl, model);
   // The picker shows curated models plus anything the provider returned live.
   const modelList = mergeModels(currentProvider?.models ?? [], baseUrl, fetchedIds);
+  // If we have a live list for this exact provider and the chosen model isn't in it, flag it.
+  const modelUnavailable =
+    availableModels !== null &&
+    sameUrl(availableModels.baseUrl, baseUrl) &&
+    model.trim() !== '' &&
+    !availableModels.models.includes(model.trim());
 
   async function loadModels() {
     if (loadingModels) return;
@@ -189,7 +201,7 @@ export function AiSettings() {
 
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium">Base URL</span>
-          <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.deepseek.com/v1" className={`${FIELD} font-mono text-[13px]`} />
+          <input type="text" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); setFetchedIds([]); }} placeholder="https://api.deepseek.com/v1" className={`${FIELD} font-mono text-[13px]`} />
         </label>
 
         <div className="flex flex-col gap-1.5">
@@ -213,6 +225,19 @@ export function AiSettings() {
               setTest(null);
             }}
           />
+          {modelUnavailable && (
+            <span className="flex items-center gap-1.5 text-[12px] text-amber">
+              <IconAlert size={13} className="shrink-0" />
+              <span>
+                <b className="font-mono">{model}</b> isn’t in your provider’s current model list — it may be renamed or retired.
+              </span>
+            </span>
+          )}
+          {availableModels !== null && sameUrl(availableModels.baseUrl, baseUrl) && (
+            <span className="text-[12px] text-text-3">
+              {availableModels.models.length} models available from your provider · auto-checked on startup and daily
+            </span>
+          )}
           {selectedInfo ? (
             <span className="text-[12px] text-text-3">
               {selectedInfo.inputPer1M === 0 && selectedInfo.outputPer1M === 0

@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
+import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -390,6 +390,21 @@ export function markNotificationsRead(db: DatabaseSync, agentId: string, at: str
 export function getSetting(db: DatabaseSync, key: string): string | null {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value ?? null;
+}
+
+export function getModelCache(db: DatabaseSync): ModelCache | null {
+  const raw = getSetting(db, 'model_cache');
+  if (raw === null) return null;
+  try {
+    const v = JSON.parse(raw) as ModelCache;
+    return v && typeof v.baseUrl === 'string' && Array.isArray(v.models) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setModelCache(db: DatabaseSync, cache: ModelCache): void {
+  setSetting(db, 'model_cache', JSON.stringify(cache));
 }
 
 export function getSavedViews(db: DatabaseSync): SavedView[] {
