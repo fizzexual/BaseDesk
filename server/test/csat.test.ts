@@ -7,6 +7,13 @@ import { createApp } from '../src/api.js';
 function makeApp() {
   return createApp(mkdtempSync(path.join(tmpdir(), 'bd-csat-'))).app;
 }
+// Aggregate-stats tests need a clean CSAT baseline; the demo seed now ships
+// ratings, so this returns an app whose seeded ratings have been cleared.
+function makeAppNoRatings() {
+  const { app, db } = createApp(mkdtempSync(path.join(tmpdir(), 'bd-csat-')));
+  db.exec('UPDATE tickets SET satisfactionScore = NULL, satisfactionComment = NULL, satisfactionAt = NULL');
+  return app;
+}
 const json = (method: string, body: unknown) => ({
   method,
   headers: { 'content-type': 'application/json' },
@@ -30,7 +37,7 @@ async function solvedTicket(app: ReturnType<typeof makeApp>, token: string): Pro
 
 describe('CSAT rating', () => {
   it('records a rating on a solved ticket and reports it in stats', async () => {
-    const app = makeApp();
+    const app = makeAppNoRatings();
     const token = await portalToken(app, 'ada@example.com');
     const id = await solvedTicket(app, token);
 
@@ -72,7 +79,7 @@ describe('CSAT rating', () => {
   });
 
   it('averages mixed ratings and computes the positive share', async () => {
-    const app = makeApp();
+    const app = makeAppNoRatings();
     const token = await portalToken(app, 'ada@example.com');
     for (const score of [5, 4, 2]) {
       const id = await solvedTicket(app, token);

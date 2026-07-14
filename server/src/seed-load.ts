@@ -17,6 +17,7 @@ interface SeedData {
   aiActions: AiAction[];
   channels: ChannelConn[];
   notifications?: Notification[];
+  followers?: { ticketId: string; agentId: string; at: string }[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -39,8 +40,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
       tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-      firstRespondedAt, resolvedAt, channelId
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      firstRespondedAt, resolvedAt, channelId, satisfactionScore, satisfactionComment, satisfactionAt, category
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertMessage = db.prepare(
     'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -78,6 +79,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
         t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
         JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil,
         t.lastMessageAt, t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId,
+        t.satisfactionScore ?? null, t.satisfactionComment ?? null, t.satisfactionAt ?? null, t.category ?? null,
       );
     }
     for (const m of seed.messages) {
@@ -110,6 +112,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const n of seed.notifications ?? []) {
       insertNotification(db, n);
     }
+    const insertFollower = db.prepare('INSERT OR IGNORE INTO ticket_followers (ticketId, agentId, at) VALUES (?, ?, ?)');
+    for (const f of seed.followers ?? []) insertFollower.run(f.ticketId, f.agentId, f.at);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

@@ -502,6 +502,26 @@ const fill = (t, c) => t.replaceAll('{first}', c.first).replaceAll('{agent}', c.
 
 // ---------------------------------------------------------------- build tickets + messages
 const contactQueue = shuffle(contacts.map((c) => c.id)); // guarantees every contact appears
+// CSAT: short comments a customer might leave with a rating, by sentiment band.
+const csatComments = {
+  good: [
+    'Fast and friendly — exactly what I needed.',
+    'Sorted in a single reply, thank you!',
+    'Really clear steps, appreciated the help.',
+    'Great support, back up and running in minutes.',
+  ],
+  ok: ['Got there in the end.', 'Resolved, though it took a few messages.'],
+  bad: ['Took longer than I hoped.', 'Fixed now, but the wait was frustrating.'],
+};
+// Loose tag → ticket category, so the demo shows categorised, sortable tickets.
+const CATEGORY_BY_TAG = {
+  refund: 'Billing', billing: 'Billing', invoice: 'Billing', payment: 'Billing', vat: 'Billing',
+  api: 'API', 'rate-limit': 'API', webhook: 'API', integration: 'API',
+  bug: 'Bug', crash: 'Bug', error: 'Bug',
+  login: 'Account', password: 'Account', '2fa': 'Account', account: 'Account',
+  shipping: 'Shipping', delivery: 'Shipping', order: 'Shipping',
+};
+
 const tickets = [];
 const rawMessages = [];
 
@@ -559,6 +579,16 @@ ticketSlots.forEach((slot, index) => {
   const lastAt = msgs[msgs.length - 1].at;
   const firstAgentReply = msgs.find((m) => m.authorKind === 'agent' && m.kind === 'reply');
   const resolved = slot.status === 'solved' || slot.status === 'closed';
+  const category = tags.map((t) => CATEGORY_BY_TAG[t]).find(Boolean) ?? null;
+  // Most resolved tickets pick up a CSAT rating (weighted positive), some with a note.
+  let satisfactionScore = null, satisfactionComment = null, satisfactionAt = null;
+  if (resolved && rnd() < 0.6) {
+    const roll = rnd();
+    satisfactionScore = roll < 0.58 ? 5 : roll < 0.83 ? 4 : roll < 0.93 ? 3 : roll < 0.98 ? 2 : 1;
+    const band = satisfactionScore >= 4 ? 'good' : satisfactionScore === 3 ? 'ok' : 'bad';
+    if (rnd() < 0.45) satisfactionComment = pick(csatComments[band]);
+    satisfactionAt = iso(new Date(lastAt).getTime() + ri(1, 40) * HOUR);
+  }
   tickets.push({
     id,
     number: 1024 + index,
@@ -570,6 +600,7 @@ ticketSlots.forEach((slot, index) => {
     assigneeId,
     tags,
     channel,
+    category,
     createdAt: msgs[0].at,
     updatedAt: lastAt,
     snoozedUntil: slot.snooze ? iso(NOW_MS + ri(20, 720) * HOUR + ri(0, 59) * MIN) : null,
@@ -577,6 +608,9 @@ ticketSlots.forEach((slot, index) => {
     lastMessagePreview: preview(lastReply.body),
     firstRespondedAt: firstAgentReply ? firstAgentReply.at : null,
     resolvedAt: resolved ? lastAt : null,
+    satisfactionScore,
+    satisfactionComment,
+    satisfactionAt,
   });
 });
 
@@ -730,7 +764,21 @@ mentionTargets.forEach((t, i) => {
   });
 });
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications };
+// Followers: put a couple of watchers on some active tickets so the feature is
+// populated in the demo — the assignee plus one or two teammates.
+const followers = [];
+const followSeed = tickets
+  .filter((t) => t.assigneeId !== null && t.bucket === 'inbox' && (t.status === 'open' || t.status === 'pending' || t.status === 'on_hold'))
+  .slice(0, 8);
+for (const t of followSeed) {
+  followers.push({ ticketId: t.id, agentId: t.assigneeId, at: t.createdAt });
+  const colleagues = shuffle(agents.filter((a) => a.id !== t.assigneeId && a.status === 'active'));
+  for (const col of colleagues.slice(0, 1 + (rnd() < 0.5 ? 1 : 0))) {
+    followers.push({ ticketId: t.id, agentId: col.id, at: t.lastMessageAt });
+  }
+}
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications, followers };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
 console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels, ${notifications.length} notifications`);

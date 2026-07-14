@@ -10,17 +10,25 @@ function makeApp() {
 
 type App = ReturnType<typeof makeApp>;
 
-async function openTicketId(app: App): Promise<string> {
-  const boot = await (await app.request('/api/bootstrap')).json();
-  return boot.tickets.find((t: { status: string }) => t.status !== 'closed' && t.status !== 'solved').id;
-}
-
 const post = (app: App, url: string, body?: unknown) =>
   app.request(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+// A brand-new ticket so seeded demo followers never interfere with assertions.
+async function openTicketId(app: App): Promise<string> {
+  const boot = await (await app.request('/api/bootstrap')).json();
+  const res = await post(app, '/api/tickets', {
+    subject: 'Follower test',
+    body: 'Testing follower behaviour.',
+    requesterId: boot.contacts[0].id,
+    priority: 'medium',
+  });
+  const data = (await res.json()) as { ticket?: { id: string }; id?: string };
+  return data.ticket?.id ?? (data.id as string);
+}
 
 describe('ticket followers', () => {
   it('follows and unfollows the current agent', async () => {
