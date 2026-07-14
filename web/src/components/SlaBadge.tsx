@@ -23,7 +23,7 @@ export function SlaBadge({ sla, className }: { sla: TicketSla | null; className?
   if (sla === null) return null;
   const info = slaExplainer(sla);
   return (
-    <Tooltip title={info.title} label={info.desc} align="end">
+    <Tooltip title={info.title} label={info.desc}>
       <span
         className={cx(
           'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium',

@@ -17,7 +17,7 @@ export function ReplyStatusBadge({ ticket, className }: { ticket: Ticket; classN
   const awaiting = ticket.awaitingReply;
   const info = awaiting ? REPLY_INFO.awaiting : REPLY_INFO.replied;
   return (
-    <Tooltip title={info.title} label={info.desc} align="end">
+    <Tooltip title={info.title} label={info.desc}>
       <span
         className={cx(
           'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium',
