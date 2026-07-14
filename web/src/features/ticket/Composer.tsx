@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconBook, IconCheckCircle, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
 import { Link } from 'react-router';
@@ -216,8 +217,24 @@ export function Composer({ ticket }: { ticket: Ticket }) {
       <div className="mb-2 flex items-center">
         <SegmentedControl<Mode>
           options={[
-            { value: 'reply', label: 'Reply', icon: <IconReply size={14} /> },
-            { value: 'note', label: 'Note', icon: <IconNote size={14} /> },
+            {
+              value: 'reply',
+              label: 'Reply',
+              icon: (
+                <Tooltip title="Reply" label="Sent to the customer as a normal message — they'll see it and be notified.">
+                  <IconReply size={14} />
+                </Tooltip>
+              ),
+            },
+            {
+              value: 'note',
+              label: 'Note',
+              icon: (
+                <Tooltip title="Internal note" label="Only your team can see this — the customer is never notified.">
+                  <IconNote size={14} />
+                </Tooltip>
+              ),
+            },
           ]}
           value={mode}
           onChange={switchMode}
@@ -251,14 +268,16 @@ export function Composer({ ticket }: { ticket: Ticket }) {
               <IconPaperclip size={12} className="shrink-0 text-text-3" />
               <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
               <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${a.filename}`}
-                onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
-                className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-3 hover:text-text"
-              >
-                <IconX size={12} />
-              </button>
+              <Tooltip label={`Remove ${a.filename}`}>
+                <button
+                  type="button"
+                  aria-label={`Remove ${a.filename}`}
+                  onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                  className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-3 hover:text-text"
+                >
+                  <IconX size={12} />
+                </button>
+              </Tooltip>
             </span>
           ))}
         </div>
@@ -271,26 +290,30 @@ export function Composer({ ticket }: { ticket: Ticket }) {
         onChange={(e) => void onFiles(e.target.files)}
       />
       <div className="mt-2 flex items-center gap-1">
-        <Menu
-          triggerLabel="Canned replies"
-          triggerClassName={GHOST_TRIGGER}
-          trigger={
-            <>
-              <IconNote size={14} />
-              <span>Canned</span>
-            </>
-          }
-          items={cannedItems}
-        />
+        <Tooltip title="Canned replies" label="Pre-written templates you can insert — some also change the ticket's status, priority, or assignee.">
+          <Menu
+            triggerLabel="Canned replies"
+            triggerClassName={GHOST_TRIGGER}
+            trigger={
+              <>
+                <IconNote size={14} />
+                <span>Canned</span>
+              </>
+            }
+            items={cannedItems}
+          />
+        </Tooltip>
         <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
           <IconPaperclip size={14} />
           {uploading ? 'Uploading…' : 'Attach'}
         </Button>
         {aiEnabled() && (
-          <Button variant="ghost" size="sm" onClick={() => void draftWithAi()} disabled={drafting}>
-            <IconSparkle size={14} />
-            {drafting ? 'Drafting…' : 'Draft with AI'}
-          </Button>
+          <Tooltip title="Draft with AI" label="Generates a suggested reply using AI and your knowledge base — review before sending.">
+            <Button variant="ghost" size="sm" onClick={() => void draftWithAi()} disabled={drafting}>
+              <IconSparkle size={14} />
+              {drafting ? 'Drafting…' : 'Draft with AI'}
+            </Button>
+          </Tooltip>
         )}
         {draftMeta !== null && (
           <span className="flex items-center gap-1.5 pl-1 text-[12px] text-text-3">
@@ -299,7 +322,9 @@ export function Composer({ ticket }: { ticket: Ticket }) {
                 <IconBook size={13} className="shrink-0 text-green" />
                 <span>From knowledge base</span>
                 <span aria-hidden="true">·</span>
-                <TokenCost promptTokens={draftMeta.usage.promptTokens} completionTokens={draftMeta.usage.completionTokens} />
+                <Tooltip title="AI cost" label="Tokens used and the estimated price for this generation, based on your configured AI model.">
+                  <TokenCost promptTokens={draftMeta.usage.promptTokens} completionTokens={draftMeta.usage.completionTokens} />
+                </Tooltip>
               </>
             ) : (
               <span className="flex items-center gap-1.5">

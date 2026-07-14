@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Kbd } from '../../components/Kbd';
+import { Tooltip } from '../../components/Tooltip';
 import { IconX } from '../../icons';
 import { MOD_LABEL } from './shortcuts';
 
@@ -64,14 +65,16 @@ export function HelpOverlay() {
       >
         <div className="flex h-12 items-center justify-between border-b border-line pl-5 pr-3">
           <h2 className="text-[15px] font-semibold">Keyboard shortcuts</h2>
-          <button
-            type="button"
-            aria-label="Close"
-            className="inline-flex size-7 items-center justify-center rounded-md text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
-            onClick={() => setOpen(false)}
-          >
-            <IconX size={16} />
-          </button>
+          <Tooltip label="Close">
+            <button
+              type="button"
+              aria-label="Close"
+              className="inline-flex size-7 items-center justify-center rounded-md text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+              onClick={() => setOpen(false)}
+            >
+              <IconX size={16} />
+            </button>
+          </Tooltip>
         </div>
         <div className="grid grid-cols-2 gap-x-8 gap-y-5 p-5">
           <Section title="Global">

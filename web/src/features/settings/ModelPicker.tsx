@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../../components/util';
+import { Tooltip } from '../../components/Tooltip';
 import { formatContext, formatPrice, type ModelInfo } from '../../data/model-catalog';
 import { IconCheck, IconChevronDown } from '../../icons';
 
 function ReasoningBadge() {
   return (
     <span className="inline-flex h-[17px] shrink-0 items-center rounded-full bg-blue-bg px-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue">
-      Reasoning
+      <Tooltip
+        title="Reasoning model"
+        label="Spends extra hidden thinking before it answers — often more accurate, but slower and pricier per reply."
+      >
+        Reasoning
+      </Tooltip>
     </span>
   );
 }

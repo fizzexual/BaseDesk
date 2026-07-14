@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { TokenCost } from './TokenCost';
 import { IconNote, IconSparkle } from '../../icons';
 
@@ -102,7 +103,9 @@ export function DraftsPage() {
                       <span aria-hidden="true">·</span>
                       <TimeAgo iso={action.createdAt} />
                       <span aria-hidden="true">·</span>
-                      <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
+                      <Tooltip title="AI cost" label="Tokens used and the estimated price for this generation, based on your configured AI model.">
+                        <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
+                      </Tooltip>
                     </div>
                   </div>
                 </div>

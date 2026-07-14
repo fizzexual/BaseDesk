@@ -5,6 +5,7 @@ import { formatMoney } from '../../data/money';
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { TimeAgo } from '../../components/TimeAgo';
+import { Tooltip } from '../../components/Tooltip';
 import { DealStageBadge, DealTypeBadge } from '../../components/DealBadges';
 import { cx } from '../../components/util';
 import { IconRevenue } from '../../icons';
@@ -23,7 +24,14 @@ export function DealTable({ deals, onEdit }: { deals: Deal[]; onEdit: (deal: Dea
     <div>
       <div className={cx('grid h-9 items-center gap-4 border-b border-line px-4 text-[13px] text-text-3', GRID)}>
         <div>Customer</div>
-        <div>Deal</div>
+        <div>
+          <Tooltip
+            title="Deal types"
+            label="Expansion — upsell to an existing account. Retention — an at-risk account saved from churn. Inbound — a new deal sourced from a support conversation."
+          >
+            <span>Deal</span>
+          </Tooltip>
+        </div>
         <div className="text-right">Value</div>
         <div>Stage</div>
         <div>Owner</div>

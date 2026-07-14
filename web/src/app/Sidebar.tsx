@@ -4,6 +4,7 @@ import { useCounts } from '../data/hooks';
 import { useApp } from '../data/store';
 import type { Counts, ViewId } from '../data/types';
 import { cx } from '../components/util';
+import { Tooltip } from '../components/Tooltip';
 import { requestNewTicket } from '../features/palette/shortcuts';
 import {
   IconAlert,
@@ -56,6 +57,24 @@ const EXTRA_ITEMS: Item[] = [
   { view: 'trash', label: 'Trash', icon: IconTrash },
 ];
 
+/** Rich-tooltip copy for nav views whose name alone doesn't say what they show. */
+const VIEW_EXPLAINERS: Partial<Record<ViewId, { title: string; desc: string }>> = {
+  unassigned: { title: 'Unassigned', desc: 'Open tickets nobody has picked up yet.' },
+  mine: { title: 'My open', desc: 'Open tickets currently assigned to you.' },
+  awaiting: {
+    title: 'Awaiting reply',
+    desc: 'The customer sent the last message on these tickets — your team owes a response.',
+  },
+  on_hold: {
+    title: 'On hold',
+    desc: 'Paused by the team — usually blocked on a third party or a scheduled fix.',
+  },
+  snoozed: {
+    title: 'Snoozed',
+    desc: 'Tickets paused until a set time, then they’ll reappear in your inbox.',
+  },
+};
+
 function readBool(key: string, fallback: boolean): boolean {
   try {
     const raw = localStorage.getItem(key);
@@ -76,6 +95,8 @@ function writeBool(key: string, value: boolean) {
 function SidebarLink({ item, counts }: { item: Item; counts: Counts }) {
   const Icon = item.icon;
   const count = counts[item.view as keyof Counts];
+  const explainer = VIEW_EXPLAINERS[item.view];
+  const icon = <Icon size={17} className="shrink-0" />;
   return (
     <NavLink
       to={`/view/${item.view}`}
@@ -86,7 +107,13 @@ function SidebarLink({ item, counts }: { item: Item; counts: Counts }) {
         )
       }
     >
-      <Icon size={17} className="shrink-0" />
+      {explainer ? (
+        <Tooltip title={explainer.title} label={explainer.desc}>
+          {icon}
+        </Tooltip>
+      ) : (
+        icon
+      )}
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.showCount && count > 0 && (
         <span className="text-[13px] font-normal text-text-3 tabular-nums">{count}</span>
@@ -148,14 +175,16 @@ export function Sidebar() {
     <aside className="flex w-[236px] shrink-0 flex-col gap-1 overflow-y-auto py-3 pr-2">
       <div className="mb-2 flex items-center justify-between pl-2">
         <h1 className="text-[16px] font-semibold">Inbox</h1>
-        <button
-          type="button"
-          aria-label="New ticket"
-          className="inline-flex size-7 items-center justify-center rounded-md bg-accent text-accent-fg transition-opacity hover:opacity-85"
-          onClick={requestNewTicket}
-        >
-          <IconPlus size={16} />
-        </button>
+        <Tooltip label="New ticket">
+          <button
+            type="button"
+            aria-label="New ticket"
+            className="inline-flex size-7 items-center justify-center rounded-md bg-accent text-accent-fg transition-opacity hover:opacity-85"
+            onClick={requestNewTicket}
+          >
+            <IconPlus size={16} />
+          </button>
+        </Tooltip>
       </div>
 
       <GroupHeader
@@ -218,14 +247,16 @@ export function Sidebar() {
                   <IconFilter size={16} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{v.name}</span>
                 </NavLink>
-                <button
-                  type="button"
-                  aria-label={`Delete saved view ${v.name}`}
-                  className="ml-0.5 hidden size-6 shrink-0 items-center justify-center rounded-sm text-text-3 hover:bg-surface-2 hover:text-red group-hover:flex"
-                  onClick={() => void deleteSavedView(v.id).catch(() => {})}
-                >
-                  <IconX size={13} />
-                </button>
+                <Tooltip label="Delete view">
+                  <button
+                    type="button"
+                    aria-label={`Delete saved view ${v.name}`}
+                    className="ml-0.5 hidden size-6 shrink-0 items-center justify-center rounded-sm text-text-3 hover:bg-surface-2 hover:text-red group-hover:flex"
+                    onClick={() => void deleteSavedView(v.id).catch(() => {})}
+                  >
+                    <IconX size={13} />
+                  </button>
+                </Tooltip>
               </div>
             ))}
         </>

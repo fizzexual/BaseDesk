@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { SlaHours, SlaTargets, TicketPriority } from '../../data/types';
@@ -168,8 +169,22 @@ export function SlaSettings() {
       <div className="mt-5 flex flex-col gap-3">
         <div className="grid grid-cols-[6rem_1fr_1fr] items-center gap-3 text-[12px] font-medium text-text-3">
           <span />
-          <span>First response (min)</span>
-          <span>Resolution (min)</span>
+          <span>
+            <Tooltip
+              title="First-response SLA"
+              label="The time you promise before an agent sends the first reply to a new ticket."
+            >
+              First response (min)
+            </Tooltip>
+          </span>
+          <span>
+            <Tooltip
+              title="Resolution SLA"
+              label="The time you promise before the ticket is fully resolved, from creation to solved."
+            >
+              Resolution (min)
+            </Tooltip>
+          </span>
         </div>
         {PRIORITIES.map((p) => (
           <div key={p} className="grid grid-cols-[6rem_1fr_1fr] items-center gap-3">

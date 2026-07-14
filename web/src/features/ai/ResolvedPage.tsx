@@ -5,6 +5,7 @@ import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TimeAgo } from '../../components/TimeAgo';
+import { Tooltip } from '../../components/Tooltip';
 import { TokenCost } from './TokenCost';
 import { IconCheckCircle, IconSparkle } from '../../icons';
 
@@ -65,14 +66,21 @@ export function ResolvedPage() {
                     {article !== undefined && (
                       <>
                         <span aria-hidden="true">·</span>
-                        <span>cited</span>
+                        <Tooltip
+                          title="Knowledge-base match"
+                          label="This reply was generated straight from a knowledge-base article the AI matched with high confidence — not just drafted for review."
+                        >
+                          <span>cited</span>
+                        </Tooltip>
                         <Link to={`/kb/${article.id}`} className="font-medium text-text-2 hover:underline">
                           {article.title}
                         </Link>
                       </>
                     )}
                     <span aria-hidden="true">·</span>
-                    <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
+                    <Tooltip title="AI cost" label="Tokens used and the estimated price for this generation, based on your configured AI model.">
+                      <TokenCost promptTokens={action.promptTokens} completionTokens={action.completionTokens} />
+                    </Tooltip>
                   </div>
                 </div>
                 <TimeAgo iso={action.resolvedAt ?? action.createdAt} />

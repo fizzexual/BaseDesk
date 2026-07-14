@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useApp } from '../../data/store';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import type { CustomFieldDef, Ticket } from '../../data/types';
 
 const INPUT =
@@ -75,7 +76,11 @@ export function TicketCustomFields({ ticket }: { ticket: Ticket }) {
 
   return (
     <section className="border-t border-line p-4">
-      <h3 className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-text-3">Details</h3>
+      <h3 className="mb-2.5 text-[12px] font-semibold uppercase tracking-wide text-text-3">
+        <Tooltip title="Custom fields" label="Extra properties your team defines for tickets — use them to track anything the built-in fields don't cover.">
+          <span>Details</span>
+        </Tooltip>
+      </h3>
       <div className="flex flex-col gap-2.5">
         {fields.map((f) => {
           const value = ticket.customFields[f.id] ?? '';

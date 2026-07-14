@@ -164,14 +164,16 @@ function TagsRow({ ticket, onPatch }: { ticket: Ticket; onPatch: (patch: TicketP
           className="group inline-flex h-6 items-center gap-1 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium text-text-2"
         >
           {tag}
-          <button
-            type="button"
-            aria-label={`Remove tag ${tag}`}
-            className="hidden text-text-3 hover:text-text group-hover:inline-flex"
-            onClick={() => onPatch({ tags: ticket.tags.filter((t) => t !== tag) })}
-          >
-            <IconX size={10} />
-          </button>
+          <Tooltip label={`Remove tag ${tag}`}>
+            <button
+              type="button"
+              aria-label={`Remove tag ${tag}`}
+              className="hidden text-text-3 hover:text-text group-hover:inline-flex"
+              onClick={() => onPatch({ tags: ticket.tags.filter((t) => t !== tag) })}
+            >
+              <IconX size={10} />
+            </button>
+          </Tooltip>
         </span>
       ))}
       {adding ? (
@@ -383,20 +385,24 @@ export function TicketPage() {
               }
               items={assigneeItems}
             />
-            <Menu
-              align="end"
-              triggerLabel="Snooze"
-              triggerClassName={ICON_BUTTON}
-              trigger={<IconSnooze size={16} />}
-              items={snoozeItems}
-            />
-            <Menu
-              align="end"
-              triggerLabel="More actions"
-              triggerClassName={ICON_BUTTON}
-              trigger={<IconDots size={16} />}
-              items={kebabItems}
-            />
+            <Tooltip title="Snooze" label="Hide this ticket from your queues until a chosen time — it reopens automatically then.">
+              <Menu
+                align="end"
+                triggerLabel="Snooze"
+                triggerClassName={ICON_BUTTON}
+                trigger={<IconSnooze size={16} />}
+                items={snoozeItems}
+              />
+            </Tooltip>
+            <Tooltip label="More actions">
+              <Menu
+                align="end"
+                triggerLabel="More actions"
+                triggerClassName={ICON_BUTTON}
+                trigger={<IconDots size={16} />}
+                items={kebabItems}
+              />
+            </Tooltip>
           </div>
         </header>
         <TagsRow ticket={ticket} onPatch={patch} />

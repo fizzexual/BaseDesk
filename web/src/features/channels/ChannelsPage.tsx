@@ -4,6 +4,7 @@ import type { ChannelConn, ChannelType } from '../../data/types';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconDots, IconTrash } from '../../icons';
 import { CHANNEL_META, CHANNEL_TYPES, ChannelDialog, Switch } from './ChannelDialog';
@@ -107,25 +108,46 @@ function ConnectedChannel({
           </div>
           <div className="mt-0.5 text-[13px] text-text-3 tabular-nums">
             {meta.label} · {ticketCount} ticket{ticketCount === 1 ? '' : 's'}
-            {channel.outboundUrl !== null && <span className="text-green"> · replies on</span>}
+            {channel.outboundUrl !== null && (
+              <Tooltip
+                title="Replies on"
+                label="An outbound URL is configured for this channel, so agent replies here are delivered automatically."
+              >
+                <span className="text-green"> · replies on</span>
+              </Tooltip>
+            )}
           </div>
         </div>
-        <Switch
-          enabled={channel.enabled}
-          onToggle={() => void toggle()}
-          label={`${channel.enabled ? 'Disable' : 'Enable'} ${channel.name}`}
-        />
-        <Menu
-          align="end"
-          triggerLabel="Channel actions"
-          triggerClassName="inline-flex size-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
-          trigger={<IconDots size={16} />}
-          items={menuItems}
-        />
+        <Tooltip
+          title="Enabled"
+          label="Turns this channel on or off. Disabled channels stop accepting new messages and won't send replies until you turn them back on."
+        >
+          <Switch
+            enabled={channel.enabled}
+            onToggle={() => void toggle()}
+            label={`${channel.enabled ? 'Disable' : 'Enable'} ${channel.name}`}
+          />
+        </Tooltip>
+        <Tooltip label="Channel actions">
+          <Menu
+            align="end"
+            triggerLabel="Channel actions"
+            triggerClassName="inline-flex size-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+            trigger={<IconDots size={16} />}
+            items={menuItems}
+          />
+        </Tooltip>
       </div>
 
       <div className="mt-3">
-        <span className="mb-1 block text-[12px] font-medium text-text-3">Inbound URL</span>
+        <span className="mb-1 block text-[12px] font-medium text-text-3">
+          <Tooltip
+            title="Inbound URL"
+            label="Where this channel receives incoming messages — point the sending system (API, relay, or webhook) at this address. It embeds a secret token, so keep it private."
+          >
+            <span>Inbound URL</span>
+          </Tooltip>
+        </span>
         <div className="flex items-center gap-2">
           <input
             readOnly
@@ -134,9 +156,11 @@ function ConnectedChannel({
             onFocus={(e) => e.currentTarget.select()}
             className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface-2 px-2.5 font-mono text-[12px] text-text-2 outline-none focus:border-line-2"
           />
-          <Button variant="subtle" size="sm" onClick={() => void copy(url, 'Inbound URL copied')}>
-            Copy
-          </Button>
+          <Tooltip label="Copy inbound URL">
+            <Button variant="subtle" size="sm" onClick={() => void copy(url, 'Inbound URL copied')}>
+              Copy
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -153,9 +177,11 @@ function ConnectedChannel({
               onFocus={(e) => e.currentTarget.select()}
               className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface-2 px-2.5 font-mono text-[12px] text-text-2 outline-none focus:border-line-2"
             />
-            <Button variant="subtle" size="sm" onClick={() => void copy(commandUrl(channel), 'Command URL copied')}>
-              Copy
-            </Button>
+            <Tooltip label="Copy command URL">
+              <Button variant="subtle" size="sm" onClick={() => void copy(commandUrl(channel), 'Command URL copied')}>
+                Copy
+              </Button>
+            </Tooltip>
           </div>
         </div>
       )}

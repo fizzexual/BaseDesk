@@ -6,6 +6,7 @@ import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { TimeAgo } from '../../components/TimeAgo';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconContacts, IconPlus, IconSearch } from '../../icons';
 import { NewContactDialog } from './NewContactDialog';
@@ -100,7 +101,11 @@ export function ContactsPage() {
               <div>Name</div>
               <div>Email</div>
               <div>Company</div>
-              <div>Tickets</div>
+              <div>
+                <Tooltip title="Tickets" label="How many tickets this contact has filed, open or closed.">
+                  <span>Tickets</span>
+                </Tooltip>
+              </div>
               <div>Since</div>
             </div>
             {visible.map((c: Contact) => (

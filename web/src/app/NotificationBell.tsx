@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useApp } from '../data/store';
 import type { Channel, Notification } from '../data/types';
 import { cx } from '../components/util';
+import { Tooltip } from '../components/Tooltip';
 import { IconBell, IconNote, IconReply, IconUserPlus } from '../icons';
 
 /** Friendly "from where" label for the channel a ticket arrived on. */
@@ -120,22 +121,24 @@ export function NotificationBell() {
 
   return (
     <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-        className={cx(
-          'relative flex size-9 items-center justify-center rounded-md border border-line bg-surface text-text-2 shadow-1 transition-colors hover:border-line-2 hover:text-text',
-          open && 'border-line-2 text-text',
-        )}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <IconBell size={17} />
-        {unread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg tabular-nums">
-            {unread > 9 ? '9+' : unread}
-          </span>
-        )}
-      </button>
+      <Tooltip label="Notifications">
+        <button
+          type="button"
+          aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+          className={cx(
+            'relative flex size-9 items-center justify-center rounded-md border border-line bg-surface text-text-2 shadow-1 transition-colors hover:border-line-2 hover:text-text',
+            open && 'border-line-2 text-text',
+          )}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <IconBell size={17} />
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg tabular-nums">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+        </button>
+      </Tooltip>
 
       {open && (
         <div className="absolute right-0 top-full z-50 mt-2 w-[340px] overflow-hidden rounded-lg border border-line bg-surface shadow-2">

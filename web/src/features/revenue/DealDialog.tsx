@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 
 const TYPE_OPTIONS: { value: DealType; label: string }[] = [
   { value: 'expansion', label: 'Expansion' },
@@ -114,7 +115,14 @@ export function DealDialog({
         </div>
 
         <div>
-          <span className={LABEL}>Type</span>
+          <span className={LABEL}>
+            <Tooltip
+              title="Deal types"
+              label="Expansion — upsell to an existing account. Retention — an at-risk account saved from churn. Inbound — a new deal sourced from a support conversation."
+            >
+              <span>Type</span>
+            </Tooltip>
+          </span>
           <SegmentedControl options={TYPE_OPTIONS} value={type} onChange={setType} />
         </div>
 

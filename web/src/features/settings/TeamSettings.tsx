@@ -5,6 +5,7 @@ import { Dialog } from '../../components/Dialog';
 import { Menu } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { Agent } from '../../data/types';
@@ -150,7 +151,16 @@ function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins
             agent.role === 'admin' ? 'bg-blue-bg text-blue' : 'bg-surface-2 text-text-2',
           )}
         >
-          {agent.role}
+          <Tooltip
+            title={agent.role === 'admin' ? 'Admin' : 'Agent'}
+            label={
+              agent.role === 'admin'
+                ? 'Admins manage the workspace, team, and all settings.'
+                : 'Agents work tickets but cannot change workspace settings.'
+            }
+          >
+            {agent.role}
+          </Tooltip>
         </span>
         {agent.status === 'invited' && (
           <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-amber-bg px-2 text-[11px] font-medium text-amber">

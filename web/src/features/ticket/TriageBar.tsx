@@ -3,6 +3,7 @@ import { useApp } from '../../data/store';
 import type { CopilotTriage, Ticket, TicketPriority } from '../../data/types';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { IconCheck, IconSparkle, IconX } from '../../icons';
 import { aiEnabled } from '../ai/engine';
 
@@ -58,7 +59,9 @@ export function TriageBar({ ticket }: { ticket: Ticket }) {
 
   return (
     <div className="mx-4 my-2 flex shrink-0 items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-[13px]">
-      <IconSparkle size={15} className="shrink-0 text-text-2" />
+      <Tooltip title="AI triage" label="Priority and tags AI suggested after reading this ticket — apply them or dismiss if they're off.">
+        <IconSparkle size={15} className="shrink-0 text-text-2" />
+      </Tooltip>
       <span className="min-w-0 text-text-2">Suggested: {clauses.join(' · ')}</span>
       <div className="flex-1" />
       <Button variant="subtle" size="sm" onClick={apply}>

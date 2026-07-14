@@ -3,6 +3,7 @@ import { useAccounts } from '../../data/hooks';
 import { formatMoney } from '../../data/money';
 import type { AccountHealth } from '../../data/types';
 import { EmptyState } from '../../components/EmptyState';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconContacts } from '../../icons';
 
@@ -31,10 +32,25 @@ export function AccountsTab() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className={cx('grid h-9 items-center gap-4 border-b border-line px-4 text-[13px] text-text-3', GRID)}>
         <div>Company</div>
-        <div className="text-right">MRR</div>
-        <div>Health</div>
+        <div className="text-right">
+          <Tooltip title="MRR" label="Monthly recurring revenue — this account's current subscription value per month.">
+            <span>MRR</span>
+          </Tooltip>
+        </div>
+        <div>
+          <Tooltip
+            title="Account health"
+            label="At risk: an urgent ticket is open, or a retention deal is in progress. Expansion-ready: no risk, but an upsell deal is open. Healthy: neither."
+          >
+            <span>Health</span>
+          </Tooltip>
+        </div>
         <div className="text-right">Won</div>
-        <div className="text-right">Pipeline</div>
+        <div className="text-right">
+          <Tooltip title="Pipeline" label="Total value of this account's deals still open — not yet won or lost.">
+            <span>Pipeline</span>
+          </Tooltip>
+        </div>
         <div className="text-right">Open</div>
       </div>
       {accounts.map((account) => {

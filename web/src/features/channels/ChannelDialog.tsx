@@ -4,6 +4,7 @@ import type { ChannelConn, ChannelTestResult, ChannelType } from '../../data/typ
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import {
   IconChannels,
@@ -360,7 +361,14 @@ export function ChannelDialog({
               <IconReply size={14} className="text-text-3" />
               <span className="text-[13px] font-medium">Reply delivery</span>
             </div>
-            <label className={LABEL} htmlFor="channel-outbound-url">{ob.urlLabel}</label>
+            <label className={LABEL} htmlFor="channel-outbound-url">
+              <Tooltip
+                title="Outbound webhook URL"
+                label="Where BaseDesk delivers each agent reply as a JSON POST, so it reaches the customer on this channel."
+              >
+                <span>{ob.urlLabel}</span>
+              </Tooltip>
+            </label>
             <input
               id="channel-outbound-url"
               className={`${FIELD} font-mono text-[12px]`}
@@ -371,7 +379,14 @@ export function ChannelDialog({
             />
             {ob.secret && (
               <div className="mt-2.5">
-                <label className={LABEL} htmlFor="channel-outbound-secret">Auth token (optional)</label>
+                <label className={LABEL} htmlFor="channel-outbound-secret">
+                  <Tooltip
+                    title="Auth token"
+                    label="Sent as a Bearer token with every outbound request, so the receiving endpoint can verify it really came from BaseDesk."
+                  >
+                    <span>Auth token (optional)</span>
+                  </Tooltip>
+                </label>
                 <input
                   id="channel-outbound-secret"
                   type="password"
@@ -413,7 +428,14 @@ export function ChannelDialog({
             <IconChannels size={14} className="text-text-3" />
             <span className="text-[13px] font-medium">Inbound security</span>
           </div>
-          <label className={LABEL} htmlFor="channel-inbound-secret">Signing secret (optional)</label>
+          <label className={LABEL} htmlFor="channel-inbound-secret">
+            <Tooltip
+              title="Signing secret"
+              label="A shared secret used to verify inbound requests are genuinely from your integration, via an HMAC signature. Optional — the inbound URL's token works on its own without it."
+            >
+              <span>Signing secret (optional)</span>
+            </Tooltip>
+          </label>
           <input
             id="channel-inbound-secret"
             type="password"
@@ -432,11 +454,16 @@ export function ChannelDialog({
         {editing && (
           <div className="flex items-center justify-between rounded-md border border-line px-3 py-2.5">
             <span className="text-[13px] font-medium text-text-2">Enabled</span>
-            <Switch
-              enabled={enabled}
-              onToggle={() => setEnabled((v) => !v)}
-              label={enabled ? 'Disable channel' : 'Enable channel'}
-            />
+            <Tooltip
+              title="Enabled"
+              label="Turns this channel on or off. Disabled channels stop accepting new messages and won't send replies until you turn them back on."
+            >
+              <Switch
+                enabled={enabled}
+                onToggle={() => setEnabled((v) => !v)}
+                label={enabled ? 'Disable channel' : 'Enable channel'}
+              />
+            </Tooltip>
           </div>
         )}
 

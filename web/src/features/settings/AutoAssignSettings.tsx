@@ -1,6 +1,7 @@
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { useApp } from '../../data/store';
 import type { AssignmentSettings } from '../../data/types';
 
@@ -33,7 +34,14 @@ export function AutoAssignSection() {
 
       {assignment.enabled && (
         <div className="mt-4">
-          <div className="text-[13px] font-medium">Strategy</div>
+          <div className="text-[13px] font-medium">
+            <Tooltip
+              title="Assignment strategy"
+              label="Round-robin cycles through active agents in turn. Least busy always goes to whoever currently has the fewest open tickets."
+            >
+              Strategy
+            </Tooltip>
+          </div>
           <div className="mt-2">
             <SegmentedControl<AssignmentSettings['strategy']>
               options={[

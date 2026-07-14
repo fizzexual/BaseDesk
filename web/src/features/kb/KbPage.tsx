@@ -7,9 +7,16 @@ import { EmptyState } from '../../components/EmptyState';
 import { Menu } from '../../components/Menu';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconBook, IconDots, IconPlus, IconSearch, IconTrash } from '../../icons';
 import { KbEditor } from './KbEditor';
+
+/** What each article status means for visitors and for AI matching. */
+const ARTICLE_STATUS_INFO: Record<ArticleStatus, { title: string; desc: string }> = {
+  published: { title: 'Published', desc: 'Live — the AI assistant can match this article to tickets and use it in replies.' },
+  draft: { title: 'Draft', desc: 'Not live yet — hidden from the AI assistant until you publish it.' },
+};
 
 function StatusBadge({ status }: { status: ArticleStatus }) {
   const style =
@@ -46,7 +53,9 @@ function Reader({
           <div className="text-[13px] text-text-3">{article.category}</div>
           <h1 className="mt-1 text-[24px] font-semibold leading-tight">{article.title}</h1>
           <div className="mt-2.5 flex items-center gap-2.5">
-            <StatusBadge status={article.status} />
+            <Tooltip title={ARTICLE_STATUS_INFO[article.status].title} label={ARTICLE_STATUS_INFO[article.status].desc}>
+              <StatusBadge status={article.status} />
+            </Tooltip>
             <span className="flex items-center gap-1 text-[13px] text-text-3">
               Updated <TimeAgo iso={article.updatedAt} />
             </span>
@@ -56,20 +65,22 @@ function Reader({
           <Button variant="subtle" size="sm" onClick={() => onEdit(article)}>
             Edit
           </Button>
-          <Menu
-            align="end"
-            triggerLabel="Article actions"
-            triggerClassName="inline-flex size-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
-            trigger={<IconDots size={16} />}
-            items={[
-              {
-                label: 'Delete',
-                icon: <IconTrash size={15} />,
-                danger: true,
-                onSelect: () => onDelete(article),
-              },
-            ]}
-          />
+          <Tooltip label="Article actions">
+            <Menu
+              align="end"
+              triggerLabel="Article actions"
+              triggerClassName="inline-flex size-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+              trigger={<IconDots size={16} />}
+              items={[
+                {
+                  label: 'Delete',
+                  icon: <IconTrash size={15} />,
+                  danger: true,
+                  onSelect: () => onDelete(article),
+                },
+              ]}
+            />
+          </Tooltip>
         </div>
       </div>
       {paragraphs.length === 0 ? (

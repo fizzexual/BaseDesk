@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { useApp } from '../../data/store';
 
 const FIELD =
@@ -42,7 +43,16 @@ export function Profile() {
           <div className="flex items-center gap-2">
             <span className="truncate text-[15px] font-semibold">{agent.name}</span>
             <span className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-surface-2 px-2 text-[11px] font-medium uppercase text-text-2">
-              {agent.role}
+              <Tooltip
+                title={agent.role === 'admin' ? 'Admin' : 'Agent'}
+                label={
+                  agent.role === 'admin'
+                    ? 'Admins manage the workspace, team, and all settings.'
+                    : 'Agents work tickets but cannot change workspace settings.'
+                }
+              >
+                {agent.role}
+              </Tooltip>
             </span>
           </div>
           <div className="truncate text-[13px] text-text-3">{agent.email}</div>

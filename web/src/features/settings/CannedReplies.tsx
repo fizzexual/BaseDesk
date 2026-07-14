@@ -4,6 +4,7 @@ import { Dialog } from '../../components/Dialog';
 import { EmptyState } from '../../components/EmptyState';
 import { Menu } from '../../components/Menu';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { useApp } from '../../data/store';
 import type { MacroActions, TicketPriority, TicketStatus } from '../../data/types';
 import { IconDots, IconNote, IconPlus, IconSparkle, IconTrash } from '../../icons';
@@ -85,7 +86,14 @@ export function CannedReplies() {
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold">Canned replies</h2>
+        <h2 className="text-[15px] font-semibold">
+          <Tooltip
+            title="Canned replies"
+            label="Pre-written templates you can insert — some also change the ticket's status, priority, or assignee."
+          >
+            Canned replies
+          </Tooltip>
+        </h2>
         <Button variant="subtle" size="sm" onClick={() => setEditor({ ...BLANK })}>
           <IconPlus size={15} />
           New canned reply
@@ -107,8 +115,15 @@ export function CannedReplies() {
                   <span className="truncate text-[14px] font-medium">{c.title}</span>
                   {c.actions && (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] font-medium text-accent">
-                      <IconSparkle size={11} />
-                      Macro
+                      <Tooltip
+                        title="Macro"
+                        label="A canned reply with actions attached — inserting it can also set status, priority, tags, or the assignee."
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <IconSparkle size={11} />
+                          Macro
+                        </span>
+                      </Tooltip>
                     </span>
                   )}
                 </div>

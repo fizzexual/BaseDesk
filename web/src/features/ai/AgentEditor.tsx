@@ -5,6 +5,7 @@ import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconX } from '../../icons';
 
@@ -123,7 +124,14 @@ export function AgentEditor({
         </div>
 
         <div>
-          <span className={LABEL}>Autonomy</span>
+          <span className={LABEL}>
+            <Tooltip
+              title="Autonomy"
+              label="How much this agent can do without you: Suggest only proposes tags, Draft queues replies for your approval, Resolve auto-answers confident matches and drafts the rest."
+            >
+              <span>Autonomy</span>
+            </Tooltip>
+          </span>
           <SegmentedControl options={AUTONOMY_OPTIONS} value={autonomy} onChange={setAutonomy} />
           <p className="mt-1.5 text-[13px] text-text-3">{AUTONOMY_DESC[autonomy]}</p>
         </div>
@@ -148,14 +156,16 @@ export function AgentEditor({
                 className="inline-flex h-6 items-center gap-1 rounded-full bg-surface-2 px-2.5 text-[12px] font-medium text-text-2"
               >
                 {tag}
-                <button
-                  type="button"
-                  aria-label={`Remove ${tag}`}
-                  className="text-text-3 hover:text-text"
-                  onClick={() => setScopeTags(scopeTags.filter((t) => t !== tag))}
-                >
-                  <IconX size={10} />
-                </button>
+                <Tooltip label={`Remove ${tag}`}>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${tag}`}
+                    className="text-text-3 hover:text-text"
+                    onClick={() => setScopeTags(scopeTags.filter((t) => t !== tag))}
+                  >
+                    <IconX size={10} />
+                  </button>
+                </Tooltip>
               </span>
             ))}
             <input

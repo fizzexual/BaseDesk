@@ -3,6 +3,7 @@ import { useApp } from '../../data/store';
 import type { Ticket } from '../../data/types';
 import { Button } from '../../components/Button';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { IconSparkle } from '../../icons';
 import { TokenCost } from '../ai/TokenCost';
 
@@ -61,7 +62,9 @@ export function DraftBanner({ ticket }: { ticket: Ticket }) {
     <div className="mx-4 mt-2 shrink-0 rounded-md border border-line bg-surface-2 p-3">
       <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[12px] font-medium text-text-2">
         <IconSparkle size={14} className="shrink-0" />
-        <span>Suggested reply</span>
+        <Tooltip title="AI draft" label="A reply drafted by AI, ready for review — approve to send it, edit it first, or dismiss it.">
+          <span>Suggested reply</span>
+        </Tooltip>
         {agent && (
           <>
             <span aria-hidden="true">·</span>
@@ -69,7 +72,9 @@ export function DraftBanner({ ticket }: { ticket: Ticket }) {
           </>
         )}
         <span aria-hidden="true">·</span>
-        <TokenCost promptTokens={draft.promptTokens} completionTokens={draft.completionTokens} />
+        <Tooltip title="AI cost" label="Tokens used and the estimated price for this generation, based on your configured AI model.">
+          <TokenCost promptTokens={draft.promptTokens} completionTokens={draft.completionTokens} />
+        </Tooltip>
       </div>
       <div className="max-h-40 overflow-y-auto whitespace-pre-line rounded-md border border-line bg-surface p-2.5 text-[13px] leading-relaxed text-text-2">
         {draft.draftBody}

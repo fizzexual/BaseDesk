@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { SmtpTestResult } from '../../data/types';
@@ -94,7 +95,14 @@ export function EmailSettings() {
       <div className={cx('mt-5 flex flex-col gap-4', !enabled && 'opacity-60')}>
         <div className="flex flex-wrap gap-3">
           <label className="flex min-w-0 flex-[3] flex-col gap-1.5">
-            <span className="text-[13px] font-medium">SMTP host</span>
+            <span className="text-[13px] font-medium">
+              <Tooltip
+                title="SMTP host"
+                label="The outgoing mail server that sends your notification emails — your email provider gives you this address."
+              >
+                SMTP host
+              </Tooltip>
+            </span>
             <input type="text" value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.provider.com" className={`${FIELD} font-mono text-[13px]`} />
           </label>
           <label className="flex w-24 shrink-0 flex-col gap-1.5">
@@ -131,7 +139,14 @@ export function EmailSettings() {
 
         <div className="flex flex-wrap gap-3">
           <label className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="text-[13px] font-medium">From name</span>
+            <span className="text-[13px] font-medium">
+              <Tooltip
+                title="From name"
+                label="The sender name customers see in their inbox, like “Acme Support” — separate from your SMTP login."
+              >
+                From name
+              </Tooltip>
+            </span>
             <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Acme Support" className={FIELD} />
           </label>
           <label className="flex min-w-0 flex-1 flex-col gap-1.5">

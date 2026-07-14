@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { CustomFieldType } from '../../data/types';
@@ -116,14 +117,16 @@ export function CustomFieldsSettings() {
                   label={f.required ? 'Make optional' : 'Make required'}
                 />
               </label>
-              <button
-                type="button"
-                aria-label={`Remove ${f.label}`}
-                onClick={() => void remove(f.id, f.label)}
-                className="shrink-0 rounded-sm p-1 text-text-3 transition-colors hover:bg-red-bg hover:text-red"
-              >
-                <IconTrash size={15} />
-              </button>
+              <Tooltip label={`Remove ${f.label}`}>
+                <button
+                  type="button"
+                  aria-label={`Remove ${f.label}`}
+                  onClick={() => void remove(f.id, f.label)}
+                  className="shrink-0 rounded-sm p-1 text-text-3 transition-colors hover:bg-red-bg hover:text-red"
+                >
+                  <IconTrash size={15} />
+                </button>
+              </Tooltip>
             </li>
           ))}
         </ul>

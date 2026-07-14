@@ -5,6 +5,7 @@ import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconPaperclip, IconTrash } from '../../icons';
 
@@ -142,9 +143,11 @@ function MessageRow({
         <div className={cx('mb-1 flex items-baseline gap-2', mine && 'flex-row-reverse')}>
           <span className="text-[13px] font-medium">{name}</span>
           {isNote && (
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-amber">
-              Internal note
-            </span>
+            <Tooltip title="Internal note" label="Only your team can see this — the customer is never notified.">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-amber">
+                Internal note
+              </span>
+            </Tooltip>
           )}
           <TimeAgo iso={message.at} />
         </div>

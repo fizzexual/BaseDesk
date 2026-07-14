@@ -7,6 +7,7 @@ import { formatMoney } from '../../data/money';
 import type { DealType, StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
+import { Tooltip } from '../../components/Tooltip';
 import { IconChart, IconUser } from '../../icons';
 import { AreaChart } from './charts/AreaChart';
 import { Donut } from './charts/Donut';
@@ -47,20 +48,56 @@ function fmtResolution(hours: number): string {
   return hours < 24 ? `${hours.toFixed(1)}h` : `${(hours / 24).toFixed(1)}d`;
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  /** Rich explainer for metrics whose meaning isn't obvious from the label alone. */
+  tooltip?: { title: string; desc: string };
+}) {
   return (
     <div className="min-w-0 rounded-md border border-line p-3.5">
-      <div className="truncate text-[12px] font-medium text-text-3">{label}</div>
+      <div className="truncate text-[12px] font-medium text-text-3">
+        {tooltip ? (
+          <Tooltip title={tooltip.title} label={tooltip.desc}>
+            <span>{label}</span>
+          </Tooltip>
+        ) : (
+          label
+        )}
+      </div>
       <div className="mt-1 text-[20px] font-semibold tabular-nums text-text">{value}</div>
     </div>
   );
 }
 
-function ChartCard({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+function ChartCard({
+  title,
+  aside,
+  tooltip,
+  children,
+}: {
+  title: string;
+  aside?: ReactNode;
+  /** Rich explainer for chart headings that use jargon. */
+  tooltip?: { title: string; desc: string };
+  children: ReactNode;
+}) {
   return (
     <section className="flex min-w-0 flex-col rounded-md border border-line p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[13px] font-medium text-text">{title}</h2>
+        <h2 className="text-[13px] font-medium text-text">
+          {tooltip ? (
+            <Tooltip title={tooltip.title} label={tooltip.desc}>
+              <span>{title}</span>
+            </Tooltip>
+          ) : (
+            title
+          )}
+        </h2>
         {aside}
       </div>
       <div className="min-h-0 flex-1">{children}</div>
@@ -154,23 +191,52 @@ export function ReportsPage() {
             <StatCard label="Open now" value={nf.format(stats.openNow)} />
             <StatCard label="Created (7d)" value={nf.format(stats.createdLast7Days)} />
             <StatCard label="Solved (7d)" value={nf.format(stats.solvedLast7Days)} />
-            <StatCard label="Median first reply" value={fmtFirstReply(stats.medianFirstReplyMinutes)} />
-            <StatCard label="Median resolution" value={fmtResolution(stats.medianResolutionHours)} />
+            <StatCard
+              label="Median first reply"
+              value={fmtFirstReply(stats.medianFirstReplyMinutes)}
+              tooltip={{
+                title: 'Median first reply',
+                desc: "Median time between a ticket being created and the team's first reply, across all tickets.",
+              }}
+            />
+            <StatCard
+              label="Median resolution"
+              value={fmtResolution(stats.medianResolutionHours)}
+              tooltip={{
+                title: 'Median resolution',
+                desc: 'Median time from ticket creation to being marked solved, across all tickets.',
+              }}
+            />
           </div>
 
           <div className="grid min-w-0 grid-cols-2 gap-3">
             <StatCard
               label={`First-response SLA met (${nf.format(sla.firstResponseSample)} tickets)`}
               value={`${Math.round(sla.firstResponsePct * 100)}%`}
+              tooltip={{
+                title: 'First-response SLA',
+                desc: "Share of tickets replied to within their priority's first-response target. Counts only tickets that have received a first reply.",
+              }}
             />
             <StatCard
               label={`Resolution SLA met (${nf.format(sla.resolutionSample)} tickets)`}
               value={`${Math.round(sla.resolutionPct * 100)}%`}
+              tooltip={{
+                title: 'Resolution SLA',
+                desc: "Share of tickets resolved within their priority's resolution target. Counts only tickets that have been resolved.",
+              }}
             />
           </div>
 
           <div className="grid min-w-0 grid-cols-3 gap-3">
-            <StatCard label="Avg satisfaction" value={stats.csat.count > 0 ? `${stats.csat.average.toFixed(1)} / 5` : '—'} />
+            <StatCard
+              label="Avg satisfaction"
+              value={stats.csat.count > 0 ? `${stats.csat.average.toFixed(1)} / 5` : '—'}
+              tooltip={{
+                title: 'CSAT',
+                desc: 'Average customer satisfaction rating across all rated tickets, 1 (worst) to 5 (best).',
+              }}
+            />
             <StatCard label="Positive (4–5★)" value={stats.csat.count > 0 ? `${stats.csat.positivePct}%` : '—'} />
             <StatCard label={`Ratings received`} value={nf.format(stats.csat.count)} />
           </div>
@@ -206,7 +272,13 @@ export function ReportsPage() {
               </div>
             </ChartCard>
 
-            <ChartCard title="By status">
+            <ChartCard
+              title="By status"
+              tooltip={{
+                title: 'Ticket status',
+                desc: 'Where each ticket sits in its lifecycle: Open (needs a reply), Pending (waiting on the customer), On hold (paused), Solved (resolved), or Closed (archived).',
+              }}
+            >
               <HBars
                 rows={STATUS_META.map((s) => ({
                   key: s.key,
@@ -237,9 +309,27 @@ export function ReportsPage() {
 
           <div className="grid min-w-0 grid-cols-4 gap-3">
             <StatCard label="Won this month" value={money(stats.revenue.wonThisMonth)} />
-            <StatCard label="Saved revenue" value={money(stats.revenue.savedRevenue)} />
-            <StatCard label="Win rate" value={`${Math.round(stats.revenue.winRate * 100)}%`} />
-            <StatCard label="Open pipeline" value={money(stats.revenue.openPipeline)} />
+            <StatCard
+              label="Saved revenue"
+              value={money(stats.revenue.savedRevenue)}
+              tooltip={{
+                title: 'Saved revenue',
+                desc: 'Value of retention deals won this month — accounts that were at risk of churning but were kept.',
+              }}
+            />
+            <StatCard
+              label="Win rate"
+              value={`${Math.round(stats.revenue.winRate * 100)}%`}
+              tooltip={{
+                title: 'Win rate',
+                desc: "Share of closed deals (won or lost) that were won. Deals still open aren't counted.",
+              }}
+            />
+            <StatCard
+              label="Open pipeline"
+              value={money(stats.revenue.openPipeline)}
+              tooltip={{ title: 'Open pipeline', desc: 'Total value of deals still open — not yet won or lost.' }}
+            />
           </div>
 
           <div className="grid min-w-0 grid-cols-2 gap-4">
@@ -259,7 +349,13 @@ export function ReportsPage() {
               />
             </ChartCard>
 
-            <ChartCard title="Won by type">
+            <ChartCard
+              title="Won by type"
+              tooltip={{
+                title: 'Deal types',
+                desc: "This month's won revenue by deal type: Expansion (upsell to an existing account), Retention (an at-risk account saved from churn), or Inbound (a new deal from a support conversation).",
+              }}
+            >
               <div className="flex h-full items-center">
                 <Donut
                   title="Won by type"

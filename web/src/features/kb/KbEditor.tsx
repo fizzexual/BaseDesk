@@ -6,6 +6,7 @@ import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 
 const FIELD = 'h-9 w-full rounded-md border border-line bg-bg px-2.5 text-[14px] outline-none focus:border-line-2';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-text-2';
@@ -128,7 +129,14 @@ export function KbEditor({
         </div>
 
         <div>
-          <span className={LABEL}>Status</span>
+          <span className={LABEL}>
+            <Tooltip
+              title="Status"
+              label="Draft stays private while you write. Published makes it live so the AI assistant can match and use it in replies."
+            >
+              <span>Status</span>
+            </Tooltip>
+          </span>
           <SegmentedControl options={STATUS_OPTIONS} value={status} onChange={setStatus} />
         </div>
 

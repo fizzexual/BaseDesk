@@ -3,6 +3,7 @@ import { Button } from '../../components/Button';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { Switch } from '../../components/Switch';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type { AiTestResult } from '../../data/types';
@@ -301,7 +302,14 @@ export function AiSettings() {
         )}
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium">API key</span>
+          <span className="text-[13px] font-medium">
+            <Tooltip
+              title="API key"
+              label="Your private credential for this provider, from their dashboard. Stored on your server and never sent to the browser."
+            >
+              API key
+            </Tooltip>
+          </span>
           <input
             type="password"
             value={key}

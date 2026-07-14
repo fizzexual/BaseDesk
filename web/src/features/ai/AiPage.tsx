@@ -7,6 +7,7 @@ import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconFilter, IconNote, IconPlay, IconPlus, IconReply, IconSparkle } from '../../icons';
 import { AI_MODULES, getApiKey } from './engine';
@@ -23,6 +24,13 @@ const AUTONOMY_META: Record<Autonomy, { label: string; className: string }> = {
   suggest: { label: 'Suggest', className: 'bg-surface-2 text-text-2' },
   draft: { label: 'Draft', className: 'bg-blue-bg text-blue' },
   resolve: { label: 'Resolve', className: 'bg-green-bg text-green' },
+};
+
+/** What each autonomy level actually does, for the pill's hover explainer. */
+const AUTONOMY_TOOLTIP: Record<Autonomy, string> = {
+  suggest: 'This agent only proposes a priority and tags — it never drafts or sends anything on its own.',
+  draft: 'This agent writes replies and queues them as drafts for your approval before anything sends.',
+  resolve: 'This agent auto-answers tickets it matches confidently to your knowledge base, and drafts the rest for review.',
 };
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
@@ -93,14 +101,16 @@ function AgentCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-[14px] font-medium">{agent.name}</span>
-            <span
-              className={cx(
-                'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[12px] font-medium',
-                meta.className,
-              )}
-            >
-              {meta.label}
-            </span>
+            <Tooltip title="Autonomy" label={AUTONOMY_TOOLTIP[agent.autonomy]}>
+              <span
+                className={cx(
+                  'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[12px] font-medium',
+                  meta.className,
+                )}
+              >
+                {meta.label}
+              </span>
+            </Tooltip>
             {!agent.enabled && (
               <span className="shrink-0 text-[12px] text-text-3">Off</span>
             )}
@@ -111,11 +121,13 @@ function AgentCard({
           </div>
         </div>
       </button>
-      <Switch
-        enabled={agent.enabled}
-        onToggle={onToggle}
-        label={`${agent.enabled ? 'Disable' : 'Enable'} ${agent.name}`}
-      />
+      <Tooltip title="Enabled" label="Turns this agent on or off. Disabled agents keep their settings but stop triaging, drafting, or resolving tickets.">
+        <Switch
+          enabled={agent.enabled}
+          onToggle={onToggle}
+          label={`${agent.enabled ? 'Disable' : 'Enable'} ${agent.name}`}
+        />
+      </Tooltip>
     </div>
   );
 }
@@ -225,17 +237,38 @@ export function AiPage() {
           <div className="border-t border-line pt-10">
             <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-lg border border-line bg-surface-2 px-4 py-3">
               <div>
-                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">Tokens used</div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">
+                  <Tooltip
+                    title="Tokens used"
+                    label="Prompt tokens (what's sent to the model) plus completion tokens (what it writes back), added up across every AI generation."
+                  >
+                    <span>Tokens used</span>
+                  </Tooltip>
+                </div>
                 <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{formatTokens(usage.total)}</div>
               </div>
               <div>
-                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">Estimated cost</div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">
+                  <Tooltip
+                    title="Estimated cost"
+                    label="What those tokens would cost at your configured model's price. Shows '—' until a catalog model is set in Settings → AI."
+                  >
+                    <span>Estimated cost</span>
+                  </Tooltip>
+                </div>
                 <div className="mt-0.5 text-[20px] font-semibold tabular-nums">
                   {usage.cost !== null ? formatCost(usage.cost) : '—'}
                 </div>
               </div>
               <div>
-                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">AI generations</div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-text-3">
+                  <Tooltip
+                    title="AI generations"
+                    label="How many times an agent called the model (or the built-in rules) to triage, draft, or resolve a ticket."
+                  >
+                    <span>AI generations</span>
+                  </Tooltip>
+                </div>
                 <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{usage.generations}</div>
               </div>
               <p className="min-w-0 flex-1 self-center text-right text-[12px] text-text-3">

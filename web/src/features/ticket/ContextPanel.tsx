@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { DealStageBadge, DealTypeBadge } from '../../components/DealBadges';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
 import { TicketCustomFields } from './TicketCustomFields';
@@ -160,7 +161,11 @@ function RevenueAwarePanel({
       </section>
       {typeof ticket.satisfactionScore === 'number' && (
         <section className="border-t border-line p-4">
-          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">Satisfaction</h3>
+          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">
+            <Tooltip title="CSAT" label="Customer satisfaction score collected after the ticket was resolved — 1 (worst) to 5 (best).">
+              <span>Satisfaction</span>
+            </Tooltip>
+          </h3>
           <div className="flex items-baseline gap-1.5">
             <span className="text-[15px] leading-none">
               <span className="text-amber">{'★'.repeat(ticket.satisfactionScore)}</span>
@@ -179,21 +184,25 @@ function RevenueAwarePanel({
           <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">
             Summary
           </h3>
-          <button
-            type="button"
-            disabled={summarizing}
-            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-60"
-            onClick={() => void summarize()}
-          >
-            <IconSparkle size={14} />
-            {summarizing ? 'Summarizing…' : 'Summarize thread'}
-          </button>
+          <Tooltip title="Summarize" label="Uses AI to condense this conversation into a short recap — handy for catching up fast.">
+            <button
+              type="button"
+              disabled={summarizing}
+              className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text disabled:opacity-60"
+              onClick={() => void summarize()}
+            >
+              <IconSparkle size={14} />
+              {summarizing ? 'Summarizing…' : 'Summarize thread'}
+            </button>
+          </Tooltip>
           {summary !== null && <p className="mt-2 text-[13px] text-text-2">{summary}</p>}
         </section>
       )}
       <section className="border-t border-line p-4">
         <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">
-          Recent tickets
+          <Tooltip title="Recent tickets" label="Other tickets filed by this same contact, most recent first.">
+            <span>Recent tickets</span>
+          </Tooltip>
         </h3>
         {recent.length === 0 ? (
           <p className="text-[13px] text-text-3">No other tickets from this contact.</p>

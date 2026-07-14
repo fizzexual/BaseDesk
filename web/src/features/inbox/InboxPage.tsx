@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { ContextMenu, type ContextMenuItem } from '../../components/ContextMenu';
 import { EmptyState } from '../../components/EmptyState';
 import { Menu, type MenuItem } from '../../components/Menu';
+import { Tooltip } from '../../components/Tooltip';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
 import {
@@ -479,19 +480,20 @@ export function InboxPage() {
             { mode: 'list' as const, Icon: IconList, label: 'List view' },
             { mode: 'cards' as const, Icon: IconGrid, label: 'Card view' },
           ]).map(({ mode, Icon, label }) => (
-            <button
-              key={mode}
-              type="button"
-              aria-label={label}
-              aria-pressed={viewMode === mode}
-              className={cx(
-                'inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors',
-                viewMode === mode ? 'bg-surface text-text shadow-1' : 'text-text-2 hover:text-text',
-              )}
-              onClick={() => chooseViewMode(mode)}
-            >
-              <Icon size={16} />
-            </button>
+            <Tooltip key={mode} label={label}>
+              <button
+                type="button"
+                aria-label={label}
+                aria-pressed={viewMode === mode}
+                className={cx(
+                  'inline-flex h-7 w-7 items-center justify-center rounded-[7px] transition-colors',
+                  viewMode === mode ? 'bg-surface text-text shadow-1' : 'text-text-2 hover:text-text',
+                )}
+                onClick={() => chooseViewMode(mode)}
+              >
+                <Icon size={16} />
+              </button>
+            </Tooltip>
           ))}
         </div>
         <Button variant="primary" size="sm" onClick={() => setNewTicketOpen(true)}>

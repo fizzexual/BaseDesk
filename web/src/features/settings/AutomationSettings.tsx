@@ -4,6 +4,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Menu } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { useApp } from '../../data/store';
 import type {
@@ -242,14 +243,16 @@ export function AutomationSettings() {
                   value={rule.enabled ? 'on' : 'off'}
                   onChange={(v) => updateRule(rule.id, { enabled: v === 'on' })}
                 />
-                <button
-                  type="button"
-                  aria-label={`Delete ${rule.name}`}
-                  onClick={() => removeRule(rule.id)}
-                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-red-bg hover:text-red"
-                >
-                  <IconTrash size={16} />
-                </button>
+                <Tooltip label={`Delete ${rule.name}`}>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${rule.name}`}
+                    onClick={() => removeRule(rule.id)}
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-red-bg hover:text-red"
+                  >
+                    <IconTrash size={16} />
+                  </button>
+                </Tooltip>
               </div>
 
               {/* Conditions */}
@@ -317,15 +320,17 @@ export function AutomationSettings() {
                         className={FIELD}
                       />
                     )}
-                    <button
-                      type="button"
-                      aria-label="Remove condition"
-                      disabled={rule.conditions.length === 1}
-                      onClick={() => setConditions(rule, rule.conditions.filter((_, j) => j !== i))}
-                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors enabled:hover:bg-surface-2 enabled:hover:text-text disabled:opacity-30"
-                    >
-                      <IconX size={15} />
-                    </button>
+                    <Tooltip label="Remove condition">
+                      <button
+                        type="button"
+                        aria-label="Remove condition"
+                        disabled={rule.conditions.length === 1}
+                        onClick={() => setConditions(rule, rule.conditions.filter((_, j) => j !== i))}
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors enabled:hover:bg-surface-2 enabled:hover:text-text disabled:opacity-30"
+                      >
+                        <IconX size={15} />
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
                 <button
@@ -413,15 +418,17 @@ export function AutomationSettings() {
                         className={FIELD}
                       />
                     )}
-                    <button
-                      type="button"
-                      aria-label="Remove action"
-                      disabled={rule.actions.length === 1}
-                      onClick={() => setActions(rule, rule.actions.filter((_, j) => j !== i))}
-                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors enabled:hover:bg-surface-2 enabled:hover:text-text disabled:opacity-30"
-                    >
-                      <IconX size={15} />
-                    </button>
+                    <Tooltip label="Remove action">
+                      <button
+                        type="button"
+                        aria-label="Remove action"
+                        disabled={rule.actions.length === 1}
+                        onClick={() => setActions(rule, rule.actions.filter((_, j) => j !== i))}
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-text-3 transition-colors enabled:hover:bg-surface-2 enabled:hover:text-text disabled:opacity-30"
+                      >
+                        <IconX size={15} />
+                      </button>
+                    </Tooltip>
                   </div>
                 ))}
                 <button

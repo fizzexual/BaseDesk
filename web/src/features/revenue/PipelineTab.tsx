@@ -5,15 +5,33 @@ import { formatMoney } from '../../data/money';
 import type { Deal, DealStage, DealType } from '../../data/types';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
+import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconFilter, IconPlus, IconSearch } from '../../icons';
 import { DealDialog } from './DealDialog';
 import { DealTable } from './DealTable';
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  /** Rich explainer for metrics whose meaning isn't obvious from the label alone. */
+  tooltip?: { title: string; desc: string };
+}) {
   return (
     <div className="rounded-md border border-line p-3.5">
-      <div className="text-[12px] font-medium text-text-3">{label}</div>
+      <div className="text-[12px] font-medium text-text-3">
+        {tooltip ? (
+          <Tooltip title={tooltip.title} label={tooltip.desc}>
+            <span>{label}</span>
+          </Tooltip>
+        ) : (
+          label
+        )}
+      </div>
       <div className="mt-1 text-[20px] font-semibold tabular-nums">{value}</div>
     </div>
   );
@@ -68,9 +86,27 @@ export function PipelineTab() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="grid grid-cols-4 gap-3 p-4">
         <StatCard label="Won this month" value={formatMoney(revenue?.wonThisMonth ?? 0, { compact: true })} />
-        <StatCard label="Open pipeline" value={formatMoney(revenue?.openPipeline ?? 0, { compact: true })} />
-        <StatCard label="Saved revenue" value={formatMoney(revenue?.savedRevenue ?? 0, { compact: true })} />
-        <StatCard label="Win rate" value={`${Math.round((revenue?.winRate ?? 0) * 100)}%`} />
+        <StatCard
+          label="Open pipeline"
+          value={formatMoney(revenue?.openPipeline ?? 0, { compact: true })}
+          tooltip={{ title: 'Open pipeline', desc: 'Total value of deals still open — not yet won or lost.' }}
+        />
+        <StatCard
+          label="Saved revenue"
+          value={formatMoney(revenue?.savedRevenue ?? 0, { compact: true })}
+          tooltip={{
+            title: 'Saved revenue',
+            desc: 'Value of retention deals won this month — accounts that were at risk of churning but were kept.',
+          }}
+        />
+        <StatCard
+          label="Win rate"
+          value={`${Math.round((revenue?.winRate ?? 0) * 100)}%`}
+          tooltip={{
+            title: 'Win rate',
+            desc: "Share of closed deals (won or lost) that were won. Deals still open aren't counted.",
+          }}
+        />
       </div>
 
       <div className="flex items-center gap-2 border-b border-line px-4 pb-3">
