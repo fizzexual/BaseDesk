@@ -48,7 +48,7 @@ export function PortalLayout() {
   return (
     <div className="flex min-h-full flex-col bg-bg">
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-2 px-4">
+        <div className="flex h-14 w-full items-center gap-2 px-4 sm:px-6">
           <NavLink to="/portal" className="mr-1 flex shrink-0 items-center gap-2.5" aria-label="Support home">
             <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
               <IconLogo size={18} />
@@ -97,7 +97,7 @@ export function PortalLayout() {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+      <main className="w-full flex-1">
         <Outlet />
       </main>
     </div>
