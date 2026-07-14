@@ -287,6 +287,7 @@ export function PortalNewTicket() {
                 {suggestions.map((a) => (
                   <details
                     key={a.id}
+                    open
                     className="group rounded-lg border border-line bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
                   >
                     <summary className="flex cursor-pointer items-center justify-between gap-3 text-[14px] font-medium">

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { AiSource, Attachment, CannedReply, Contact, Ticket, TicketPatch, TokenUsage } from '../../data/types';
+import type { Agent, AiSource, Attachment, CannedReply, Contact, Ticket, TicketPatch, TokenUsage } from '../../data/types';
 import { formatBytes } from '../../data/attachments';
+import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -42,6 +43,47 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // @mention typeahead: when the caret sits right after "@word", offer teammates.
+  const agentsMap = useApp((s) => s.agents);
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionIdx, setMentionIdx] = useState(0);
+  const mentionMatches = useMemo(() => {
+    if (mention === null) return [] as Agent[];
+    const q = mention.query.toLowerCase();
+    return Object.values(agentsMap)
+      .filter((a) => a.name.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 6);
+  }, [mention, agentsMap]);
+
+  /** Track the body + detect an in-progress "@mention" at the caret. */
+  function onBody(value: string, caret: number) {
+    setBody(value);
+    const m = /(?:^|\s)@(\w*)$/.exec(value.slice(0, caret));
+    if (m) {
+      setMention({ query: m[1], start: caret - m[1].length - 1 }); // index of the '@'
+      setMentionIdx(0);
+    } else {
+      setMention(null);
+    }
+  }
+
+  /** Replace the "@partial" at the caret with the teammate's first name (what the server matches). */
+  function insertMention(agent: Agent) {
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? body.length;
+    const start = mention?.start ?? caret;
+    const first = agent.name.trim().split(/\s+/)[0] ?? agent.name;
+    const next = `${body.slice(0, start)}@${first} ${body.slice(caret)}`;
+    setBody(next);
+    setMention(null);
+    const pos = start + first.length + 2; // just past "@First "
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  }
 
   function autogrow() {
     const el = textareaRef.current;
@@ -240,17 +282,23 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           onChange={switchMode}
         />
       </div>
-      <div className={cx(mode === 'note' && 'rounded-md bg-amber-bg')}>
+      <div className={cx('relative', mode === 'note' && 'rounded-md bg-amber-bg')}>
         <textarea
           ref={textareaRef}
           rows={1}
           value={body}
           placeholder={
-            mode === 'reply' ? `Reply to ${firstName(contact)}…` : 'Add an internal note…'
+            mode === 'reply' ? `Reply to ${firstName(contact)}…` : 'Add an internal note… @ to mention a teammate'
           }
           className="max-h-64 min-h-[88px] w-full resize-none bg-transparent p-2 text-[14px] outline-none placeholder:text-text-3"
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => onBody(e.target.value, e.target.selectionStart ?? e.target.value.length)}
           onKeyDown={(e) => {
+            if (mention !== null && mentionMatches.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx((i) => (i + 1) % mentionMatches.length); return; }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx((i) => (i - 1 + mentionMatches.length) % mentionMatches.length); return; }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionIdx]); return; }
+              if (e.key === 'Escape') { e.preventDefault(); setMention(null); return; }
+            }
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               send();
@@ -260,6 +308,27 @@ export function Composer({ ticket }: { ticket: Ticket }) {
             }
           }}
         />
+        {mention !== null && mentionMatches.length > 0 && (
+          <div className="absolute bottom-full left-2 z-30 mb-1 w-56 overflow-hidden rounded-md border border-line bg-surface py-1 shadow-2">
+            {mentionMatches.map((a, i) => (
+              <button
+                key={a.id}
+                type="button"
+                className={cx(
+                  'flex w-full items-center gap-2 px-2.5 py-1.5 text-left',
+                  i === mentionIdx ? 'bg-surface-2' : 'hover:bg-surface-2',
+                )}
+                // mousedown (not click) so the textarea keeps focus through the insert
+                onMouseDown={(e) => { e.preventDefault(); insertMention(a); }}
+                onMouseEnter={() => setMentionIdx(i)}
+              >
+                <Avatar name={a.name} hue={a.avatarHue} size={20} />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{a.name}</span>
+                <span className="shrink-0 text-[11px] text-text-3">@{a.name.trim().split(/\s+/)[0]}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {pending.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
