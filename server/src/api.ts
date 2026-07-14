@@ -11,6 +11,7 @@ import {
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
   getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
   followTicket, unfollowTicket, getFollowers,
+  getTasks, getTask, insertTask, patchTask, removeTask, nextTaskPosition,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -936,6 +937,54 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     unfollowTicket(db, id, c.req.param('agentId'));
     return c.json(followersJson(id));
+  });
+
+  // Checklist: the sub-steps an agent works through to resolve a ticket.
+  app.get('/api/tickets/:id/tasks', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getTasks(db, id));
+  });
+  app.post('/api/tickets/:id/tasks', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let title = '';
+    try {
+      const b = (await c.req.json()) as { title?: unknown };
+      if (typeof b.title === 'string') title = b.title.trim();
+    } catch {
+      /* no/invalid body */
+    }
+    if (title === '') return c.json({ error: 'title is required' }, 400);
+    insertTask(db, {
+      id: newId('tk_'), ticketId: id, title, done: false,
+      position: nextTaskPosition(db, id), createdAt: new Date().toISOString(), doneAt: null,
+    });
+    return c.json(getTasks(db, id));
+  });
+  app.patch('/api/tickets/:id/tasks/:taskId', async (c) => {
+    const id = c.req.param('id');
+    const taskId = c.req.param('taskId');
+    const task = getTask(db, taskId);
+    if (task === null || task.ticketId !== id) return c.json({ error: 'task not found' }, 404);
+    const patch: { title?: string; done?: boolean } = {};
+    try {
+      const b = (await c.req.json()) as { title?: unknown; done?: unknown };
+      if (typeof b.title === 'string' && b.title.trim() !== '') patch.title = b.title.trim();
+      if (typeof b.done === 'boolean') patch.done = b.done;
+    } catch {
+      /* no/invalid body */
+    }
+    patchTask(db, taskId, patch, new Date().toISOString());
+    return c.json(getTasks(db, id));
+  });
+  app.delete('/api/tickets/:id/tasks/:taskId', (c) => {
+    const id = c.req.param('id');
+    const taskId = c.req.param('taskId');
+    const task = getTask(db, taskId);
+    if (task === null || task.ticketId !== id) return c.json({ error: 'task not found' }, 404);
+    removeTask(db, taskId);
+    return c.json(getTasks(db, id));
   });
 
   // Intake-form answers captured when the ticket was opened (shown as metadata).

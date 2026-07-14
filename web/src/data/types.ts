@@ -321,6 +321,17 @@ export interface TicketFollower {
   at: string;
 }
 
+/** One checklist item on a ticket — a sub-step an agent works through to resolve it. */
+export interface TicketTask {
+  id: string;
+  ticketId: string;
+  title: string;
+  done: boolean;
+  position: number;
+  createdAt: string;
+  doneAt: string | null;
+}
+
 /** An @mention alert for the current agent. */
 /** What happened: a teammate @mentioned you, a customer replied, or a ticket was assigned to you. */
 export type NotificationKind = 'mention' | 'reply' | 'assigned';

@@ -19,6 +19,7 @@ interface SeedData {
   notifications?: Notification[];
   followers?: { ticketId: string; agentId: string; at: string }[];
   intake?: { ticketId: string; answers: { prompt: string; label: string }[] }[];
+  tasks?: { id: string; ticketId: string; title: string; done: boolean; position: number; createdAt: string; doneAt: string | null }[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -118,6 +119,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const f of seed.followers ?? []) insertFollower.run(f.ticketId, f.agentId, f.at);
     const insertIntake = db.prepare('INSERT OR REPLACE INTO ticket_intake (ticketId, answers) VALUES (?, ?)');
     for (const i of seed.intake ?? []) insertIntake.run(i.ticketId, JSON.stringify(i.answers));
+    const insertTask = db.prepare('INSERT INTO ticket_tasks (id, ticketId, title, done, position, createdAt, doneAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const t of seed.tasks ?? []) insertTask.run(t.id, t.ticketId, t.title, t.done ? 1 : 0, t.position, t.createdAt, t.doneAt);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

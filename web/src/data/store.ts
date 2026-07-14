@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -37,6 +37,7 @@ export interface AppState {
   ticketEvents: Record<string, TicketEvent[]>; // activity timeline, keyed by ticketId
   ticketSeen: Record<string, TicketSeen[]>; // read receipts, keyed by ticketId
   ticketFollowers: Record<string, TicketFollower[]>; // watchers, keyed by ticketId
+  ticketTasks: Record<string, TicketTask[]>; // checklist items, keyed by ticketId
   ticketIntake: Record<string, IntakeAnswer[]>; // intake-form answers, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
@@ -49,6 +50,10 @@ export interface AppState {
   /** Follow/unfollow a ticket (defaults to the current agent), updating its watcher list. */
   followTicket(ticketId: string, agentId?: string): Promise<void>;
   unfollowTicket(ticketId: string, agentId: string): Promise<void>;
+  /** Ticket checklist mutations — each refreshes the ticket's task list in the store. */
+  addTask(ticketId: string, title: string): Promise<void>;
+  patchTask(ticketId: string, taskId: string, patch: { title?: string; done?: boolean }): Promise<void>;
+  deleteTask(ticketId: string, taskId: string): Promise<void>;
   /** Live sync: merge the latest tickets from the server into the store. */
   refreshTickets(): Promise<void>;
   /** Live sync: re-fetch an open ticket's messages + read receipts so new replies appear. */
@@ -195,6 +200,7 @@ export function createAppStore(repository: Repository) {
     ticketEvents: {},
     ticketSeen: {},
     ticketFollowers: {},
+    ticketTasks: {},
     ticketIntake: {},
     composerPrefill: null,
     currentAgentId: '',
@@ -278,10 +284,11 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const [seen, intake, followers] = await Promise.all([
+      const [seen, intake, followers, tasks] = await Promise.all([
         repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
         repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
         repository.getFollowers(ticketId).catch(() => [] as TicketFollower[]),
+        repository.getTasks(ticketId).catch(() => [] as TicketTask[]),
       ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
@@ -289,6 +296,7 @@ export function createAppStore(repository: Repository) {
         ticketSeen: { ...s.ticketSeen, [ticketId]: seen },
         ticketIntake: { ...s.ticketIntake, [ticketId]: intake },
         ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers },
+        ticketTasks: { ...s.ticketTasks, [ticketId]: tasks },
       }));
     },
 
@@ -305,6 +313,21 @@ export function createAppStore(repository: Repository) {
     async unfollowTicket(ticketId, agentId) {
       const followers = await repository.unfollowTicket(ticketId, agentId);
       set((s) => ({ ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers } }));
+    },
+
+    async addTask(ticketId, title) {
+      const tasks = await repository.addTask(ticketId, title);
+      set((s) => ({ ticketTasks: { ...s.ticketTasks, [ticketId]: tasks } }));
+    },
+
+    async patchTask(ticketId, taskId, patch) {
+      const tasks = await repository.patchTask(ticketId, taskId, patch);
+      set((s) => ({ ticketTasks: { ...s.ticketTasks, [ticketId]: tasks } }));
+    },
+
+    async deleteTask(ticketId, taskId) {
+      const tasks = await repository.deleteTask(ticketId, taskId);
+      set((s) => ({ ticketTasks: { ...s.ticketTasks, [ticketId]: tasks } }));
     },
 
     async refreshTickets() {

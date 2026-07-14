@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
-  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -254,6 +254,7 @@ export class LocalRepository implements Repository {
   private readonly storage: StorageLike;
   private data: LocalData;
   private followers = new Map<string, TicketFollower[]>(); // demo-only, in-memory
+  private tasks = new Map<string, TicketTask[]>(); // demo-only, in-memory
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -705,6 +706,35 @@ export class LocalRepository implements Repository {
   async unfollowTicket(ticketId: string, agentId: string): Promise<TicketFollower[]> {
     this.followers.set(ticketId, (this.followers.get(ticketId) ?? []).filter((f) => f.agentId !== agentId));
     return this.getFollowers(ticketId);
+  }
+
+  async getTasks(ticketId: string): Promise<TicketTask[]> {
+    return (this.tasks.get(ticketId) ?? []).map((t) => ({ ...t }));
+  }
+  async addTask(ticketId: string, title: string): Promise<TicketTask[]> {
+    const list = this.tasks.get(ticketId) ?? [];
+    list.push({
+      id: 'tk_' + Date.now().toString(36) + '_' + list.length,
+      ticketId, title: title.trim(), done: false, position: list.length,
+      createdAt: new Date().toISOString(), doneAt: null,
+    });
+    this.tasks.set(ticketId, list);
+    return this.getTasks(ticketId);
+  }
+  async patchTask(ticketId: string, taskId: string, patch: { title?: string; done?: boolean }): Promise<TicketTask[]> {
+    const t = (this.tasks.get(ticketId) ?? []).find((x) => x.id === taskId);
+    if (t) {
+      if (patch.title !== undefined) t.title = patch.title;
+      if (patch.done !== undefined) {
+        t.done = patch.done;
+        t.doneAt = patch.done ? new Date().toISOString() : null;
+      }
+    }
+    return this.getTasks(ticketId);
+  }
+  async deleteTask(ticketId: string, taskId: string): Promise<TicketTask[]> {
+    this.tasks.set(ticketId, (this.tasks.get(ticketId) ?? []).filter((x) => x.id !== taskId));
+    return this.getTasks(ticketId);
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

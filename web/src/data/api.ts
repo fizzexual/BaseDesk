@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -87,6 +87,18 @@ export class ApiRepository implements Repository {
   }
   unfollowTicket(ticketId: string, agentId: string): Promise<TicketFollower[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/followers/${encodeURIComponent(agentId)}`, { method: 'DELETE' });
+  }
+  getTasks(ticketId: string): Promise<TicketTask[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/tasks`);
+  }
+  addTask(ticketId: string, title: string): Promise<TicketTask[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/tasks`, jsonInit('POST', { title }));
+  }
+  patchTask(ticketId: string, taskId: string, patch: { title?: string; done?: boolean }): Promise<TicketTask[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/tasks/${encodeURIComponent(taskId)}`, jsonInit('PATCH', patch));
+  }
+  deleteTask(ticketId: string, taskId: string): Promise<TicketTask[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
   }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();

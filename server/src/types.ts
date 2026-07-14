@@ -324,6 +324,17 @@ export interface TicketFollower {
   at: string;
 }
 
+/** One checklist item on a ticket — a sub-step an agent works through to resolve it. */
+export interface TicketTask {
+  id: string;
+  ticketId: string;
+  title: string;
+  done: boolean;
+  position: number;
+  createdAt: string;
+  doneAt: string | null;
+}
+
 /**
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.

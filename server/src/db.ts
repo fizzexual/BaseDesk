@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -156,6 +156,15 @@ export function openDb(dataDir: string): DatabaseSync {
       agentId TEXT NOT NULL,
       at TEXT NOT NULL,
       PRIMARY KEY (ticketId, agentId)
+    );
+    CREATE TABLE IF NOT EXISTS ticket_tasks (
+      id TEXT PRIMARY KEY,
+      ticketId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      doneAt TEXT
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -477,6 +486,35 @@ export function getFollowers(db: DatabaseSync, ticketId: string): { agentId: str
   return db
     .prepare('SELECT agentId, at FROM ticket_followers WHERE ticketId = ? ORDER BY at')
     .all(ticketId) as unknown as { agentId: string; at: string }[];
+}
+
+/** A ticket's checklist — sub-steps an agent works through to resolve it. */
+export function getTasks(db: DatabaseSync, ticketId: string): TicketTask[] {
+  const rows = db
+    .prepare('SELECT id, ticketId, title, done, position, createdAt, doneAt FROM ticket_tasks WHERE ticketId = ? ORDER BY position, createdAt')
+    .all(ticketId) as unknown as (Omit<TicketTask, 'done'> & { done: number })[];
+  return rows.map((r) => ({ ...r, done: r.done === 1 }));
+}
+export function getTask(db: DatabaseSync, id: string): TicketTask | null {
+  const rows = db.prepare('SELECT id, ticketId, title, done, position, createdAt, doneAt FROM ticket_tasks WHERE id = ?').all(id) as unknown as (Omit<TicketTask, 'done'> & { done: number })[];
+  return rows.length > 0 ? { ...rows[0], done: rows[0].done === 1 } : null;
+}
+export function nextTaskPosition(db: DatabaseSync, ticketId: string): number {
+  const row = db.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS n FROM ticket_tasks WHERE ticketId = ?').get(ticketId) as { n: number };
+  return row.n;
+}
+export function insertTask(db: DatabaseSync, t: TicketTask): void {
+  db.prepare('INSERT INTO ticket_tasks (id, ticketId, title, done, position, createdAt, doneAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(t.id, t.ticketId, t.title, t.done ? 1 : 0, t.position, t.createdAt, t.doneAt);
+}
+export function patchTask(db: DatabaseSync, id: string, patch: { title?: string; done?: boolean }, now: string): void {
+  if (patch.title !== undefined) db.prepare('UPDATE ticket_tasks SET title = ? WHERE id = ?').run(patch.title, id);
+  if (patch.done !== undefined) {
+    db.prepare('UPDATE ticket_tasks SET done = ?, doneAt = ? WHERE id = ?').run(patch.done ? 1 : 0, patch.done ? now : null, id);
+  }
+}
+export function removeTask(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM ticket_tasks WHERE id = ?').run(id);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

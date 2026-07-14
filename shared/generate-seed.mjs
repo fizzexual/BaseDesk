@@ -854,7 +854,15 @@ intake.push({ ticketId: 'ts_8', answers: [
   { prompt: 'What kind of billing issue?', label: 'Charged after cancelling' },
 ] });
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications, followers, intake };
+// A checklist on the outage ticket, so the tasks feature is populated (2 of 4 done).
+const tasks = [
+  { id: 'tk_sc_1', ticketId: 'ts_1', title: 'Page the on-call engineer', done: true, position: 0, createdAt: H(29.8), doneAt: H(29.5) },
+  { id: 'tk_sc_2', ticketId: 'ts_1', title: 'Identify the failing payment step', done: true, position: 1, createdAt: H(29.8), doneAt: H(28) },
+  { id: 'tk_sc_3', ticketId: 'ts_1', title: 'Deploy the fix', done: false, position: 2, createdAt: H(29.8), doneAt: null },
+  { id: 'tk_sc_4', ticketId: 'ts_1', title: 'Confirm checkout succeeds end to end', done: false, position: 3, createdAt: H(29.8), doneAt: null },
+];
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications, followers, intake, tasks };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
 console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels, ${notifications.length} notifications`);

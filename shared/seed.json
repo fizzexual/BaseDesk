@@ -8533,5 +8533,43 @@
         }
       ]
     }
+  ],
+  "tasks": [
+    {
+      "id": "tk_sc_1",
+      "ticketId": "ts_1",
+      "title": "Page the on-call engineer",
+      "done": true,
+      "position": 0,
+      "createdAt": "2026-07-10T06:12:00.000Z",
+      "doneAt": "2026-07-10T06:30:00.000Z"
+    },
+    {
+      "id": "tk_sc_2",
+      "ticketId": "ts_1",
+      "title": "Identify the failing payment step",
+      "done": true,
+      "position": 1,
+      "createdAt": "2026-07-10T06:12:00.000Z",
+      "doneAt": "2026-07-10T08:00:00.000Z"
+    },
+    {
+      "id": "tk_sc_3",
+      "ticketId": "ts_1",
+      "title": "Deploy the fix",
+      "done": false,
+      "position": 2,
+      "createdAt": "2026-07-10T06:12:00.000Z",
+      "doneAt": null
+    },
+    {
+      "id": "tk_sc_4",
+      "ticketId": "ts_1",
+      "title": "Confirm checkout succeeds end to end",
+      "done": false,
+      "position": 3,
+      "createdAt": "2026-07-10T06:12:00.000Z",
+      "doneAt": null
+    }
   ]
 }
