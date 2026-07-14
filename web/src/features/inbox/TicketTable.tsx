@@ -107,6 +107,13 @@ export function TicketTable({
         // One pill per row: an urgent first-response SLA already implies "awaiting",
         // so show it in place of the reply badge; otherwise show the reply state.
         const alert = alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours));
+        // Rows that owe the customer a reply get an amber left stripe so they're
+        // easy to spot at a glance; it layers over the keyboard-selection stripe.
+        const needsReply = t.awaitingReply && t.status !== 'solved' && t.status !== 'closed';
+        const stripes = [
+          needsReply ? 'inset 3px 0 0 0 var(--amber)' : '',
+          selected ? 'inset 2px 0 0 0 var(--focus)' : '',
+        ].filter(Boolean);
         return (
           <div
             key={t.id}
@@ -123,7 +130,7 @@ export function TicketTable({
               grid,
               selected || checked ? 'bg-surface-2' : 'hover:bg-surface-2',
             )}
-            style={selected ? { boxShadow: 'inset 2px 0 0 0 var(--focus)' } : undefined}
+            style={stripes.length > 0 ? { boxShadow: stripes.join(', ') } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
             onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, t) : undefined}
             onKeyDown={(e) => {

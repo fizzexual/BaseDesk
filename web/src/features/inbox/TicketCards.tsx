@@ -45,6 +45,12 @@ export function TicketCards({
         const selected = t.id === selectedId;
         // One pill per card: prefer the urgent SLA alert, else the reply state.
         const alert = alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours));
+        // Amber left stripe on cards that owe the customer a reply — easy to spot.
+        const needsReply = t.awaitingReply && t.status !== 'solved' && t.status !== 'closed';
+        const shadows = [
+          needsReply ? 'inset 3px 0 0 0 var(--amber)' : '',
+          selected ? 'inset 0 0 0 1.5px var(--focus)' : '',
+        ].filter(Boolean);
         return (
           <div
             key={t.id}
@@ -60,7 +66,7 @@ export function TicketCards({
               'flex cursor-pointer flex-col rounded-md border bg-surface p-3.5 transition-colors',
               selected ? 'border-transparent bg-surface-2' : 'border-line hover:border-line-2',
             )}
-            style={selected ? { boxShadow: 'inset 0 0 0 1.5px var(--focus)' } : undefined}
+            style={shadows.length > 0 ? { boxShadow: shadows.join(', ') } : undefined}
             onClick={() => navigate(`/ticket/${t.id}`)}
             onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(e, t) : undefined}
             onKeyDown={(e) => {
