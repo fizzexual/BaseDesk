@@ -9,7 +9,7 @@ import { PortalTickets } from './PortalTickets';
 import { PortalTicket } from './PortalTicket';
 import { PortalNewTicket } from './PortalNewTicket';
 import { PortalProfile } from './PortalProfile';
-import { PortalHelp } from './PortalHelp';
+import { HelpLayout, HelpIndex, HelpArticle } from './PortalHelp';
 
 /** Scrollable, centered column for the portal's non-ticket pages. */
 function ContainedPage() {
@@ -45,14 +45,17 @@ export function PortalApp() {
         <Route path="/portal/login" element={contact ? <Navigate to="/portal" replace /> : <PortalAuth />} />
         {contact && (
           <Route path="/portal" element={<PortalLayout />}>
-            {/* The ticket view is full-bleed: it lays out its own conversation +
-                right sidebar edge-to-edge. Every other page reads better centered,
-                so they share a comfortably-wide contained column. */}
+            {/* The ticket view and the help center are full-bleed: they lay out
+                their own sidebars edge-to-edge. Every other page reads better
+                centered, so they share a comfortably-wide contained column. */}
             <Route path="ticket/:id" element={<PortalTicket />} />
+            <Route path="help" element={<HelpLayout />}>
+              <Route index element={<HelpIndex />} />
+              <Route path=":slug" element={<HelpArticle />} />
+            </Route>
             <Route element={<ContainedPage />}>
               <Route index element={<PortalTickets />} />
               <Route path="new" element={<PortalNewTicket />} />
-              <Route path="help" element={<PortalHelp />} />
               <Route path="profile" element={<PortalProfile />} />
             </Route>
           </Route>
