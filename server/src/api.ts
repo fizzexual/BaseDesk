@@ -9,6 +9,7 @@ import {
   awaitingReplyMap, getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
+  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -24,7 +25,7 @@ import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
-  CustomFieldType, Deal, DealStage, DealType, KbArticle, MacroActions, Message,
+  CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
@@ -222,13 +223,45 @@ function insertTicketRow(db: DatabaseSync, t: Ticket): void {
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
       tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-      firstRespondedAt, resolvedAt, channelId, customFields
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      firstRespondedAt, resolvedAt, channelId, customFields, category
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     t.id, t.number, t.subject, t.status, t.priority, t.bucket, t.requesterId, t.assigneeId,
     JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil, t.lastMessageAt,
-    t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId, JSON.stringify(t.customFields),
+    t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId, JSON.stringify(t.customFields), t.category,
   );
+}
+
+/** Validate/normalize an untrusted intake-form payload into a safe decision tree. */
+function sanitizeIntakeForm(input: unknown): IntakeForm | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const raw = input as Record<string, unknown>;
+  const nodesIn = typeof raw.nodes === 'object' && raw.nodes !== null ? (raw.nodes as Record<string, unknown>) : {};
+  const nodes: Record<string, IntakeNode> = {};
+  for (const [key, val] of Object.entries(nodesIn)) {
+    if (typeof val !== 'object' || val === null) continue;
+    const n = val as Record<string, unknown>;
+    const id = typeof n.id === 'string' && n.id.trim() !== '' ? n.id : key;
+    const prompt = typeof n.prompt === 'string' ? n.prompt : '';
+    const optsIn = Array.isArray(n.options) ? n.options : [];
+    const options: IntakeNode['options'] = [];
+    optsIn.forEach((o, i) => {
+      if (typeof o !== 'object' || o === null) return;
+      const opt = o as Record<string, unknown>;
+      if (typeof opt.label !== 'string') return;
+      options.push({
+        id: typeof opt.id === 'string' && opt.id.trim() !== '' ? opt.id : `o_${id}_${i}`,
+        label: opt.label,
+        next: typeof opt.next === 'string' && opt.next.trim() !== '' ? opt.next : null,
+        category: typeof opt.category === 'string' && opt.category.trim() !== '' ? opt.category.trim() : null,
+        tags: Array.isArray(opt.tags) ? opt.tags.filter((t): t is string => typeof t === 'string') : [],
+      });
+    });
+    nodes[id] = { id, prompt, options };
+  }
+  const rootRaw = typeof raw.rootId === 'string' ? raw.rootId : null;
+  const rootId = rootRaw !== null && nodes[rootRaw] !== undefined ? rootRaw : (Object.keys(nodes)[0] ?? null);
+  return { enabled: raw.enabled === true, rootId, nodes };
 }
 
 /**
@@ -318,10 +351,20 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
   };
 
-  /** Choose an agent for a new ticket per the strategy, or null if no agent is active. */
-  const pickAssignee = (strategy: AssignmentSettings['strategy']): string | null => {
-    const pool = db.prepare("SELECT id FROM agents WHERE status = 'active' ORDER BY rowid").all() as { id: string }[];
-    if (pool.length === 0) return null;
+  /**
+   * Choose an agent for a new ticket per the strategy, or null if no agent is active.
+   * When the ticket has a category and any active agent explicitly covers it, the pool
+   * is narrowed to those coverers so tickets route to the right team; otherwise every
+   * active agent is eligible (generalists with no categories set).
+   */
+  const pickAssignee = (strategy: AssignmentSettings['strategy'], category: string | null): string | null => {
+    const active = getAgents(db).filter((a) => a.status === 'active');
+    if (active.length === 0) return null;
+    let pool = active.map((a) => ({ id: a.id }));
+    if (category !== null) {
+      const coverers = active.filter((a) => a.categories.includes(category));
+      if (coverers.length > 0) pool = coverers.map((a) => ({ id: a.id }));
+    }
     if (strategy === 'least_busy') {
       let best = pool[0].id;
       let bestCount = Infinity;
@@ -333,7 +376,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       }
       return best;
     }
-    // round_robin: advance a persisted counter across the active pool.
+    // round_robin: advance a persisted counter across the (possibly category-filtered) pool.
     const counter = Number(getSetting(db, 'assignment_rr') ?? '0') || 0;
     const pick = pool[counter % pool.length].id;
     setSetting(db, 'assignment_rr', String((counter + 1) % 1_000_000));
@@ -357,11 +400,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
   };
 
-  const autoAssign = (ticketId: string, currentAssignee: string | null): string | null => {
+  const autoAssign = (ticketId: string, currentAssignee: string | null, category: string | null = null): string | null => {
     if (currentAssignee !== null) return currentAssignee;
     const cfg = assignmentSettings();
     if (!cfg.enabled) return null;
-    const pick = pickAssignee(cfg.strategy);
+    const pick = pickAssignee(cfg.strategy, category);
     if (pick !== null) {
       const now = new Date().toISOString();
       db.prepare('UPDATE tickets SET assigneeId = ? WHERE id = ?').run(pick, ticketId);
@@ -464,6 +507,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const runAgentsOnTicket = async (ticket: Ticket, firstBody: string): Promise<AiAction | null> => {
     const agents = getAiAgents(db)
       .filter((a) => a.enabled)
+      // A category-scoped agent only works tickets in one of its categories; an
+      // agent with no categories set works everything.
+      .filter((a) => a.scopeCategories.length === 0 || (ticket.category !== null && a.scopeCategories.includes(ticket.category)))
       .sort((a, b) => AUTONOMY_RANK[b.autonomy] - AUTONOMY_RANK[a.autonomy]);
     if (agents.length === 0) return null;
     const contact = getContact(db, ticket.requesterId);
@@ -553,8 +599,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       .map(rowToTicket)
       .map((t) => ({ ...t, awaitingReply: awaiting.get(t.id) ?? false }));
     const contacts = db.prepare('SELECT * FROM contacts ORDER BY rowid').all() as unknown as Contact[];
-    const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
+    const agents = getAgents(db);
     const canned = getCannedReplies(db);
+    const intakeForm = getIntakeForm(db);
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
@@ -575,8 +622,30 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
+      intakeForm,
+      categories: categoriesFromForm(intakeForm),
     };
     return c.json(data);
+  });
+
+  // --- Intake form: the branching questionnaire customers walk to open a ticket ---
+  app.get('/api/intake-form', (c) => c.json(getIntakeForm(db)));
+  app.put('/api/intake-form', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const form = sanitizeIntakeForm(input);
+    if (form === null) return c.json({ error: 'invalid intake form' }, 400);
+    setIntakeForm(db, form);
+    return c.json(form);
+  });
+  // Public: the portal fetches the form to render — only exposes it while enabled.
+  app.get('/api/portal/intake-form', (c) => {
+    const form = getIntakeForm(db);
+    return c.json(form.enabled ? form : ({ enabled: false, rootId: null, nodes: {} } as IntakeForm));
   });
 
   app.get('/api/tickets', (c) => {
@@ -667,6 +736,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       mergedIntoId: null,
       awaitingReply: true,
       customFields: {},
+      category: null,
     };
     const message: Message = {
       id: newId('m_'),
@@ -691,7 +761,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     // AI agents evaluate the new ticket (may auto-resolve it).
     await runAgentsOnTicket(ticket, body);
-    autoAssign(ticket.id, ticket.assigneeId);
+    autoAssign(ticket.id, ticket.assigneeId, ticket.category);
     return c.json({ ticket: getTicket(db, ticket.id), message });
   });
 
@@ -1181,7 +1251,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
               id: newId('t_'), number: maxRow.maxNumber + 1, subject, status, priority, bucket: 'inbox',
               requesterId: contact!.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
               snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
-              firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, awaitingReply: !resolved, customFields: {},
+              firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, awaitingReply: !resolved, customFields: {}, category: null,
             };
             insertTicketRow(db, ticket);
             db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -1462,18 +1532,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const agent: Agent = {
       id: newId('a_'), name: name.trim(), email: email.trim(), avatarHue: djb2(email.trim()) % 360,
       role: role === 'admin' ? 'admin' : 'agent', status: 'invited',
-      inviteToken: `inv_${randomUUID().replace(/-/g, '').slice(0, 16)}`, signature: '',
+      inviteToken: `inv_${randomUUID().replace(/-/g, '').slice(0, 16)}`, signature: '', categories: [],
     };
-    db.prepare('INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(agent.id, agent.name, agent.email, agent.avatarHue, agent.role, agent.status, agent.inviteToken, agent.signature);
+    db.prepare('INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(agent.id, agent.name, agent.email, agent.avatarHue, agent.role, agent.status, agent.inviteToken, agent.signature, JSON.stringify(agent.categories));
     return c.json(agent);
   });
 
   app.patch('/api/agents/:id', async (c) => {
     const id = c.req.param('id');
-    const existing = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as Agent | undefined;
-    if (existing === undefined) return c.json({ error: `agent not found: ${id}` }, 404);
-    let patch: { name?: unknown; role?: unknown; signature?: unknown };
+    const existing = getAgent(db, id);
+    if (existing === null) return c.json({ error: `agent not found: ${id}` }, 404);
+    let patch: { name?: unknown; role?: unknown; signature?: unknown; categories?: unknown };
     try {
       patch = await c.req.json();
     } catch {
@@ -1496,9 +1566,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       sets.push('signature = ?');
       params.push(patch.signature);
     }
+    if ('categories' in patch) {
+      if (!Array.isArray(patch.categories)) return c.json({ error: 'invalid categories' }, 400);
+      sets.push('categories = ?');
+      params.push(JSON.stringify(patch.categories.filter((x): x is string => typeof x === 'string')));
+    }
     if (sets.length === 0) return c.json(existing);
     db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
-    return c.json(db.prepare('SELECT * FROM agents WHERE id = ?').get(id));
+    return c.json(getAgent(db, id));
   });
 
   app.delete('/api/agents/:id', (c) => {
@@ -1593,24 +1668,25 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   });
 
   app.post('/api/ai/agents', async (c) => {
-    let input: { name?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown };
+    let input: { name?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown; scopeCategories?: unknown };
     try {
       input = await c.req.json();
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
-    const { name, autonomy, scopeTags, scopePriorities } = input;
+    const { name, autonomy, scopeTags, scopePriorities, scopeCategories } = input;
     if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
     if (typeof autonomy !== 'string' || !AUTONOMIES.includes(autonomy as Autonomy)) return c.json({ error: 'invalid autonomy' }, 400);
     const tags = Array.isArray(scopeTags) ? scopeTags.filter((x): x is string => typeof x === 'string') : [];
     const prios = Array.isArray(scopePriorities) ? scopePriorities.filter((p): p is TicketPriority => PRIORITIES.includes(p as TicketPriority)) : [];
+    const cats = Array.isArray(scopeCategories) ? scopeCategories.filter((x): x is string => typeof x === 'string') : [];
     const agent = {
       id: newId('ai_'), name: name.trim(), avatarHue: djb2(name.trim()) % 360, enabled: true,
-      autonomy: autonomy as Autonomy, scopeTags: tags, scopePriorities: prios, createdAt: new Date().toISOString(),
+      autonomy: autonomy as Autonomy, scopeTags: tags, scopePriorities: prios, scopeCategories: cats, createdAt: new Date().toISOString(),
     };
     db.prepare(
-      'INSERT INTO ai_agents (id, name, avatarHue, enabled, autonomy, scopeTags, scopePriorities, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(agent.id, agent.name, agent.avatarHue, 1, agent.autonomy, JSON.stringify(agent.scopeTags), JSON.stringify(agent.scopePriorities), agent.createdAt);
+      'INSERT INTO ai_agents (id, name, avatarHue, enabled, autonomy, scopeTags, scopePriorities, scopeCategories, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(agent.id, agent.name, agent.avatarHue, 1, agent.autonomy, JSON.stringify(agent.scopeTags), JSON.stringify(agent.scopePriorities), JSON.stringify(agent.scopeCategories), agent.createdAt);
     return c.json(agent);
   });
 
@@ -1618,7 +1694,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     const existing = getAiAgent(db, id);
     if (existing === null) return c.json({ error: `agent not found: ${id}` }, 404);
-    let patch: { name?: unknown; enabled?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown };
+    let patch: { name?: unknown; enabled?: unknown; autonomy?: unknown; scopeTags?: unknown; scopePriorities?: unknown; scopeCategories?: unknown };
     try {
       patch = await c.req.json();
     } catch {
@@ -1650,6 +1726,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       if (!Array.isArray(patch.scopePriorities)) return c.json({ error: 'invalid scopePriorities' }, 400);
       sets.push('scopePriorities = ?');
       params.push(JSON.stringify(patch.scopePriorities.filter((p): p is TicketPriority => PRIORITIES.includes(p as TicketPriority))));
+    }
+    if ('scopeCategories' in patch) {
+      if (!Array.isArray(patch.scopeCategories)) return c.json({ error: 'invalid scopeCategories' }, 400);
+      sets.push('scopeCategories = ?');
+      params.push(JSON.stringify(patch.scopeCategories.filter((x): x is string => typeof x === 'string')));
     }
     if (sets.length === 0) return c.json(existing);
     db.prepare(`UPDATE ai_agents SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
@@ -2067,7 +2148,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.post('/api/portal/tickets', async (c) => {
     const contact = contactFromAuth(c.req.header('Authorization'));
     if (contact === null) return c.json({ error: 'not signed in' }, 401);
-    let input: { subject?: unknown; body?: unknown; priority?: unknown; attachmentIds?: unknown };
+    let input: { subject?: unknown; body?: unknown; priority?: unknown; attachmentIds?: unknown; category?: unknown; tags?: unknown; answers?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -2079,17 +2160,29 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const attachmentIds = Array.isArray(input.attachmentIds)
       ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
       : [];
+    // Intake-form results: the picked category + accumulated tags, plus the full
+    // question/answer path (prepended to the opening message so agents see context).
+    const category = typeof input.category === 'string' && input.category.trim() !== '' ? input.category.trim() : null;
+    const intakeTags = Array.isArray(input.tags) ? input.tags.filter((x): x is string => typeof x === 'string') : [];
+    const answers = Array.isArray(input.answers)
+      ? input.answers.filter(
+          (a): a is { prompt: string; label: string } =>
+            typeof a === 'object' && a !== null && typeof (a as { prompt?: unknown }).prompt === 'string' && typeof (a as { label?: unknown }).label === 'string',
+        )
+      : [];
+    const intakeHeader = answers.length > 0 ? answers.map((a) => `${a.prompt} — ${a.label}`).join('\n') + '\n\n' : '';
+    const fullBody = intakeHeader + body;
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
     const ticket: Ticket = {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject: subject.trim(), status: 'open',
       priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
-      bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: [], channel: 'web',
-      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, awaitingReply: true, customFields: {},
+      bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: intakeTags, channel: 'web',
+      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(fullBody),
+      firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, awaitingReply: true, customFields: {}, category,
     };
     const message: Message = {
-      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: fullBody, at: now,
     };
     db.exec('BEGIN');
     try {
@@ -2103,7 +2196,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     await runAgentsOnTicket(ticket, body);
-    autoAssign(ticket.id, null);
+    autoAssign(ticket.id, null, ticket.category);
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
@@ -2367,7 +2460,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
       requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: previewText,
-      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, awaitingReply: true, customFields: {},
+      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, awaitingReply: true, customFields: {}, category: null,
     };
     const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
     db.exec('BEGIN');
@@ -2381,7 +2474,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     await runAgentsOnTicket(ticket, body);
-    autoAssign(ticket.id, null);
+    autoAssign(ticket.id, null, ticket.category);
     return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
   });
 

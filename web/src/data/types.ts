@@ -21,6 +21,8 @@ export interface Ticket {
   awaitingReply: boolean;
   /** Values for admin-defined custom fields, keyed by field id. */
   customFields: Record<string, string>;
+  /** The type the customer picked in the intake form (routing + filtering); null if none. */
+  category: string | null;
   /** Customer satisfaction rating (1–5) captured from the portal. */
   satisfactionScore?: number | null;
   satisfactionComment?: string | null;
@@ -113,6 +115,8 @@ export interface AiAgent {
   autonomy: Autonomy;
   scopeTags: string[];
   scopePriorities: TicketPriority[];
+  /** Ticket categories this AI agent works; empty = all categories. */
+  scopeCategories: string[];
   createdAt: string;
 }
 export type AiActionKind = 'triage' | 'draft' | 'resolve';
@@ -127,8 +131,31 @@ export interface AiAction {
   promptTokens: number; completionTokens: number;
   createdAt: string; resolvedAt: string | null;
 }
-export type AiAgentCreate = { name: string; autonomy: Autonomy; scopeTags?: string[]; scopePriorities?: TicketPriority[] };
-export type AiAgentPatch = Partial<Pick<AiAgent, 'name' | 'enabled' | 'autonomy' | 'scopeTags' | 'scopePriorities'>>;
+export type AiAgentCreate = { name: string; autonomy: Autonomy; scopeTags?: string[]; scopePriorities?: TicketPriority[]; scopeCategories?: string[] };
+export type AiAgentPatch = Partial<Pick<AiAgent, 'name' | 'enabled' | 'autonomy' | 'scopeTags' | 'scopePriorities' | 'scopeCategories'>>;
+
+/** A branching intake form: the decision tree a customer walks to open a ticket. */
+export interface IntakeOption {
+  id: string;
+  label: string;
+  /** id of the next node to ask, or null to finish. */
+  next: string | null;
+  /** Sets/overrides the ticket category when chosen (null = leave as-is). */
+  category: string | null;
+  tags: string[];
+}
+export interface IntakeNode {
+  id: string;
+  prompt: string;
+  options: IntakeOption[];
+}
+export interface IntakeForm {
+  enabled: boolean;
+  rootId: string | null;
+  nodes: Record<string, IntakeNode>;
+}
+/** One answered question captured when a ticket is opened via the intake form. */
+export interface IntakeAnswer { prompt: string; label: string; }
 
 /** Model-provider status as seen by the client — never carries the API key. */
 export interface AiProvider {
@@ -197,9 +224,11 @@ export type AgentStatus = 'active' | 'invited';
 export interface Agent {
   id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent';
   status: AgentStatus; inviteToken: string | null; signature: string;
+  /** Ticket categories this agent handles; new tickets in these route to them. Empty = all. */
+  categories: string[];
 }
 export type AgentInvite = { name: string; email: string; role: 'admin' | 'agent' };
-export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature'>>;
+export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature' | 'categories'>>;
 /** Ticket mutations a canned reply applies when inserted, making it a macro. */
 export interface MacroActions {
   status?: TicketStatus;

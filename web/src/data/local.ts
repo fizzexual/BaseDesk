@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
@@ -89,6 +89,7 @@ interface LocalData {
   customFields: CustomFieldDef[];
   attachments: Attachment[];
   savedViews: SavedView[];
+  intakeForm: IntakeForm;
   notifications: Notification[];
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
@@ -163,20 +164,65 @@ function nextId(items: { id: string }[], prefix: string, width: number): string 
   return prefix + String(max + 1).padStart(width, '0');
 }
 
+/** Demo intake form (the server ships its own default; this mirrors it for the static demo). */
+const DEFAULT_INTAKE_FORM: IntakeForm = {
+  enabled: true,
+  rootId: 'n_type',
+  nodes: {
+    n_type: {
+      id: 'n_type',
+      prompt: 'What do you need help with?',
+      options: [
+        { id: 'o_tech', label: 'Technical issue', next: 'n_tech', category: 'Technical', tags: [] },
+        { id: 'o_bug', label: 'Report a bug', next: 'n_server', category: 'Bug', tags: [] },
+        { id: 'o_abuse', label: 'Report a player', next: 'n_server', category: 'Abuse', tags: [] },
+        { id: 'o_billing', label: 'Billing & purchases', next: null, category: 'Billing', tags: [] },
+      ],
+    },
+    n_tech: {
+      id: 'n_tech',
+      prompt: 'What kind of technical issue?',
+      options: [
+        { id: 'o_login', label: "Can't log in", next: null, category: null, tags: ['login'] },
+        { id: 'o_lag', label: 'Lag or disconnects', next: 'n_server', category: null, tags: ['performance'] },
+        { id: 'o_other', label: 'Something else', next: null, category: null, tags: [] },
+      ],
+    },
+    n_server: {
+      id: 'n_server',
+      prompt: 'Which server is it on?',
+      options: [
+        { id: 'o_sky', label: 'Skyblock', next: null, category: null, tags: ['skyblock'] },
+        { id: 'o_surv', label: 'Survival', next: null, category: null, tags: ['survival'] },
+        { id: 'o_creative', label: 'Creative', next: null, category: null, tags: ['creative'] },
+      ],
+    },
+  },
+};
+
+/** Distinct category names any option assigns across the tree. */
+export function categoriesFromForm(form: IntakeForm): string[] {
+  const set = new Set<string>();
+  for (const node of Object.values(form.nodes)) {
+    for (const opt of node.options) if (opt.category != null && opt.category.trim() !== '') set.add(opt.category);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
 function seedData(): LocalData {
   const seed = seedJson as unknown as LocalData;
   return {
-    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, awaitingReply: t.awaitingReply ?? false, customFields: { ...(t.customFields ?? {}) } })),
+    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, awaitingReply: t.awaitingReply ?? false, customFields: { ...(t.customFields ?? {}) }, category: t.category ?? null })),
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
-    agents: seed.agents.map((a) => ({ ...a })),
+    agents: seed.agents.map((a) => ({ ...a, categories: a.categories ?? [] })),
     canned: seed.canned.map((c) => ({ ...c, actions: c.actions ?? null })),
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
     slaHours: { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days] },
     automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
     kb: seed.kb.map((a) => ({ ...a })),
-    aiAgents: seed.aiAgents.map((a) => ({ ...a })),
+    aiAgents: seed.aiAgents.map((a) => ({ ...a, scopeCategories: a.scopeCategories ?? [] })),
     aiActions: seed.aiActions.map((a) => ({ ...a })),
     channels: seed.channels.map((c) => ({ ...c, outboundUrl: c.outboundUrl ?? null, hasOutboundSecret: c.hasOutboundSecret ?? false, hasInboundSecret: c.hasInboundSecret ?? false })),
     aiProvider: { ...DEFAULT_AI_PROVIDER },
@@ -184,6 +230,7 @@ function seedData(): LocalData {
     customFields: (seed.customFields ?? []).map((f) => ({ ...f, options: [...f.options] })),
     attachments: [],
     savedViews: [],
+    intakeForm: DEFAULT_INTAKE_FORM,
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
     events: [],
@@ -277,6 +324,10 @@ export class LocalRepository implements Repository {
       }
       if (!Array.isArray(this.data.notifications)) {
         this.data.notifications = [];
+        this.persist();
+      }
+      if (this.data.intakeForm === undefined || this.data.intakeForm === null) {
+        this.data.intakeForm = DEFAULT_INTAKE_FORM;
         this.persist();
       }
       if (this.data.assignment === undefined) {
@@ -376,7 +427,15 @@ export class LocalRepository implements Repository {
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
+      intakeForm: this.data.intakeForm,
+      categories: categoriesFromForm(this.data.intakeForm),
     };
+  }
+
+  async saveIntakeForm(form: IntakeForm): Promise<IntakeForm> {
+    this.data.intakeForm = form;
+    this.persist();
+    return form;
   }
 
   async getMessages(ticketId: string): Promise<Message[]> {
@@ -443,6 +502,7 @@ export class LocalRepository implements Repository {
       mergedIntoId: null,
       awaitingReply: true,
       customFields: {},
+      category: null,
     };
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),
@@ -844,6 +904,7 @@ export class LocalRepository implements Repository {
       status: 'invited',
       inviteToken: `inv_${randomToken(16)}`,
       signature: '',
+      categories: [],
     };
     this.data.agents.push(agent);
     this.persist();
@@ -1020,6 +1081,7 @@ export class LocalRepository implements Repository {
       autonomy: input.autonomy,
       scopeTags: input.scopeTags ?? [],
       scopePriorities: input.scopePriorities ?? [],
+      scopeCategories: input.scopeCategories ?? [],
       createdAt: new Date().toISOString(),
     };
     this.data.aiAgents.push(agent);
@@ -1268,7 +1330,7 @@ export class LocalRepository implements Repository {
             requesterId: contact.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
             snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
             firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, customFields: {},
-            awaitingReply: !resolved,
+            awaitingReply: !resolved, category: null,
           };
           this.data.tickets.push(ticket);
           this.data.messages.push({ id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: bodyText, at: now });

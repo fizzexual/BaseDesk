@@ -1,7 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
+import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
 export type TicketRow = Omit<Ticket, 'tags' | 'customFields'> & { tags: string; customFields: string | null };
@@ -38,7 +39,8 @@ export function openDb(dataDir: string): DatabaseSync {
       role TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       inviteToken TEXT,
-      signature TEXT NOT NULL DEFAULT ''
+      signature TEXT NOT NULL DEFAULT '',
+      categories TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS contacts (
       id TEXT PRIMARY KEY,
@@ -73,7 +75,8 @@ export function openDb(dataDir: string): DatabaseSync {
       customFields TEXT NOT NULL DEFAULT '{}',
       satisfactionScore INTEGER,
       satisfactionComment TEXT,
-      satisfactionAt TEXT
+      satisfactionAt TEXT,
+      category TEXT
     );
     CREATE TABLE IF NOT EXISTS custom_fields (
       id TEXT PRIMARY KEY,
@@ -178,6 +181,7 @@ export function openDb(dataDir: string): DatabaseSync {
       autonomy TEXT NOT NULL,
       scopeTags TEXT NOT NULL,
       scopePriorities TEXT NOT NULL,
+      scopeCategories TEXT NOT NULL DEFAULT '[]',
       createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ai_actions (
@@ -268,6 +272,13 @@ export function openDb(dataDir: string): DatabaseSync {
     db.exec("ALTER TABLE notifications ADD COLUMN actorName TEXT NOT NULL DEFAULT ''");
     db.exec("UPDATE notifications SET actorName = COALESCE((SELECT name FROM agents WHERE agents.id = notifications.actorId), '') WHERE actorName = ''");
   }
+
+  // Intake forms (v0.5): tickets carry a category; agents + AI agents carry the
+  // categories they cover.
+  if (!ticketCols.some((c) => c.name === 'category')) db.exec('ALTER TABLE tickets ADD COLUMN category TEXT');
+  if (!agentCols.some((c) => c.name === 'categories')) db.exec("ALTER TABLE agents ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'");
+  const aiAgentCols = db.prepare('PRAGMA table_info(ai_agents)').all() as { name: string }[];
+  if (!aiAgentCols.some((c) => c.name === 'scopeCategories')) db.exec("ALTER TABLE ai_agents ADD COLUMN scopeCategories TEXT NOT NULL DEFAULT '[]'");
 
   // One-time backfill: seed the usage ledger from any pre-existing AI actions so
   // an upgraded install keeps the token history it already recorded. New calls
@@ -637,8 +648,8 @@ export function getKbArticle(db: DatabaseSync, id: string): KbArticle | null {
   return row ?? null;
 }
 
-type AiAgentRow = Omit<AiAgent, 'enabled' | 'scopeTags' | 'scopePriorities'> & {
-  enabled: number; scopeTags: string; scopePriorities: string;
+type AiAgentRow = Omit<AiAgent, 'enabled' | 'scopeTags' | 'scopePriorities' | 'scopeCategories'> & {
+  enabled: number; scopeTags: string; scopePriorities: string; scopeCategories: string;
 };
 export function rowToAiAgent(row: AiAgentRow): AiAgent {
   return {
@@ -646,7 +657,43 @@ export function rowToAiAgent(row: AiAgentRow): AiAgent {
     enabled: row.enabled === 1,
     scopeTags: JSON.parse(row.scopeTags) as string[],
     scopePriorities: JSON.parse(row.scopePriorities) as TicketPriority[],
+    scopeCategories: JSON.parse(row.scopeCategories ?? '[]') as string[],
   };
+}
+
+/** Agents store their covered categories as a JSON column. */
+type AgentRow = Omit<Agent, 'categories'> & { categories: string };
+export function rowToAgent(row: AgentRow): Agent {
+  return { ...row, categories: JSON.parse(row.categories ?? '[]') as string[] };
+}
+export function getAgents(db: DatabaseSync): Agent[] {
+  return (db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as AgentRow[]).map(rowToAgent);
+}
+export function getAgent(db: DatabaseSync, id: string): Agent | null {
+  const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow | undefined;
+  return row ? rowToAgent(row) : null;
+}
+
+/** The branching intake form (decision tree) stored as a single settings blob. */
+export function getIntakeForm(db: DatabaseSync): IntakeForm {
+  const raw = getSetting(db, 'intake_form');
+  if (raw === null) return DEFAULT_INTAKE_FORM;
+  try {
+    return JSON.parse(raw) as IntakeForm;
+  } catch {
+    return DEFAULT_INTAKE_FORM;
+  }
+}
+export function setIntakeForm(db: DatabaseSync, form: IntakeForm): void {
+  setSetting(db, 'intake_form', JSON.stringify(form));
+}
+/** Distinct category names an option can assign, across the whole tree — for coverage pickers. */
+export function categoriesFromForm(form: IntakeForm): string[] {
+  const set = new Set<string>();
+  for (const node of Object.values(form.nodes)) {
+    for (const opt of node.options) if (opt.category != null && opt.category.trim() !== '') set.add(opt.category);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
 }
 export function getAiAgents(db: DatabaseSync): AiAgent[] {
   return (db.prepare('SELECT * FROM ai_agents ORDER BY createdAt').all() as unknown as AiAgentRow[]).map(rowToAiAgent);

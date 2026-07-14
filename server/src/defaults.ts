@@ -1,4 +1,44 @@
-import type { AiProviderConfig, AutomationRule, SlaHours, SlaTargets, SmtpConfig } from './types.js';
+import type { AiProviderConfig, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig } from './types.js';
+
+/**
+ * A ready-to-use branching intake form. Admins can edit or disable it; it ships
+ * enabled with a small gaming-community tree so the flow is visible out of the box:
+ * "What do you need help with?" → Bug/Abuse ask which server; Technical branches again.
+ */
+export const DEFAULT_INTAKE_FORM: IntakeForm = {
+  enabled: true,
+  rootId: 'n_type',
+  nodes: {
+    n_type: {
+      id: 'n_type',
+      prompt: 'What do you need help with?',
+      options: [
+        { id: 'o_tech', label: 'Technical issue', next: 'n_tech', category: 'Technical', tags: [] },
+        { id: 'o_bug', label: 'Report a bug', next: 'n_server', category: 'Bug', tags: [] },
+        { id: 'o_abuse', label: 'Report a player', next: 'n_server', category: 'Abuse', tags: [] },
+        { id: 'o_billing', label: 'Billing & purchases', next: null, category: 'Billing', tags: [] },
+      ],
+    },
+    n_tech: {
+      id: 'n_tech',
+      prompt: 'What kind of technical issue?',
+      options: [
+        { id: 'o_login', label: "Can't log in", next: null, category: null, tags: ['login'] },
+        { id: 'o_lag', label: 'Lag or disconnects', next: 'n_server', category: null, tags: ['performance'] },
+        { id: 'o_other', label: 'Something else', next: null, category: null, tags: [] },
+      ],
+    },
+    n_server: {
+      id: 'n_server',
+      prompt: 'Which server is it on?',
+      options: [
+        { id: 'o_sky', label: 'Skyblock', next: null, category: null, tags: ['skyblock'] },
+        { id: 'o_surv', label: 'Survival', next: null, category: null, tags: ['survival'] },
+        { id: 'o_creative', label: 'Creative', next: null, category: null, tags: ['creative'] },
+      ],
+    },
+  },
+};
 
 /** No email configured by default — notifications are off until SMTP is set up. */
 export const DEFAULT_SMTP: SmtpConfig = {

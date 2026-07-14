@@ -2,11 +2,12 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeForm, Notification, TicketEvent, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
+import { categoriesFromForm } from './local';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
@@ -27,6 +28,8 @@ export interface AppState {
   channels: Record<string, ChannelConn>;
   customFields: CustomFieldDef[]; // ordered by entity + position
   savedViews: SavedView[];
+  intakeForm: IntakeForm; // branching ticket-creation questionnaire (admin-built)
+  categories: string[]; // distinct categories the intake form can assign
   notifications: Notification[]; // @mention alerts for the current agent, newest first
   aiProvider: AiProvider;
   smtp: SmtpSettings;
@@ -60,6 +63,7 @@ export interface AppState {
   saveSlaHours(hours: SlaHours): Promise<void>;
   saveAutomation(rules: AutomationRule[]): Promise<void>;
   saveAssignment(settings: AssignmentSettings): Promise<void>;
+  saveIntakeForm(form: IntakeForm): Promise<void>;
   inviteAgent(input: AgentInvite): Promise<string>;             // returns id
   updateAgent(id: string, patch: AgentPatch): Promise<void>;    // optimistic + rollback
   deleteAgent(id: string): Promise<void>;                       // optimistic + rollback
@@ -170,6 +174,8 @@ export function createAppStore(repository: Repository) {
     channels: {},
     customFields: [],
     savedViews: [],
+    intakeForm: { enabled: false, rootId: null, nodes: {} },
+    categories: [],
     notifications: [],
     aiProvider: DEFAULT_AI_PROVIDER,
     smtp: DEFAULT_SMTP,
@@ -200,6 +206,8 @@ export function createAppStore(repository: Repository) {
         channels: Object.fromEntries(data.channels.map((ch) => [ch.id, ch])),
         customFields: data.customFields,
         savedViews: data.savedViews,
+        intakeForm: data.intakeForm,
+        categories: data.categories,
         notifications: data.notifications,
         aiProvider: data.aiProvider,
         smtp: data.smtp,
@@ -592,6 +600,18 @@ export function createAppStore(repository: Repository) {
         set({ assignment: saved });
       } catch (err) {
         set({ assignment: prev });
+        throw err;
+      }
+    },
+
+    async saveIntakeForm(form) {
+      const prev = get().intakeForm;
+      set({ intakeForm: form, categories: categoriesFromForm(form) });
+      try {
+        const saved = await repository.saveIntakeForm(form);
+        set({ intakeForm: saved, categories: categoriesFromForm(saved) });
+      } catch (err) {
+        set({ intakeForm: prev, categories: categoriesFromForm(prev) });
         throw err;
       }
     },

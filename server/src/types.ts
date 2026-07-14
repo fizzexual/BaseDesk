@@ -23,10 +23,39 @@ export interface Ticket {
   awaitingReply: boolean;
   /** Values for admin-defined custom fields, keyed by field id. */
   customFields: Record<string, string>;
+  /** The type the customer picked in the intake form (routing + filtering); null if none. */
+  category: string | null;
   /** Customer satisfaction rating (1–5), set from the portal on a solved/closed ticket. */
   satisfactionScore?: number | null;
   satisfactionComment?: string | null;
   satisfactionAt?: string | null;
+}
+
+/**
+ * A branching intake form: a decision tree the customer walks when opening a
+ * ticket. Each option either ends the branch or points to a follow-up question,
+ * and can set the ticket's category and/or add tags.
+ */
+export interface IntakeOption {
+  id: string;
+  label: string;
+  /** id of the next node to ask, or null to finish. */
+  next: string | null;
+  /** Sets/overrides the ticket category when this option is chosen (null = leave as-is). */
+  category: string | null;
+  /** Tags added to the ticket when this option is chosen. */
+  tags: string[];
+}
+export interface IntakeNode {
+  id: string;
+  prompt: string;
+  options: IntakeOption[];
+}
+export interface IntakeForm {
+  enabled: boolean;
+  /** The first question shown; null means the form is empty. */
+  rootId: string | null;
+  nodes: Record<string, IntakeNode>;
 }
 
 /** Aggregate customer-satisfaction figures over rated tickets. */
@@ -112,6 +141,8 @@ export interface AiAgent {
   autonomy: Autonomy;
   scopeTags: string[];
   scopePriorities: TicketPriority[];
+  /** Ticket categories this AI agent works; empty = all categories. */
+  scopeCategories: string[];
   createdAt: string;
 }
 export type AiActionKind = 'triage' | 'draft' | 'resolve';
@@ -197,6 +228,8 @@ export type AgentStatus = 'active' | 'invited';
 export interface Agent {
   id: string; name: string; email: string; avatarHue: number; role: 'admin' | 'agent';
   status: AgentStatus; inviteToken: string | null; signature: string;
+  /** Ticket categories this agent handles; new tickets in these route to them. Empty = all. */
+  categories: string[];
 }
 /**
  * Optional ticket mutations a canned reply applies when inserted, turning it
@@ -317,4 +350,7 @@ export interface BootstrapData {
   customFields: CustomFieldDef[];
   savedViews: SavedView[];
   assignment: AssignmentSettings;
+  intakeForm: IntakeForm;
+  /** Distinct categories defined across the intake form, for coverage pickers. */
+  categories: string[];
 }

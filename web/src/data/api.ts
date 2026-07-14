@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, Notification, TicketEvent, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeForm, Notification, TicketEvent, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -127,6 +127,10 @@ export class ApiRepository implements Repository {
 
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings> {
     return request('/settings/assignment', jsonInit('PUT', settings));
+  }
+
+  saveIntakeForm(form: IntakeForm): Promise<IntakeForm> {
+    return request('/intake-form', jsonInit('PUT', form));
   }
 
   createArticle(input: ArticleCreate): Promise<KbArticle> {
