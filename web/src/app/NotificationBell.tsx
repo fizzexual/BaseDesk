@@ -1,9 +1,59 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../data/store';
-import type { Notification } from '../data/types';
+import type { Channel, Notification } from '../data/types';
 import { cx } from '../components/util';
-import { IconBell } from '../icons';
+import { IconBell, IconNote, IconReply, IconUserPlus } from '../icons';
+
+/** Friendly "from where" label for the channel a ticket arrived on. */
+const CHANNEL_LABEL: Record<Channel, string> = {
+  web: 'Web widget',
+  chat: 'Live chat',
+  email: 'Email',
+  api: 'API',
+};
+
+type IconComponent = ComponentType<{ size?: number; className?: string }>;
+
+/** Per-kind icon, colour, and the "what happened" line ("Ada replied · via Email"). */
+function describe(n: Notification): { Icon: IconComponent; tone: string; action: ReactNode } {
+  switch (n.kind) {
+    case 'reply':
+      return {
+        Icon: IconReply,
+        tone: 'bg-blue-bg text-blue',
+        action: (
+          <>
+            <span className="font-semibold">{n.actorName}</span>
+            <span className="text-text-3"> replied · via {CHANNEL_LABEL[n.channel]}</span>
+          </>
+        ),
+      };
+    case 'assigned':
+      return {
+        Icon: IconUserPlus,
+        tone: 'bg-green-bg text-green',
+        action: (
+          <>
+            <span className="font-semibold">{n.actorName}</span>
+            <span className="text-text-3"> assigned this to you</span>
+          </>
+        ),
+      };
+    case 'mention':
+    default:
+      return {
+        Icon: IconNote,
+        tone: 'bg-amber-bg text-amber',
+        action: (
+          <>
+            <span className="font-semibold">{n.actorName}</span>
+            <span className="text-text-3"> mentioned you</span>
+          </>
+        ),
+      };
+  }
+}
 
 /** Compact "3m / 2h / 4d" relative time; falls back to a date past a week. */
 function timeAgo(iso: string): string {
@@ -104,43 +154,47 @@ export function NotificationBell() {
 
           {notifications.length === 0 ? (
             <div className="px-3 py-8 text-center text-[13px] text-text-3">
-              No notifications yet. You'll be alerted when a teammate @mentions you in a note.
+              No notifications yet. You'll be alerted when a customer replies to your ticket or a teammate @mentions you.
             </div>
           ) : (
             <ul className="max-h-[380px] overflow-y-auto py-1">
-              {notifications.map((n) => (
-                <li key={n.id}>
-                  <button
-                    type="button"
-                    className={cx(
-                      'flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors',
-                      n.readAt === null ? 'bg-surface-2 hover:bg-surface-3' : 'hover:bg-surface-2',
-                    )}
-                    onClick={() => openNotification(n)}
-                  >
-                    <span
+              {notifications.map((n) => {
+                const { Icon, tone, action } = describe(n);
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
                       className={cx(
-                        'mt-1.5 size-2 shrink-0 rounded-full',
-                        n.readAt === null ? 'bg-accent' : 'bg-transparent',
+                        'flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors',
+                        n.readAt === null ? 'bg-surface-2 hover:bg-surface-3' : 'hover:bg-surface-2',
                       )}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-[13px]">
-                          <span className="font-semibold">{n.actorName}</span>
-                          <span className="text-text-3"> mentioned you</span>
+                      onClick={() => openNotification(n)}
+                    >
+                      <span className="relative mt-0.5 shrink-0">
+                        <span className={cx('flex size-7 items-center justify-center rounded-full', tone)}>
+                          <Icon size={14} />
                         </span>
-                        <span className="shrink-0 text-[11px] text-text-3 tabular-nums">{timeAgo(n.createdAt)}</span>
+                        {n.readAt === null && (
+                          <span
+                            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-surface bg-accent"
+                            aria-hidden="true"
+                          />
+                        )}
                       </span>
-                      <span className="mt-0.5 block truncate text-[12px] text-text-2">{n.ticketSubject}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-text-3">
-                        <Snippet text={n.snippet} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[13px]">{action}</span>
+                          <span className="shrink-0 text-[11px] text-text-3 tabular-nums">{timeAgo(n.createdAt)}</span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-[12px] text-text-2">{n.ticketSubject}</span>
+                        <span className="mt-0.5 block truncate text-[12px] text-text-3">
+                          <Snippet text={n.snippet} />
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

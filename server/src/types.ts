@@ -278,9 +278,13 @@ export interface TicketEvent {
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.
  */
+/** What happened: a teammate @mentioned you, a customer replied, or a ticket was assigned to you. */
+export type NotificationKind = 'mention' | 'reply' | 'assigned';
 export interface Notification {
   id: string; agentId: string; ticketId: string; ticketSubject: string;
   messageId: string; actorId: string; actorName: string; snippet: string;
+  /** The event type and the channel the ticket came in on ("from where"). */
+  kind: NotificationKind; channel: Channel;
   createdAt: string; readAt: string | null;
 }
 

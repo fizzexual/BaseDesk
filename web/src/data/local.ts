@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
-  Attachment, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
+  Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
@@ -192,6 +192,8 @@ function seedData(): LocalData {
       ...n,
       actorName: seed.agents.find((a) => a.id === n.actorId)?.name ?? 'A teammate',
       ticketSubject: seed.tickets.find((t) => t.id === n.ticketId)?.subject ?? '(ticket)',
+      channel: (seed.tickets.find((t) => t.id === n.ticketId)?.channel ?? 'web') as Channel,
+      kind: 'mention' as const,
     })),
   };
 }
@@ -653,7 +655,9 @@ export class LocalRepository implements Repository {
           id: nextId(this.data.notifications, 'nt_', 1),
           agentId: a.id, ticketId: message.ticketId, ticketSubject,
           messageId: message.id, actorId: message.authorId, actorName,
-          snippet: preview(message.body), createdAt: message.at, readAt: null,
+          snippet: preview(message.body), kind: 'mention',
+          channel: this.data.tickets.find((t) => t.id === message.ticketId)?.channel ?? 'web',
+          createdAt: message.at, readAt: null,
         });
       }
     }

@@ -393,16 +393,32 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const tokens = new Set((opts.body.match(/@[A-Za-z]+/g) ?? []).map((t) => t.slice(1).toLowerCase()));
     if (tokens.size === 0) return;
     const agents = db.prepare('SELECT id, name FROM agents').all() as { id: string; name: string }[];
+    const actorName = agents.find((a) => a.id === opts.actorId)?.name ?? 'A teammate';
     for (const a of agents) {
       if (a.id === opts.actorId) continue;
       const first = a.name.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
       if (first !== '' && tokens.has(first)) {
         insertNotification(db, {
           id: newId('nt_'), agentId: a.id, ticketId: opts.ticketId, messageId: opts.messageId,
-          actorId: opts.actorId, snippet: preview(opts.body), createdAt: opts.now,
+          actorId: opts.actorId, actorName, snippet: preview(opts.body), kind: 'mention', createdAt: opts.now,
         });
       }
     }
+  };
+
+  /**
+   * Notify a ticket's assignee that its customer replied, so they see the ball is
+   * back in their court. Unassigned tickets surface in the Unassigned / Awaiting
+   * views instead, so they don't fan out a notification to the whole team.
+   */
+  const notifyCustomerReply = (opts: { ticket: Ticket; message: Message; contactName: string }): void => {
+    const { ticket, message } = opts;
+    if (ticket.assigneeId === null || message.authorKind !== 'contact') return;
+    insertNotification(db, {
+      id: newId('nt_'), agentId: ticket.assigneeId, ticketId: ticket.id, messageId: message.id,
+      actorId: message.authorId, actorName: opts.contactName, snippet: preview(message.body || 'Sent an attachment'),
+      kind: 'reply', createdAt: message.at,
+    });
   };
 
   /** Fire-and-forget: email the ticket's requester that support replied. */
@@ -2126,6 +2142,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
+    notifyCustomerReply({ ticket, message, contactName: contact.name });
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
@@ -2340,6 +2357,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         db.exec('ROLLBACK');
         throw err;
       }
+      notifyCustomerReply({ ticket: existing, message, contactName: contact.name });
       return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true });
     }
 

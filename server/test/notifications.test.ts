@@ -24,6 +24,21 @@ async function openTicketId(app: ReturnType<typeof makeApp>['app']): Promise<str
   return boot.tickets.find((t: { status: string }) => t.status !== 'closed').id;
 }
 
+type App = ReturnType<typeof makeApp>['app'];
+const authJson = (body: unknown, token?: string) => ({
+  method: 'POST',
+  headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+  body: JSON.stringify(body),
+});
+
+/** A customer opens a ticket via the portal (a "web" channel), returning its id + the auth token. */
+async function portalTicket(app: App, email: string): Promise<{ id: string; token: string }> {
+  const reg = await (await app.request('/api/portal/register', authJson({ name: 'Ada Lovelace', email, password: 'hunter2!' }))).json();
+  const created = await (await app.request('/api/portal/tickets', authJson({ subject: 'Broken', body: 'It broke' }, reg.token))).json();
+  return { id: created.ticket.id, token: reg.token };
+}
+const assign = (id: string) => ({ method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ assigneeId: id }) });
+
 describe('@mention notifications', () => {
   it('creates a notification for a teammate mentioned in a note', async () => {
     const { app, db } = makeApp();
@@ -55,6 +70,37 @@ describe('@mention notifications', () => {
     const before = getNotifications(db, 'a_1').length;
     await app.request(`/api/tickets/${tid}/messages`, note('Note to self @Sam — follow up tomorrow.'));
     expect(getNotifications(db, 'a_1').length).toBe(before);
+  });
+
+  it("notifies a ticket's assignee when their customer replies, tagged with the source channel", async () => {
+    const { app, db } = makeApp();
+    const { id, token } = await portalTicket(app, 'ada@example.com');
+    await app.request(`/api/tickets/${id}`, assign('a_2')); // assign to Priya
+
+    const before = getNotifications(db, 'a_2').length;
+    await app.request(`/api/portal/tickets/${id}/messages`, authJson({ body: 'Any update on this?' }, token));
+
+    const after = getNotifications(db, 'a_2');
+    expect(after.length).toBe(before + 1);
+    const n = after[0];
+    expect(n.kind).toBe('reply');
+    expect(n.actorName).toBe('Ada Lovelace'); // the customer, not an agent
+    expect(n.channel).toBe('web');
+    expect(n.ticketId).toBe(id);
+    expect(n.snippet).toContain('Any update');
+    expect(n.readAt).toBeNull();
+  });
+
+  it('does not notify on a customer reply to an unassigned ticket', async () => {
+    const { app, db } = makeApp();
+    const { id, token } = await portalTicket(app, 'ada@example.com');
+    await app.request(`/api/tickets/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ assigneeId: null }) });
+
+    const a1 = getNotifications(db, 'a_1').length;
+    const a2 = getNotifications(db, 'a_2').length;
+    await app.request(`/api/portal/tickets/${id}/messages`, authJson({ body: 'Still waiting.' }, token));
+    expect(getNotifications(db, 'a_1').length).toBe(a1);
+    expect(getNotifications(db, 'a_2').length).toBe(a2);
   });
 
   it('serves the current agent their notifications and marks them read', async () => {

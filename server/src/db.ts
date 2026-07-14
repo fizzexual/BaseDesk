@@ -116,7 +116,9 @@ export function openDb(dataDir: string): DatabaseSync {
       ticketId TEXT NOT NULL,
       messageId TEXT NOT NULL,
       actorId TEXT NOT NULL,
+      actorName TEXT NOT NULL DEFAULT '',
       snippet TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'mention',
       createdAt TEXT NOT NULL,
       readAt TEXT
     );
@@ -258,6 +260,15 @@ export function openDb(dataDir: string): DatabaseSync {
 
   if (!ticketCols.some((c) => c.name === 'mergedIntoId')) db.exec('ALTER TABLE tickets ADD COLUMN mergedIntoId TEXT');
 
+  // Notifications gained a type ("what") and a denormalized actor name so a
+  // customer (non-agent) actor can be shown. Backfill existing rows as mentions.
+  const notifCols = db.prepare('PRAGMA table_info(notifications)').all() as { name: string }[];
+  if (!notifCols.some((c) => c.name === 'kind')) db.exec("ALTER TABLE notifications ADD COLUMN kind TEXT NOT NULL DEFAULT 'mention'");
+  if (!notifCols.some((c) => c.name === 'actorName')) {
+    db.exec("ALTER TABLE notifications ADD COLUMN actorName TEXT NOT NULL DEFAULT ''");
+    db.exec("UPDATE notifications SET actorName = COALESCE((SELECT name FROM agents WHERE agents.id = notifications.actorId), '') WHERE actorName = ''");
+  }
+
   // One-time backfill: seed the usage ledger from any pre-existing AI actions so
   // an upgraded install keeps the token history it already recorded. New calls
   // (interactive + autonomous) append to the ledger going forward.
@@ -325,30 +336,34 @@ function parseMacroActions(raw: string | null): MacroActions | null {
 export function getNotifications(db: DatabaseSync, agentId: string, limit = 50): Notification[] {
   const rows = db
     .prepare(
-      `SELECT n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.snippet, n.createdAt, n.readAt,
-              a.name AS actorName, t.subject AS ticketSubject
+      `SELECT n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.actorName, n.snippet, n.kind, n.createdAt, n.readAt,
+              t.subject AS ticketSubject, t.channel AS channel
          FROM notifications n
-         JOIN agents a ON a.id = n.actorId
          JOIN tickets t ON t.id = n.ticketId
         WHERE n.agentId = ?
         ORDER BY n.createdAt DESC
         LIMIT ?`,
     )
-    .all(agentId, limit) as (Omit<Notification, 'actorName' | 'ticketSubject'> & { actorName: string; ticketSubject: string })[];
+    .all(agentId, limit) as (Omit<Notification, 'ticketSubject'> & { ticketSubject: string })[];
   return rows.map((r) => ({
     id: r.id, agentId: r.agentId, ticketId: r.ticketId, ticketSubject: r.ticketSubject,
     messageId: r.messageId, actorId: r.actorId, actorName: r.actorName, snippet: r.snippet,
-    createdAt: r.createdAt, readAt: r.readAt,
+    kind: r.kind, channel: r.channel, createdAt: r.createdAt, readAt: r.readAt,
   }));
 }
 
 export function insertNotification(
   db: DatabaseSync,
-  n: { id: string; agentId: string; ticketId: string; messageId: string; actorId: string; snippet: string; createdAt: string; readAt?: string | null },
+  n: { id: string; agentId: string; ticketId: string; messageId: string; actorId: string; snippet: string; createdAt: string; readAt?: string | null; kind?: Notification['kind']; actorName?: string },
 ): void {
+  // Seed rows (and legacy callers) omit actorName; resolve it from the agent so the
+  // display name is always present without a join at read time.
+  const actorName =
+    n.actorName ??
+    ((db.prepare('SELECT name FROM agents WHERE id = ?').get(n.actorId) as { name: string } | undefined)?.name ?? '');
   db.prepare(
-    'INSERT INTO notifications (id, agentId, ticketId, messageId, actorId, snippet, createdAt, readAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(n.id, n.agentId, n.ticketId, n.messageId, n.actorId, n.snippet, n.createdAt, n.readAt ?? null);
+    'INSERT INTO notifications (id, agentId, ticketId, messageId, actorId, actorName, snippet, kind, createdAt, readAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  ).run(n.id, n.agentId, n.ticketId, n.messageId, n.actorId, actorName, n.snippet, n.kind ?? 'mention', n.createdAt, n.readAt ?? null);
 }
 
 /** A ticket's activity events, oldest first, with the actor's name resolved live. */
