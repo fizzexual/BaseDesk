@@ -192,7 +192,7 @@ export function PortalNewTicket() {
         <IconChevronLeft size={15} />
         All tickets
       </Link>
-      <h1 className="mt-3 text-[20px] font-semibold">Open a new ticket</h1>
+      <h1 className="mt-3 text-[22px] font-semibold tracking-tight">Open a new ticket</h1>
       <p className="mt-1 text-[13px] text-text-3">
         {showWizard
           ? 'A couple of quick questions will help us get you to the right place.'
@@ -233,17 +233,20 @@ export function PortalNewTicket() {
 
           {showWizard && activeNode !== null ? (
             <div>
-              <h2 className="text-[15px] font-medium">{activeNode.prompt}</h2>
-              <div className="mt-3 flex flex-col gap-2">
+              <h2 className="text-[16px] font-semibold">{activeNode.prompt}</h2>
+              <div className="mt-3.5 flex flex-col gap-2">
                 {activeNode.options.map((opt) => (
                   <button
                     key={opt.id}
                     type="button"
                     onClick={() => choose(activeNode, opt)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-left text-[14px] font-medium transition-colors hover:border-line-2 hover:bg-surface-2"
+                    className="group flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 text-left text-[14px] font-medium transition-all hover:border-accent/60 hover:bg-surface-2"
                   >
                     {opt.label}
-                    <IconChevronRight size={16} className="shrink-0 text-text-3" />
+                    <IconChevronRight
+                      size={16}
+                      className="shrink-0 text-text-3 transition-all group-hover:translate-x-0.5 group-hover:text-accent"
+                    />
                   </button>
                 ))}
               </div>
@@ -317,75 +320,78 @@ export function PortalNewTicket() {
                 void submit();
               }}
             >
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-medium">Subject</span>
-                <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="A short summary" className={`${FIELD} h-10`} />
-              </label>
+              <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium">Subject</span>
+                  <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="A short summary" className={`${FIELD} h-10`} />
+                </label>
 
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-medium">Urgency</span>
-                <div className="flex gap-1.5">
-                  {URGENCY.map((u) => (
-                    <button
-                      key={u.value}
-                      type="button"
-                      onClick={() => setPriority(u.value)}
-                      className={cx(
-                        'h-9 flex-1 rounded-md border text-[13px] font-medium transition-colors',
-                        priority === u.value ? 'border-transparent bg-accent text-accent-fg' : 'border-line text-text-2 hover:bg-surface-2',
-                      )}
-                    >
-                      {u.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-medium">Message</span>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={7}
-                  placeholder="Describe your question or problem in as much detail as you can…"
-                  className={`${FIELD} resize-y py-2.5 leading-relaxed`}
-                />
-              </label>
-
-              <div className="flex flex-col gap-2">
-                <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
-                <div>
-                  <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                    <IconPaperclip size={14} />
-                    {uploading ? 'Uploading…' : 'Attach a file'}
-                  </Button>
-                </div>
-                {pending.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {pending.map((a) => (
-                      <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface py-1 pl-2 pr-1 text-[12px]">
-                        <IconPaperclip size={12} className="shrink-0 text-text-3" />
-                        <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
-                        <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${a.filename}`}
-                          onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
-                          className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
-                        >
-                          <IconX size={12} />
-                        </button>
-                      </span>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium">Urgency</span>
+                  <div className="flex gap-1.5">
+                    {URGENCY.map((u) => (
+                      <button
+                        key={u.value}
+                        type="button"
+                        onClick={() => setPriority(u.value)}
+                        className={cx(
+                          'h-9 flex-1 rounded-md border text-[13px] font-medium transition-colors',
+                          priority === u.value ? 'border-transparent bg-accent text-accent-fg' : 'border-line text-text-2 hover:bg-surface-2',
+                        )}
+                      >
+                        {u.label}
+                      </button>
                     ))}
                   </div>
-                )}
+                </div>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium">Message</span>
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={7}
+                    placeholder="Describe your question or problem in as much detail as you can…"
+                    className={`${FIELD} resize-y py-2.5 leading-relaxed`}
+                  />
+                </label>
+
+                <div className="flex flex-col gap-2">
+                  <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+                  <div>
+                    <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                      <IconPaperclip size={14} />
+                      {uploading ? 'Uploading…' : 'Attach a file'}
+                    </Button>
+                  </div>
+                  {pending.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {pending.map((a) => (
+                        <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-bg py-1 pl-2 pr-1 text-[12px]">
+                          <IconPaperclip size={12} className="shrink-0 text-text-3" />
+                          <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+                          <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${a.filename}`}
+                            onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                            className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+                          >
+                            <IconX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {error !== null && (
                 <div className="rounded-md border border-red/30 bg-red-bg px-3 py-2 text-[13px] text-red">{error}</div>
               )}
 
-              <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[12px] text-text-3">We usually reply within a few hours during business days.</p>
                 <Button variant="primary" size="md" disabled={!valid || busy} onClick={() => void submit()}>
                   {busy ? 'Submitting…' : 'Submit ticket'}
                 </Button>

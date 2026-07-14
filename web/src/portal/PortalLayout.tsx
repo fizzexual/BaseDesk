@@ -25,7 +25,7 @@ function NavPill({ item }: { item: NavItem }) {
       className={({ isActive }) =>
         cx(
           'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors',
-          isActive ? 'bg-surface-2 text-text' : 'text-text-2 hover:bg-surface-2 hover:text-text',
+          isActive ? 'bg-accent/10 text-accent' : 'text-text-2 hover:bg-surface-2 hover:text-text',
         )
       }
     >

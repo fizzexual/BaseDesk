@@ -2,20 +2,67 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { usePortal } from './store';
 import { playNotification } from './sound';
+import { btnPrimary } from './ui';
 import { EmptyState } from '../components/EmptyState';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
 import { cx } from '../components/util';
-import { IconInbox, IconPlus, IconSearch } from '../icons';
-import { btnPrimary } from './ui';
+import type { Ticket } from '../data/types';
+import { IconChevronRight, IconInbox, IconPlus, IconSearch, IconTicket } from '../icons';
 
 // All / Open / Solved. Open groups the still-active statuses; Solved groups the
 // finished ones, matching how the agent app buckets them.
 type Segment = 'all' | 'open' | 'solved';
 
+const isOpen = (t: Ticket) => t.status === 'open' || t.status === 'pending' || t.status === 'on_hold';
+
+/** One row in the customer's ticket list — a conversation they can jump back into. */
+function TicketCard({ ticket, isNew, onOpen }: { ticket: Ticket; isNew: boolean; onOpen: (id: string) => void }) {
+  return (
+    <li>
+      <Link
+        to={`/portal/ticket/${ticket.id}`}
+        onClick={() => onOpen(ticket.id)}
+        className={cx(
+          'group flex items-center gap-3.5 rounded-xl border bg-surface p-3.5 transition-all hover:shadow-1',
+          isNew ? 'border-blue/50' : 'border-line hover:border-line-2',
+        )}
+      >
+        <span
+          className={cx(
+            'flex size-10 shrink-0 items-center justify-center rounded-lg',
+            isOpen(ticket) ? 'bg-accent/10 text-accent' : 'bg-surface-2 text-text-3',
+          )}
+        >
+          <IconTicket size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {isNew && <span className="size-2 shrink-0 rounded-full bg-blue" aria-hidden />}
+            <span className="truncate text-[14px] font-medium">{ticket.subject}</span>
+            <span className="shrink-0 text-[12px] tabular-nums text-text-3">#{ticket.number}</span>
+            {isNew && <span className="sr-only">New reply</span>}
+          </div>
+          <p className="mt-0.5 truncate text-[13px] text-text-3">
+            {isNew && <span className="font-medium text-blue">New reply · </span>}
+            {ticket.lastMessagePreview}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusBadge status={ticket.status} tooltip />
+          <TimeAgo iso={ticket.lastMessageAt} className="text-[12px] text-text-3" />
+        </div>
+        <IconChevronRight
+          size={16}
+          className="hidden shrink-0 text-text-3 transition-opacity sm:block sm:opacity-0 sm:group-hover:opacity-100"
+        />
+      </Link>
+    </li>
+  );
+}
+
 export function PortalTickets() {
-  const contact = usePortal((s) => s.contact);
   const tickets = usePortal((s) => s.tickets);
   // Tickets that gained a reply while this list was open, shown with a "new" dot
   // until the customer opens them.
@@ -83,11 +130,12 @@ export function PortalTickets() {
     });
   }
 
+  const openCount = tickets.filter(isOpen).length;
   const q = query.trim().toLowerCase();
   const filtered = tickets.filter((t) => {
     const inSegment =
       segment === 'all' ||
-      (segment === 'open' && (t.status === 'open' || t.status === 'pending' || t.status === 'on_hold')) ||
+      (segment === 'open' && isOpen(t)) ||
       (segment === 'solved' && (t.status === 'solved' || t.status === 'closed'));
     if (!inSegment) return false;
     if (q === '') return true;
@@ -95,12 +143,16 @@ export function PortalTickets() {
   });
 
   return (
-    <section>
-      <div className="flex items-center justify-between">
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[20px] font-semibold">Your tickets</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight">Your tickets</h1>
           <p className="mt-1 text-[13px] text-text-3">
-            {contact ? `Signed in as ${contact.email}` : ''}
+            {tickets.length === 0
+              ? 'You haven’t opened any tickets yet.'
+              : openCount > 0
+                ? `${openCount} open · ${tickets.length} total`
+                : `All caught up · ${tickets.length} total`}
           </p>
         </div>
         <Link to="/portal/new" className={btnPrimary}>
@@ -110,16 +162,22 @@ export function PortalTickets() {
       </div>
 
       {tickets.length === 0 ? (
-        <div className="mt-6">
+        <div className="rounded-xl border border-line bg-surface">
           <EmptyState
             icon={IconInbox}
             title="No tickets yet"
-            hint="When you open a ticket it will appear here with its latest status."
+            hint="When you open a ticket it will appear here with its latest status and replies."
           />
+          <div className="flex justify-center pb-6">
+            <Link to="/portal/new" className={btnPrimary}>
+              <IconPlus size={15} />
+              Open your first ticket
+            </Link>
+          </div>
         </div>
       ) : (
         <>
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <SegmentedControl
               options={[
                 { value: 'all', label: 'All' },
@@ -146,46 +204,14 @@ export function PortalTickets() {
           </div>
 
           {filtered.length === 0 ? (
-            <div className="mt-4">
-              <EmptyState
-                icon={IconSearch}
-                title="No matching tickets"
-                hint="Try a different search or filter."
-              />
+            <div className="rounded-xl border border-line bg-surface">
+              <EmptyState icon={IconSearch} title="No matching tickets" hint="Try a different search or filter." />
             </div>
           ) : (
-            <ul className="mt-4 flex flex-col gap-2">
-              {filtered.map((t) => {
-                const isNew = newIds.has(t.id);
-                return (
-                  <li key={t.id}>
-                    <Link
-                      to={`/portal/ticket/${t.id}`}
-                      onClick={() => openTicket(t.id)}
-                      className={cx(
-                        'block rounded-lg border bg-surface p-4 transition-colors hover:border-line-2',
-                        isNew ? 'border-blue/40' : 'border-line',
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            {isNew && <span className="h-2 w-2 shrink-0 rounded-full bg-blue" aria-hidden />}
-                            <span className="truncate text-[15px] font-medium">{t.subject}</span>
-                            <span className="shrink-0 text-[12px] text-text-3">#{t.number}</span>
-                            {isNew && <span className="sr-only">New reply</span>}
-                          </div>
-                          <p className="mt-1 truncate text-[13px] text-text-3">{t.lastMessagePreview}</p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <StatusBadge status={t.status} />
-                          <TimeAgo iso={t.lastMessageAt} className="text-[12px] text-text-3" />
-                        </div>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
+            <ul className="flex flex-col gap-2.5">
+              {filtered.map((t) => (
+                <TicketCard key={t.id} ticket={t} isNew={newIds.has(t.id)} onOpen={openTicket} />
+              ))}
             </ul>
           )}
         </>
