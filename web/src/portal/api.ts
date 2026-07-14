@@ -15,6 +15,13 @@ export interface PortalMessage {
   attachments: Attachment[];
 }
 
+/** A support agent on the thread + when they last viewed it (a read receipt for the customer). */
+export interface PortalSupport {
+  name: string;
+  avatarHue: number;
+  seenAt: string | null;
+}
+
 export function getToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -76,7 +83,7 @@ export const portalApi = {
     return req<Ticket[]>('/tickets');
   },
   getTicket(id: string) {
-    return req<{ ticket: Ticket; messages: PortalMessage[] }>(`/tickets/${encodeURIComponent(id)}`);
+    return req<{ ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[] }>(`/tickets/${encodeURIComponent(id)}`);
   },
   createTicket(input: {
     subject: string;

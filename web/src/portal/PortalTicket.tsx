@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { portalApi, type PortalMessage } from './api';
+import { portalApi, type PortalMessage, type PortalSupport } from './api';
 import { usePortal } from './store';
 import { playNotification } from './sound';
 import { Skeleton } from './Skeleton';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
@@ -11,7 +12,7 @@ import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
 import type { Attachment, Ticket } from '../data/types';
-import { IconChevronLeft, IconPaperclip, IconX } from '../icons';
+import { IconCheckCircle, IconChevronLeft, IconPaperclip, IconX } from '../icons';
 
 const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
 
@@ -214,6 +215,7 @@ export function PortalTicket() {
   const refreshTickets = usePortal((s) => s.refreshTickets);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<PortalMessage[]>([]);
+  const [support, setSupport] = useState<PortalSupport[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
@@ -235,11 +237,12 @@ export function PortalTicket() {
   // Fold a fresh snapshot into state. `sound` is false for the first load and the
   // customer's own replies, so the chime and highlight only fire for agent replies
   // that arrive while the customer is watching the thread.
-  function apply(data: { ticket: Ticket; messages: PortalMessage[] }, sound: boolean) {
+  function apply(data: { ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[] }, sound: boolean) {
     const seen = seenRef.current;
     const inbound = data.messages.filter((m) => !seen.has(m.id) && m.authorKind === 'agent');
     setTicket(data.ticket);
     setMessages(data.messages);
+    setSupport(data.support ?? []);
     setState('ready');
     seenRef.current = new Set(data.messages.map((m) => m.id));
 
@@ -370,6 +373,8 @@ export function PortalTicket() {
   }
 
   const closed = ticket.status === 'closed';
+  // "Seen your latest message" is measured against the customer's most recent reply.
+  const lastCustomerAt = [...messages].reverse().find((m) => m.authorKind === 'contact')?.at ?? null;
 
   return (
     <section>
@@ -385,6 +390,35 @@ export function PortalTicket() {
         </div>
         <StatusBadge status={ticket.status} />
       </div>
+
+      {support.length > 0 && (
+        <div className="mt-5 rounded-lg border border-line bg-surface p-4">
+          <h2 className="text-[12px] font-semibold uppercase tracking-wide text-text-3">Your support team</h2>
+          <ul className="mt-2.5 flex flex-col gap-2.5">
+            {support.map((s) => {
+              const sawLatest = lastCustomerAt !== null && s.seenAt !== null && s.seenAt >= lastCustomerAt;
+              return (
+                <li key={s.name} className="flex items-center gap-2.5">
+                  <Avatar name={s.name} hue={s.avatarHue} size={30} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium">{s.name}</div>
+                    <div className="text-[11px] text-text-3">
+                      {s.seenAt === null ? (
+                        "Hasn't opened this yet"
+                      ) : sawLatest ? (
+                        'Has seen your latest message'
+                      ) : (
+                        <>Last viewed <TimeAgo iso={s.seenAt} /></>
+                      )}
+                    </div>
+                  </div>
+                  {sawLatest && <IconCheckCircle size={15} className="shrink-0 text-green" />}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-6 flex flex-col gap-4">
         {messages.map((m) => (

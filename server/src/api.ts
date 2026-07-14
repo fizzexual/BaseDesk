@@ -2159,7 +2159,17 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         at: m.at,
         attachments: m.attachments ?? [],
       }));
-    return c.json({ ticket, messages });
+    // Customer-facing "support team": agents who've replied (or are assigned),
+    // with when they last viewed the thread — a read receipt for the customer.
+    const seenByAgent = new Map(getTicketSeen(db, ticket.id).filter((s) => s.viewerKind === 'agent').map((s) => [s.viewerId, s.at]));
+    const agentIds = new Set<string>();
+    for (const m of getMessages(db, ticket.id)) if (m.authorKind === 'agent' && m.kind === 'reply') agentIds.add(m.authorId);
+    if (ticket.assigneeId !== null) agentIds.add(ticket.assigneeId);
+    const support = [...agentIds].map((aid) => {
+      const a = getAgent(db, aid);
+      return { name: a?.name ?? 'Support', avatarHue: a?.avatarHue ?? 0, seenAt: seenByAgent.get(aid) ?? null };
+    });
+    return c.json({ ticket, messages, support });
   });
 
   app.post('/api/portal/tickets', async (c) => {
