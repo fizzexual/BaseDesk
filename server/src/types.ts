@@ -158,6 +158,8 @@ export interface AiProvider {
   reasoning: boolean;
   kbOnly: boolean;
   hasKey: boolean;
+  /** A safe masked preview of the stored key, e.g. "sk-…4a2" — null when none. */
+  keyHint: string | null;
 }
 
 /** SMTP config as stored server-side (includes the secret password). */

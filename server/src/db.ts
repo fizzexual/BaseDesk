@@ -14,9 +14,20 @@ export function rowToTicket(row: TicketRow): Ticket {
   };
 }
 
+/** Checkpoint the WAL into the main db file so recent writes survive a bare-file
+ *  copy/backup (the WAL isn't part of a naive `cp basedesk.db`). Best-effort. */
+function flushWal(db: DatabaseSync): void {
+  try {
+    db.exec('PRAGMA wal_checkpoint(PASSIVE);');
+  } catch {
+    /* ignore — checkpoint is an optimization, not required for correctness */
+  }
+}
+
 export function openDb(dataDir: string): DatabaseSync {
   const db = new DatabaseSync(path.join(dataDir, 'basedesk.db'));
   db.exec('PRAGMA journal_mode=WAL;');
+  db.exec('PRAGMA synchronous=NORMAL;'); // WAL-recommended: durable across app restarts, fast writes
   db.exec(`
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
@@ -449,13 +460,23 @@ export function getAiProviderConfig(db: DatabaseSync): AiProviderConfig {
 
 export function setAiProviderConfig(db: DatabaseSync, cfg: AiProviderConfig): void {
   setSetting(db, 'ai_provider', JSON.stringify(cfg));
+  flushWal(db); // land the secret in the main .db file so a bare copy/backup keeps it
 }
 
-/** Strips the secret key, leaving the client-safe status shape. */
+/** A safe masked preview of a secret — first 3 + last 3 chars ("sk-…4a2"), or null. */
+export function maskSecret(secret: string): string | null {
+  const s = secret.trim();
+  if (s === '') return null;
+  if (s.length <= 8) return `${s.slice(0, 1)}…${s.slice(-1)}`;
+  return `${s.slice(0, 3)}…${s.slice(-3)}`;
+}
+
+/** Strips the secret key, leaving the client-safe status shape (+ a masked hint). */
 export function toPublicProvider(cfg: AiProviderConfig): AiProvider {
   return {
     enabled: cfg.enabled, baseUrl: cfg.baseUrl, model: cfg.model,
-    temperature: cfg.temperature, reasoning: cfg.reasoning, kbOnly: cfg.kbOnly, hasKey: cfg.apiKey.trim() !== '',
+    temperature: cfg.temperature, reasoning: cfg.reasoning, kbOnly: cfg.kbOnly,
+    hasKey: cfg.apiKey.trim() !== '', keyHint: maskSecret(cfg.apiKey),
   };
 }
 
@@ -483,6 +504,7 @@ export function getSmtpConfig(db: DatabaseSync): SmtpConfig {
 
 export function setSmtpConfig(db: DatabaseSync, cfg: SmtpConfig): void {
   setSetting(db, 'smtp', JSON.stringify(cfg));
+  flushWal(db); // credential write — flush to the main db file
 }
 
 /** Strips the secret password, leaving the client-safe settings shape. */

@@ -137,8 +137,10 @@ export interface AiProvider {
   reasoning: boolean;
   kbOnly: boolean;
   hasKey: boolean;
+  /** Masked preview of the stored key, e.g. "sk-…4a2" — null when none. */
+  keyHint: string | null;
 }
-/** Provider fields to update. `apiKey` omitted keeps the stored key; '' clears it. */
+/** Provider fields to update. A blank/omitted apiKey keeps the stored key; removeKey clears it. */
 export type AiProviderSave = {
   enabled?: boolean;
   baseUrl?: string;
@@ -147,6 +149,7 @@ export type AiProviderSave = {
   reasoning?: boolean;
   kbOnly?: boolean;
   apiKey?: string;
+  removeKey?: boolean;
 };
 export interface SmtpSettings {
   enabled: boolean;

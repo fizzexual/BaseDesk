@@ -22,6 +22,7 @@ export const DEFAULT_AI_PROVIDER: AiProvider = {
   reasoning: false,
   kbOnly: true,
   hasKey: false,
+  keyHint: null,
 };
 
 // Mirror of server/src/defaults.ts — used by the local demo repository so

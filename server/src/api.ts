@@ -1728,8 +1728,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       temperature: Math.min(2, Math.max(0, temp)),
       reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : current.reasoning,
       kbOnly: typeof input.kbOnly === 'boolean' ? input.kbOnly : current.kbOnly,
-      // apiKey absent → keep the stored key; a string (even empty) replaces it.
-      apiKey: typeof input.apiKey === 'string' ? input.apiKey.trim() : current.apiKey,
+      // Never lose the key by accident: only a non-empty key replaces it, and only
+      // an explicit removeKey clears it. A blank/absent apiKey keeps what's stored.
+      apiKey: input.removeKey === true
+        ? ''
+        : typeof input.apiKey === 'string' && input.apiKey.trim() !== ''
+          ? input.apiKey.trim()
+          : current.apiKey,
     };
     setAiProviderConfig(db, cfg);
     return c.json(toPublicProvider(cfg));

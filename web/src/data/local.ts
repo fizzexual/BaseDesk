@@ -865,6 +865,8 @@ export class LocalRepository implements Repository {
 
   async saveAiProvider(input: AiProviderSave): Promise<AiProvider> {
     const cur = this.data.aiProvider;
+    const mask = (s: string): string => (s.length <= 8 ? `${s.slice(0, 1)}…${s.slice(-1)}` : `${s.slice(0, 3)}…${s.slice(-3)}`);
+    const newKey = typeof input.apiKey === 'string' && input.apiKey.trim() !== '' ? input.apiKey.trim() : null;
     const next: AiProvider = {
       enabled: input.enabled ?? cur.enabled,
       baseUrl: input.baseUrl && input.baseUrl.trim() !== '' ? input.baseUrl.trim() : cur.baseUrl,
@@ -872,7 +874,9 @@ export class LocalRepository implements Repository {
       temperature: typeof input.temperature === 'number' ? Math.min(2, Math.max(0, input.temperature)) : cur.temperature,
       reasoning: typeof input.reasoning === 'boolean' ? input.reasoning : cur.reasoning,
       kbOnly: typeof input.kbOnly === 'boolean' ? input.kbOnly : cur.kbOnly,
-      hasKey: typeof input.apiKey === 'string' ? input.apiKey.trim() !== '' : cur.hasKey,
+      // Mirror the server: only a new non-empty key changes it; removeKey clears it.
+      hasKey: input.removeKey === true ? false : newKey !== null ? true : cur.hasKey,
+      keyHint: input.removeKey === true ? null : newKey !== null ? mask(newKey) : cur.keyHint,
     };
     this.data.aiProvider = next;
     this.persist();

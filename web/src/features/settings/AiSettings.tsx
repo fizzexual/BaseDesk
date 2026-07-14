@@ -138,7 +138,7 @@ export function AiSettings() {
   async function onRemoveKey() {
     setSaving(true);
     try {
-      await saveAiProvider({ ...payload(), enabled: false, apiKey: '' });
+      await saveAiProvider({ ...payload(), enabled: false, removeKey: true, apiKey: undefined });
       setHasKey(false);
       setEnabled(false);
       setKey('');
@@ -306,10 +306,15 @@ export function AiSettings() {
             type="password"
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            placeholder={hasKey ? '•••••••••• (stored — leave blank to keep)' : 'Paste your provider key'}
+            placeholder={hasKey ? 'Stored — leave blank to keep it' : 'Paste your provider key'}
             className={`${FIELD} font-mono text-[13px]`}
             autoComplete="off"
           />
+          {provider.keyHint !== null && key.trim() === '' && (
+            <span className="text-[12px] text-text-3">
+              Stored key <span className="font-mono text-text-2">{provider.keyHint}</span> · kept unless you type a new one or remove it
+            </span>
+          )}
         </label>
 
         <label className="flex flex-col gap-1.5">

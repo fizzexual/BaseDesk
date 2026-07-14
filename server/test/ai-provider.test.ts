@@ -66,6 +66,7 @@ describe('provider config', () => {
     }))).json();
     expect(saved.hasKey).toBe(true);
     expect('apiKey' in saved).toBe(false);
+    expect(saved.keyHint).toBe('sk-…ret'); // masked preview: first 3 + last 3 of "sk-secret"
 
     // A save without apiKey must keep the stored key.
     const again = await (await app.request('/api/ai/provider', json('PUT', { model: 'deepseek-reasoner' }))).json();
@@ -77,11 +78,17 @@ describe('provider config', () => {
     expect('apiKey' in boot.aiProvider).toBe(false);
   });
 
-  it('clears the key when apiKey is an empty string', async () => {
+  it('never loses the key on a blank save, but removeKey clears it', async () => {
     const app = makeApp();
     await app.request('/api/ai/provider', json('PUT', { enabled: true, apiKey: 'sk-secret' }));
-    const cleared = await (await app.request('/api/ai/provider', json('PUT', { apiKey: '' }))).json();
+    // A blank apiKey must NOT wipe the stored key — this was the "token disappeared" bug.
+    const blank = await (await app.request('/api/ai/provider', json('PUT', { apiKey: '' }))).json();
+    expect(blank.hasKey).toBe(true);
+    expect(blank.keyHint).toBe('sk-…ret');
+    // Only an explicit removeKey clears it.
+    const cleared = await (await app.request('/api/ai/provider', json('PUT', { removeKey: true }))).json();
     expect(cleared.hasKey).toBe(false);
+    expect(cleared.keyHint).toBeNull();
   });
 
   it('persists the reasoning flag', async () => {
