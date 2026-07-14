@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
-  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -253,6 +253,7 @@ function seedData(): LocalData {
 export class LocalRepository implements Repository {
   private readonly storage: StorageLike;
   private data: LocalData;
+  private followers = new Map<string, TicketFollower[]>(); // demo-only, in-memory
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -686,6 +687,24 @@ export class LocalRepository implements Repository {
 
   async getTicketIntake(_ticketId: string): Promise<IntakeAnswer[]> {
     return []; // the demo repo doesn't capture intake answers
+  }
+
+  async getFollowers(ticketId: string): Promise<TicketFollower[]> {
+    return (this.followers.get(ticketId) ?? []).map((f) => ({ ...f }));
+  }
+  async followTicket(ticketId: string, agentId?: string): Promise<TicketFollower[]> {
+    const id = agentId ?? CURRENT_AGENT_ID;
+    const agent = this.data.agents.find((a) => a.id === id);
+    const list = this.followers.get(ticketId) ?? [];
+    if (agent && !list.some((f) => f.agentId === id)) {
+      list.push({ agentId: id, name: agent.name, avatarHue: agent.avatarHue, at: new Date().toISOString() });
+      this.followers.set(ticketId, list);
+    }
+    return this.getFollowers(ticketId);
+  }
+  async unfollowTicket(ticketId: string, agentId: string): Promise<TicketFollower[]> {
+    this.followers.set(ticketId, (this.followers.get(ticketId) ?? []).filter((f) => f.agentId !== agentId));
+    return this.getFollowers(ticketId);
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

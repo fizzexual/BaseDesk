@@ -10,6 +10,7 @@ import {
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
   getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
+  followTicket, unfollowTicket, getFollowers,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -456,12 +457,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
    */
   const notifyCustomerReply = (opts: { ticket: Ticket; message: Message; contactName: string }): void => {
     const { ticket, message } = opts;
-    if (ticket.assigneeId === null || message.authorKind !== 'contact') return;
-    insertNotification(db, {
-      id: newId('nt_'), agentId: ticket.assigneeId, ticketId: ticket.id, messageId: message.id,
-      actorId: message.authorId, actorName: opts.contactName, snippet: preview(message.body || 'Sent an attachment'),
-      kind: 'reply', createdAt: message.at,
-    });
+    if (message.authorKind !== 'contact') return;
+    // Alert the assignee plus everyone watching the ticket — deduped.
+    const recipients = new Set<string>();
+    if (ticket.assigneeId !== null) recipients.add(ticket.assigneeId);
+    for (const f of getFollowers(db, ticket.id)) recipients.add(f.agentId);
+    for (const agentId of recipients) {
+      insertNotification(db, {
+        id: newId('nt_'), agentId, ticketId: ticket.id, messageId: message.id,
+        actorId: message.authorId, actorName: opts.contactName, snippet: preview(message.body || 'Sent an attachment'),
+        kind: 'reply', createdAt: message.at,
+      });
+    }
   };
 
   /** Fire-and-forget: email the ticket's requester that support replied. */
@@ -899,6 +906,38 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(getTicketSeen(db, id));
   });
 
+  // Followers: agents watching a ticket for activity even when they aren't assigned.
+  const followersJson = (ticketId: string) =>
+    getFollowers(db, ticketId).map((f) => {
+      const a = getAgent(db, f.agentId);
+      return { agentId: f.agentId, name: a?.name ?? 'Agent', avatarHue: a?.avatarHue ?? 0, at: f.at };
+    });
+  app.get('/api/tickets/:id/followers', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(followersJson(id));
+  });
+  // Follow the current agent, or a named teammate via { agentId }.
+  app.post('/api/tickets/:id/followers', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let agentId = currentAgentId();
+    try {
+      const b = (await c.req.json()) as { agentId?: unknown };
+      if (typeof b.agentId === 'string' && getAgent(db, b.agentId) !== null) agentId = b.agentId;
+    } catch {
+      /* no body → follow self */
+    }
+    followTicket(db, id, agentId, new Date().toISOString());
+    return c.json(followersJson(id));
+  });
+  app.delete('/api/tickets/:id/followers/:agentId', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    unfollowTicket(db, id, c.req.param('agentId'));
+    return c.json(followersJson(id));
+  });
+
   // Intake-form answers captured when the ticket was opened (shown as metadata).
   app.get('/api/tickets/:id/intake', (c) => {
     const id = c.req.param('id');
@@ -958,6 +997,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
+    // The agent who acts on a ticket starts watching it, so later activity reaches them.
+    followTicket(db, id, message.authorId, now);
     // Notify the customer on a public reply (never on an internal note): email + source channel.
     if (kind === 'reply') deliverReply(ticket, body.trim() !== '' ? body : '(sent an attachment)');
     // An internal note can @mention teammates — alert each of them.

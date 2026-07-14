@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -36,6 +36,7 @@ export interface AppState {
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   ticketEvents: Record<string, TicketEvent[]>; // activity timeline, keyed by ticketId
   ticketSeen: Record<string, TicketSeen[]>; // read receipts, keyed by ticketId
+  ticketFollowers: Record<string, TicketFollower[]>; // watchers, keyed by ticketId
   ticketIntake: Record<string, IntakeAnswer[]>; // intake-form answers, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
@@ -45,6 +46,9 @@ export interface AppState {
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
   loadEvents(ticketId: string): Promise<void>;
+  /** Follow/unfollow a ticket (defaults to the current agent), updating its watcher list. */
+  followTicket(ticketId: string, agentId?: string): Promise<void>;
+  unfollowTicket(ticketId: string, agentId: string): Promise<void>;
   /** Live sync: merge the latest tickets from the server into the store. */
   refreshTickets(): Promise<void>;
   /** Live sync: re-fetch an open ticket's messages + read receipts so new replies appear. */
@@ -190,6 +194,7 @@ export function createAppStore(repository: Repository) {
     messages: {},
     ticketEvents: {},
     ticketSeen: {},
+    ticketFollowers: {},
     ticketIntake: {},
     composerPrefill: null,
     currentAgentId: '',
@@ -273,21 +278,33 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const [seen, intake] = await Promise.all([
+      const [seen, intake, followers] = await Promise.all([
         repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
         repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
+        repository.getFollowers(ticketId).catch(() => [] as TicketFollower[]),
       ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
         ticketEvents: { ...s.ticketEvents, [ticketId]: events },
         ticketSeen: { ...s.ticketSeen, [ticketId]: seen },
         ticketIntake: { ...s.ticketIntake, [ticketId]: intake },
+        ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers },
       }));
     },
 
     async loadEvents(ticketId) {
       const events = await repository.getTicketEvents(ticketId);
       set((s) => ({ ticketEvents: { ...s.ticketEvents, [ticketId]: events } }));
+    },
+
+    async followTicket(ticketId, agentId) {
+      const followers = await repository.followTicket(ticketId, agentId);
+      set((s) => ({ ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers } }));
+    },
+
+    async unfollowTicket(ticketId, agentId) {
+      const followers = await repository.unfollowTicket(ticketId, agentId);
+      set((s) => ({ ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers } }));
     },
 
     async refreshTickets() {

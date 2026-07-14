@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -31,6 +31,10 @@ export interface Repository {
   getTicketSeen(ticketId: string): Promise<TicketSeen[]>;
   /** Intake-form answers captured when the ticket was opened (ticket metadata). */
   getTicketIntake(ticketId: string): Promise<IntakeAnswer[]>;
+  /** Agents watching this ticket for activity. */
+  getFollowers(ticketId: string): Promise<TicketFollower[]>;
+  followTicket(ticketId: string, agentId?: string): Promise<TicketFollower[]>;
+  unfollowTicket(ticketId: string, agentId: string): Promise<TicketFollower[]>;
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }>;
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket>;
   bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]>;

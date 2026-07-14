@@ -316,6 +316,14 @@ export interface TicketSeen {
   at: string;
 }
 
+/** An agent watching a ticket for activity even when they aren't the assignee. */
+export interface TicketFollower {
+  agentId: string;
+  name: string;
+  avatarHue: number;
+  at: string;
+}
+
 /**
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.

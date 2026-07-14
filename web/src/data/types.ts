@@ -313,6 +313,14 @@ export interface TicketSeen {
   at: string;
 }
 
+/** An agent watching a ticket for activity even when they aren't the assignee. */
+export interface TicketFollower {
+  agentId: string;
+  name: string;
+  avatarHue: number;
+  at: string;
+}
+
 /** An @mention alert for the current agent. */
 /** What happened: a teammate @mentioned you, a customer replied, or a ticket was assigned to you. */
 export type NotificationKind = 'mention' | 'reply' | 'assigned';

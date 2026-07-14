@@ -151,6 +151,12 @@ export function openDb(dataDir: string): DatabaseSync {
       ticketId TEXT PRIMARY KEY,
       answers TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ticket_followers (
+      ticketId TEXT NOT NULL,
+      agentId TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (ticketId, agentId)
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -455,6 +461,22 @@ export function getTicketIntake(db: DatabaseSync, ticketId: string): IntakeAnswe
   } catch {
     return [];
   }
+}
+
+/** Followers watch a ticket for new activity even when they aren't the assignee. */
+export function followTicket(db: DatabaseSync, ticketId: string, agentId: string, at: string): void {
+  db.prepare(
+    `INSERT INTO ticket_followers (ticketId, agentId, at) VALUES (?, ?, ?)
+     ON CONFLICT(ticketId, agentId) DO NOTHING`,
+  ).run(ticketId, agentId, at);
+}
+export function unfollowTicket(db: DatabaseSync, ticketId: string, agentId: string): void {
+  db.prepare('DELETE FROM ticket_followers WHERE ticketId = ? AND agentId = ?').run(ticketId, agentId);
+}
+export function getFollowers(db: DatabaseSync, ticketId: string): { agentId: string; at: string }[] {
+  return db
+    .prepare('SELECT agentId, at FROM ticket_followers WHERE ticketId = ? ORDER BY at')
+    .all(ticketId) as unknown as { agentId: string; at: string }[];
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */
