@@ -11,11 +11,13 @@ import { PortalNewTicket } from './PortalNewTicket';
 import { PortalProfile } from './PortalProfile';
 import { PortalHelp } from './PortalHelp';
 
-/** Centered, comfortably-wide column for the portal's non-ticket pages. */
+/** Scrollable, centered column for the portal's non-ticket pages. */
 function ContainedPage() {
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-      <Outlet />
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
+        <Outlet />
+      </div>
     </div>
   );
 }

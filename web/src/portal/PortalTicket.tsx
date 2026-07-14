@@ -210,6 +210,71 @@ function RatingCard({ ticket, onRated }: { ticket: Ticket; onRated: (t: Ticket) 
   );
 }
 
+/** Ticket detail + read-receipt panel. Rendered in the desktop right sidebar and,
+ *  on narrow screens, as a card at the top of the conversation. */
+function TicketSidebar({
+  ticket,
+  support,
+  lastCustomerAt,
+}: {
+  ticket: Ticket;
+  support: PortalSupport[];
+  lastCustomerAt: string | null;
+}) {
+  return (
+    <>
+      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Ticket details</h2>
+      <dl className="mt-3 flex flex-col gap-2.5 text-[13px]">
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-text-3">Priority</dt>
+          <dd className="font-medium capitalize">{ticket.priority}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-text-3">Opened</dt>
+          <dd className="text-text-2">
+            <TimeAgo iso={ticket.createdAt} />
+          </dd>
+        </div>
+        {ticket.category !== null && ticket.category !== '' && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-text-3">Category</dt>
+            <dd className="font-medium">{ticket.category}</dd>
+          </div>
+        )}
+      </dl>
+
+      {support.length > 0 && (
+        <div className="mt-6 border-t border-line pt-5">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Your support team</h2>
+          <ul className="mt-3 flex flex-col gap-3">
+            {support.map((s) => {
+              const sawLatest = lastCustomerAt !== null && s.seenAt !== null && s.seenAt >= lastCustomerAt;
+              return (
+                <li key={s.name} className="flex items-center gap-2.5">
+                  <Avatar name={s.name} hue={s.avatarHue} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium">{s.name}</div>
+                    <div className="text-[11px] text-text-3">
+                      {s.seenAt === null ? (
+                        "Hasn't opened this yet"
+                      ) : sawLatest ? (
+                        'Seen your latest message'
+                      ) : (
+                        <>Last viewed <TimeAgo iso={s.seenAt} /></>
+                      )}
+                    </div>
+                  </div>
+                  {sawLatest && <IconCheckCircle size={15} className="shrink-0 text-green" />}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PortalTicket() {
   const { id = '' } = useParams();
   const refreshTickets = usePortal((s) => s.refreshTickets);
@@ -359,11 +424,15 @@ export function PortalTicket() {
   }
 
   if (state === 'loading') {
-    return <TicketSkeleton />;
+    return (
+      <div className="h-full overflow-y-auto">
+        <TicketSkeleton />
+      </div>
+    );
   }
   if (state === 'error' || ticket === null) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-16 text-center">
+      <div className="flex h-full flex-col items-center justify-center px-4 text-center">
         <p className="text-[14px] text-text-2">We couldn't find that ticket.</p>
         <Link to="/portal" className="mt-2 inline-block text-[13px] font-medium text-accent hover:underline">
           Back to your tickets
@@ -377,24 +446,30 @@ export function PortalTicket() {
   const lastCustomerAt = [...messages].reverse().find((m) => m.authorKind === 'contact')?.at ?? null;
 
   return (
-    <div className="flex w-full flex-col lg:flex-row lg:items-start">
-      {/* Conversation — fills the column edge-to-edge; message bubbles cap their own width */}
-      <div className="min-w-0 flex-1">
-        <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px]">
+      {/* Conversation — a header bar, the scrolling thread, and a composer pinned to the bottom */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-line px-4 py-4 sm:px-6 lg:px-8">
           <Link to="/portal" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-2 hover:text-text">
             <IconChevronLeft size={15} />
             All tickets
           </Link>
-
-          <div className="mt-3 flex items-start justify-between gap-3">
+          <div className="mt-2 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-[19px] font-semibold">{ticket.subject}</h1>
-              <p className="mt-1 text-[13px] text-text-3">Ticket #{ticket.number}</p>
+              <h1 className="truncate text-[18px] font-semibold">{ticket.subject}</h1>
+              <p className="mt-0.5 text-[12px] text-text-3">Ticket #{ticket.number}</p>
             </div>
             <StatusBadge status={ticket.status} tooltip />
           </div>
+        </div>
 
-          <div className="mt-6 flex flex-col gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          {/* On narrow screens the sidebar collapses into a card above the thread. */}
+          <div className="mb-5 rounded-lg border border-line bg-surface p-4 lg:hidden">
+            <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />
+          </div>
+
+          <div className="flex flex-col gap-4">
             {messages.map((m) => (
               <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} />
             ))}
@@ -405,116 +480,69 @@ export function PortalTicket() {
           {(ticket.status === 'solved' || ticket.status === 'closed') && (
             <RatingCard ticket={ticket} onRated={setTicket} />
           )}
+        </div>
 
-          <div className="mt-6 rounded-lg border border-line bg-surface p-3">
-            {closed ? (
-              <p className="py-2 text-center text-[13px] text-text-3">This ticket is closed. Open a new ticket if you still need help.</p>
-            ) : (
-              <>
-                <textarea
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  rows={3}
-                  placeholder="Write a reply…"
-                  className="w-full resize-y bg-transparent px-1 py-1 text-[14px] outline-none placeholder:text-text-3"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
-                      void send();
-                    }
-                  }}
-                />
-                {pending.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {pending.map((a) => (
-                      <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-bg py-1 pl-2 pr-1 text-[12px]">
-                        <IconPaperclip size={12} className="shrink-0 text-text-3" />
-                        <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
-                        <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${a.filename}`}
-                          onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
-                          className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
-                        >
-                          <IconX size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
-                <div className="mt-2 flex items-center justify-between">
-                  <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                    <IconPaperclip size={14} />
-                    {uploading ? 'Uploading…' : 'Attach'}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={(reply.trim() === '' && pending.length === 0) || sending}
-                    onClick={() => void send()}
-                  >
-                    {sending ? 'Sending…' : 'Send reply'}
-                  </Button>
+        <div className="shrink-0 border-t border-line bg-surface px-4 py-3 sm:px-6 lg:px-8">
+          {closed ? (
+            <p className="py-2 text-center text-[13px] text-text-3">This ticket is closed. Open a new ticket if you still need help.</p>
+          ) : (
+            <div className="rounded-lg border border-line bg-bg p-2.5">
+              <textarea
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                rows={2}
+                placeholder="Write a reply…"
+                className="w-full resize-none bg-transparent px-1 py-1 text-[14px] outline-none placeholder:text-text-3"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+              />
+              {pending.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {pending.map((a) => (
+                    <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface py-1 pl-2 pr-1 text-[12px]">
+                      <IconPaperclip size={12} className="shrink-0 text-text-3" />
+                      <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+                      <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${a.filename}`}
+                        onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                        className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+                      >
+                        <IconX size={12} />
+                      </button>
+                    </span>
+                  ))}
                 </div>
-              </>
-            )}
-          </div>
+              )}
+              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+              <div className="mt-1.5 flex items-center justify-between">
+                <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                  <IconPaperclip size={14} />
+                  {uploading ? 'Uploading…' : 'Attach'}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={(reply.trim() === '' && pending.length === 0) || sending}
+                  onClick={() => void send()}
+                >
+                  {sending ? 'Sending…' : 'Send reply'}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Real right sidebar — ticket details + who's helping and what they've seen */}
-      <aside className="w-full shrink-0 border-t border-line lg:sticky lg:top-14 lg:h-[calc(100dvh-3.5rem)] lg:w-[320px] lg:overflow-y-auto lg:border-l lg:border-t-0">
+      {/* Real right sidebar — full height, ticket details + who's helping and what they've seen */}
+      <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-line lg:block">
         <div className="px-5 py-6">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Ticket details</h2>
-          <dl className="mt-3 flex flex-col gap-2.5 text-[13px]">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-text-3">Priority</dt>
-              <dd className="font-medium capitalize">{ticket.priority}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-text-3">Opened</dt>
-              <dd className="text-text-2">
-                <TimeAgo iso={ticket.createdAt} />
-              </dd>
-            </div>
-            {ticket.category !== null && ticket.category !== '' && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-text-3">Category</dt>
-                <dd className="font-medium">{ticket.category}</dd>
-              </div>
-            )}
-          </dl>
-
-          {support.length > 0 && (
-            <div className="mt-6 border-t border-line pt-5">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Your support team</h2>
-              <ul className="mt-3 flex flex-col gap-3">
-                {support.map((s) => {
-                  const sawLatest = lastCustomerAt !== null && s.seenAt !== null && s.seenAt >= lastCustomerAt;
-                  return (
-                    <li key={s.name} className="flex items-center gap-2.5">
-                      <Avatar name={s.name} hue={s.avatarHue} size={32} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium">{s.name}</div>
-                        <div className="text-[11px] text-text-3">
-                          {s.seenAt === null ? (
-                            "Hasn't opened this yet"
-                          ) : sawLatest ? (
-                            'Seen your latest message'
-                          ) : (
-                            <>Last viewed <TimeAgo iso={s.seenAt} /></>
-                          )}
-                        </div>
-                      </div>
-                      {sawLatest && <IconCheckCircle size={15} className="shrink-0 text-green" />}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+          <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />
         </div>
       </aside>
     </div>
