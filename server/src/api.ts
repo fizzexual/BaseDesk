@@ -2155,6 +2155,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         id: m.id,
         authorKind: m.authorKind,
         authorName: m.authorKind === 'contact' ? contact.name : agentName(m.authorId),
+        avatarHue: m.authorKind === 'contact' ? contact.avatarHue : getAgent(db, m.authorId)?.avatarHue ?? 0,
         body: m.body,
         at: m.at,
         attachments: m.attachments ?? [],

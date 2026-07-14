@@ -62,24 +62,27 @@ function Bubble({ message, entering = false }: { message: PortalMessage; enterin
   }, [entering]);
 
   return (
-    <div className={cx('flex flex-col', mine ? 'items-end' : 'items-start')}>
-      <div className="mb-1 flex items-center gap-2 px-1">
-        <span className="text-[12px] font-medium">{mine ? 'You' : message.authorName}</span>
-        <TimeAgo iso={message.at} className="text-[11px] text-text-3" />
-      </div>
-      {message.body.trim() !== '' && (
-        <div
-          className={cx(
-            'max-w-[85%] whitespace-pre-wrap rounded-lg px-3.5 py-2.5 text-[14px] leading-relaxed transition duration-500 ease-out lg:max-w-[46rem]',
-            mine ? 'bg-accent text-accent-fg' : 'border border-line bg-surface',
-            entering && 'ring-2 ring-blue/40',
-            revealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
-          )}
-        >
-          {message.body}
+    <div className={cx('flex items-end gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
+      <Avatar name={message.authorName} hue={message.avatarHue} size={28} className="mb-0.5" />
+      <div className={cx('flex min-w-0 flex-1 flex-col', mine ? 'items-end' : 'items-start')}>
+        <div className="mb-1 flex items-center gap-2 px-1">
+          <span className="text-[12px] font-medium">{mine ? 'You' : message.authorName}</span>
+          <TimeAgo iso={message.at} className="text-[11px] text-text-3" />
         </div>
-      )}
-      {message.attachments.length > 0 && <PortalAttachments items={message.attachments} />}
+        {message.body.trim() !== '' && (
+          <div
+            className={cx(
+              'max-w-[85%] whitespace-pre-wrap rounded-lg px-3.5 py-2.5 text-[14px] leading-relaxed transition duration-500 ease-out lg:max-w-[46rem]',
+              mine ? 'bg-accent text-accent-fg' : 'border border-line bg-surface',
+              entering && 'ring-2 ring-blue/40',
+              revealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+            )}
+          >
+            {message.body}
+          </div>
+        )}
+        {message.attachments.length > 0 && <PortalAttachments items={message.attachments} />}
+      </div>
     </div>
   );
 }

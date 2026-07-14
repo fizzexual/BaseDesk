@@ -10,6 +10,7 @@ export interface PortalMessage {
   id: string;
   authorKind: 'contact' | 'agent';
   authorName: string;
+  avatarHue: number;
   body: string;
   at: string;
   attachments: Attachment[];
