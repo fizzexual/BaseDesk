@@ -355,7 +355,7 @@ export function TicketPage() {
             <Menu
               triggerLabel="Change status"
               triggerClassName="rounded-full transition-opacity hover:opacity-80"
-              trigger={<StatusBadge status={ticket.status} />}
+              trigger={<StatusBadge status={ticket.status} tooltip />}
               items={STATUSES.map((s) => ({
                 label: s.label,
                 icon: s.icon,

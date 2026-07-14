@@ -1,5 +1,7 @@
 import type { SlaState, TicketSla } from '../data/types';
 import { cx } from './util';
+import { Tooltip } from './Tooltip';
+import { slaExplainer } from './badgeInfo';
 
 const PILL: Record<SlaState, string> = {
   breached: 'bg-red-bg text-red',
@@ -19,17 +21,19 @@ const DOT: Record<SlaState, string> = {
 /** Compact SLA pill: a colored dot + label ("Reply overdue", "Reply due in 25m", "Met"). */
 export function SlaBadge({ sla, className }: { sla: TicketSla | null; className?: string }) {
   if (sla === null) return null;
+  const info = slaExplainer(sla);
   return (
-    <span
-      className={cx(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium',
-        PILL[sla.state],
-        className,
-      )}
-      title={`SLA: ${sla.label}`}
-    >
-      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', DOT[sla.state])} aria-hidden="true" />
-      {sla.label}
-    </span>
+    <Tooltip title={info.title} label={info.desc} align="end">
+      <span
+        className={cx(
+          'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium',
+          PILL[sla.state],
+          className,
+        )}
+      >
+        <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', DOT[sla.state])} aria-hidden="true" />
+        {sla.label}
+      </span>
+    </Tooltip>
   );
 }
