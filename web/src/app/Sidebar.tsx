@@ -17,6 +17,7 @@ import {
   IconNote,
   IconPause,
   IconPlus,
+  IconReply,
   IconSnooze,
   IconSparkle,
   IconTicket,
@@ -37,6 +38,7 @@ const MAIN_ITEMS: Item[] = [
   { view: 'all', label: 'All', icon: IconTicket },
   { view: 'unassigned', label: 'Unassigned', icon: IconUserPlus, showCount: true },
   { view: 'mine', label: 'My open', icon: IconUser, showCount: true },
+  { view: 'awaiting', label: 'Awaiting reply', icon: IconReply, showCount: true },
 ];
 
 const STATUS_ITEMS: Item[] = [

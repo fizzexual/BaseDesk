@@ -46,6 +46,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   all: 'All tickets',
   unassigned: 'Unassigned',
   mine: 'My open',
+  awaiting: 'Awaiting reply',
   snoozed: 'Snoozed',
   open: 'Open',
   pending: 'Pending',
@@ -89,6 +90,8 @@ function emptyFor(view: ViewId): { icon: IconComponent; title: string } {
       return { icon: IconTrash, title: 'Trash is empty' };
     case 'snoozed':
       return { icon: IconSnooze, title: 'Nothing snoozed' };
+    case 'awaiting':
+      return { icon: IconCheck, title: 'All caught up — nothing awaiting a reply' };
     case 'solved':
       return { icon: IconCheck, title: 'Nothing solved yet' };
     default:

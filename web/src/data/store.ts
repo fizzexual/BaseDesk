@@ -124,6 +124,9 @@ function matchesView(t: Ticket, view: ViewId, currentAgentId: string, now: strin
         t.assigneeId === currentAgentId &&
         (t.status === 'open' || t.status === 'pending' || t.status === 'on_hold')
       );
+    case 'awaiting':
+      // Threads that owe the customer a reply — matches the "Awaiting reply" badge.
+      return t.awaitingReply && t.status !== 'solved' && t.status !== 'closed';
     default:
       return t.status === view;
   }
@@ -216,7 +219,7 @@ export function createAppStore(repository: Repository) {
       const now = new Date().toISOString();
       const { tickets, currentAgentId } = get();
       const c: Counts = {
-        all: 0, unassigned: 0, mine: 0, snoozed: 0,
+        all: 0, unassigned: 0, mine: 0, awaiting: 0, snoozed: 0,
         open: 0, pending: 0, on_hold: 0, solved: 0, closed: 0,
         archive: 0, spam: 0, trash: 0,
       };
@@ -230,6 +233,7 @@ export function createAppStore(repository: Repository) {
           continue;
         }
         c[t.status] += 1;
+        if (t.status !== 'closed' && t.status !== 'solved' && t.awaitingReply) c.awaiting += 1;
         if (t.status !== 'closed') {
           c.all += 1;
           if (t.assigneeId === null && (t.status === 'open' || t.status === 'pending')) c.unassigned += 1;

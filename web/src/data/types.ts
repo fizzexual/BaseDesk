@@ -3,7 +3,7 @@ export type TicketPriority = 'urgent' | 'high' | 'medium' | 'low';
 export type TicketBucket = 'inbox' | 'archive' | 'spam' | 'trash';
 export type Channel = 'email' | 'chat' | 'web' | 'api';
 export type ViewId =
-  | 'all' | 'unassigned' | 'mine' | 'snoozed'
+  | 'all' | 'unassigned' | 'mine' | 'awaiting' | 'snoozed'
   | 'open' | 'pending' | 'on_hold' | 'solved' | 'closed'
   | 'archive' | 'spam' | 'trash';
 
@@ -241,7 +241,7 @@ export type DealCreate = {
 export type DealPatch = Partial<Pick<Deal, 'title' | 'type' | 'stage' | 'value' | 'ownerId' | 'note'>>;
 
 export interface Counts {
-  all: number; unassigned: number; mine: number; snoozed: number;
+  all: number; unassigned: number; mine: number; awaiting: number; snoozed: number;
   open: number; pending: number; on_hold: number; solved: number; closed: number;
   archive: number; spam: number; trash: number;
 }

@@ -6,7 +6,17 @@ import type { Repository } from '../src/data/repository';
 import type { Counts, Ticket } from '../src/data/types';
 
 const seedTickets = seedJson.tickets as unknown as Ticket[];
+const seedMessages = seedJson.messages as unknown as { ticketId: string; kind: string; authorKind: string; at: string }[];
 const ACTIVE: readonly string[] = ['open', 'pending', 'on_hold'];
+
+/** Mirrors LocalRepository.stampAwaiting: last public reply came from the customer. */
+function awaitingFor(ticketId: string): boolean {
+  const last = seedMessages
+    .filter((m) => m.ticketId === ticketId && m.kind === 'reply')
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .at(-1);
+  return last !== undefined && last.authorKind === 'contact';
+}
 
 function memStorage() {
   const map = new Map<string, string>();
@@ -31,7 +41,7 @@ function isSnoozed(t: Ticket, now: string): boolean {
 /** Expected counts derived from the seed dataset with the shared view semantics. */
 function expectedCounts(now: string): Counts {
   const c: Counts = {
-    all: 0, unassigned: 0, mine: 0, snoozed: 0,
+    all: 0, unassigned: 0, mine: 0, awaiting: 0, snoozed: 0,
     open: 0, pending: 0, on_hold: 0, solved: 0, closed: 0,
     archive: 0, spam: 0, trash: 0,
   };
@@ -45,6 +55,7 @@ function expectedCounts(now: string): Counts {
       continue;
     }
     c[t.status] += 1;
+    if (t.status !== 'closed' && t.status !== 'solved' && awaitingFor(t.id)) c.awaiting += 1;
     if (t.status !== 'closed') {
       c.all += 1;
       if (t.assigneeId === null && (t.status === 'open' || t.status === 'pending')) c.unassigned += 1;
@@ -96,6 +107,30 @@ describe('store', () => {
     for (let i = 1; i < mine.length; i++) {
       expect(mine[i - 1].lastMessageAt >= mine[i].lastMessageAt).toBe(true);
     }
+  });
+
+  it("ticketsForView('awaiting') returns unresolved inbox tickets that owe the customer a reply", async () => {
+    const store = await freshStore();
+    const now = new Date().toISOString();
+    const awaiting = store.getState().ticketsForView('awaiting');
+    const expectedIds = seedTickets
+      .filter(
+        (t) =>
+          t.bucket === 'inbox' &&
+          !isSnoozed(t, now) &&
+          t.status !== 'solved' &&
+          t.status !== 'closed' &&
+          awaitingFor(t.id),
+      )
+      .map((t) => t.id)
+      .sort();
+    expect(awaiting.map((t) => t.id).sort()).toEqual(expectedIds);
+    for (const t of awaiting) {
+      expect(t.awaitingReply).toBe(true);
+      expect(['solved', 'closed']).not.toContain(t.status);
+    }
+    // The view and the sidebar badge count must agree.
+    expect(awaiting.length).toBe(store.getState().counts().awaiting);
   });
 
   it("a snoozed ticket is absent from 'all' but present in 'snoozed'", async () => {
