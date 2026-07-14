@@ -5,9 +5,12 @@ import { Topbar } from './Topbar';
 import { Palette } from '../features/palette/Palette';
 import { HelpOverlay } from '../features/palette/HelpOverlay';
 import { openHelp, openPalette, useShortcuts } from '../features/palette/shortcuts';
+import { useLiveSync } from './useLiveSync';
 
 export function Shell() {
   const navigate = useNavigate();
+
+  useLiveSync();
 
   useShortcuts('global', {
     'mod+k': openPalette,

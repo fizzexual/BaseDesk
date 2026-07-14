@@ -21,6 +21,10 @@ export interface BootstrapData {
 }
 export interface Repository {
   bootstrap(): Promise<BootstrapData>;
+  /** All tickets, freshly from the server — used by live polling to keep the inbox current. */
+  listTickets(): Promise<Ticket[]>;
+  /** The current agent's notifications, freshly from the server (for live polling). */
+  listNotifications(): Promise<Notification[]>;
   getMessages(ticketId: string): Promise<Message[]>;
   getTicketEvents(ticketId: string): Promise<TicketEvent[]>;
   /** Read receipts: when each participant last viewed this ticket's thread. */

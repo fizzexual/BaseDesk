@@ -438,6 +438,16 @@ export class LocalRepository implements Repository {
     return form;
   }
 
+  async listTickets(): Promise<Ticket[]> {
+    return this.data.tickets.map((t) => this.stampAwaiting({ ...t, tags: [...t.tags] }));
+  }
+
+  async listNotifications(): Promise<Notification[]> {
+    return [...this.data.notifications]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((n) => ({ ...n }));
+  }
+
   async getMessages(ticketId: string): Promise<Message[]> {
     return this.data.messages
       .filter((m) => m.ticketId === ticketId)

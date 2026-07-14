@@ -45,6 +45,12 @@ export interface AppState {
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
   loadEvents(ticketId: string): Promise<void>;
+  /** Live sync: merge the latest tickets from the server into the store. */
+  refreshTickets(): Promise<void>;
+  /** Live sync: re-fetch an open ticket's messages + read receipts so new replies appear. */
+  refreshOpenMessages(ticketId: string): Promise<void>;
+  /** Live sync: refresh the current agent's notifications. */
+  refreshNotifications(): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
   bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
@@ -282,6 +288,28 @@ export function createAppStore(repository: Repository) {
     async loadEvents(ticketId) {
       const events = await repository.getTicketEvents(ticketId);
       set((s) => ({ ticketEvents: { ...s.ticketEvents, [ticketId]: events } }));
+    },
+
+    async refreshTickets() {
+      const list = await repository.listTickets();
+      // Merge server truth over the store (adds new tickets, updates changed ones).
+      set((s) => ({ tickets: { ...s.tickets, ...Object.fromEntries(list.map((t) => [t.id, t])) } }));
+    },
+
+    async refreshOpenMessages(ticketId) {
+      const [msgs, seen] = await Promise.all([
+        repository.getMessages(ticketId),
+        repository.getTicketSeen(ticketId).catch(() => get().ticketSeen[ticketId] ?? []),
+      ]);
+      set((s) => ({
+        messages: { ...s.messages, [ticketId]: msgs },
+        ticketSeen: { ...s.ticketSeen, [ticketId]: seen },
+      }));
+    },
+
+    async refreshNotifications() {
+      const notifications = await repository.listNotifications();
+      set({ notifications });
     },
 
     async patchTicket(id, patch) {

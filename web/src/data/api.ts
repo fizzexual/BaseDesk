@@ -35,6 +35,12 @@ export class ApiRepository implements Repository {
     return request('/bootstrap');
   }
 
+  listTickets(): Promise<Ticket[]> {
+    return request('/tickets');
+  }
+  listNotifications(): Promise<Notification[]> {
+    return request('/notifications');
+  }
   getMessages(ticketId: string): Promise<Message[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`);
   }
