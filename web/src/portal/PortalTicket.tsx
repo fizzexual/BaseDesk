@@ -62,8 +62,8 @@ function Bubble({ message, entering = false }: { message: PortalMessage; enterin
   }, [entering]);
 
   return (
-    <div className={cx('flex items-end gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
-      <Avatar name={message.authorName} hue={message.avatarHue} size={28} className="mb-0.5" />
+    <div className={cx('flex items-start gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
+      <Avatar name={message.authorName} hue={message.avatarHue} size={28} className="mt-0.5" />
       <div className={cx('flex min-w-0 flex-1 flex-col', mine ? 'items-end' : 'items-start')}>
         <div className="mb-1 flex items-center gap-2 px-1">
           <span className="text-[12px] font-medium">{mine ? 'You' : message.authorName}</span>
@@ -283,7 +283,7 @@ function TicketSidebar({
 function TicketListPanel({ activeId }: { activeId: string }) {
   const tickets = usePortal((s) => s.tickets);
   return (
-    <aside className="hidden w-[280px] shrink-0 flex-col border-r border-line xl:flex">
+    <aside className="hidden w-[320px] shrink-0 flex-col border-r border-line xl:flex">
       <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-4">
         <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Your tickets</h2>
         <Link
