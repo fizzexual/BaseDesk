@@ -5,6 +5,7 @@ import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
+import { CategoryPill } from '../../components/CategoryPill';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { PriorityPill } from '../../components/PriorityPill';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -353,7 +354,8 @@ export function TicketPage() {
           <SubjectTitle ticket={ticket} onRename={(subject) => patch({ subject })} />
           <div className="flex shrink-0 items-center gap-2">
             <ReplyStatusBadge ticket={ticket} />
-            <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now(), slaHours)} className="mr-1" />
+            <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now(), slaHours)} />
+            <CategoryPill category={ticket.category} className="mr-1" />
             <Menu
               triggerLabel="Change status"
               triggerClassName="rounded-full transition-opacity hover:opacity-80"

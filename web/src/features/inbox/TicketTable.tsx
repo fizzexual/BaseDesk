@@ -4,6 +4,7 @@ import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority, TicketSla } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
+import { CategoryPill } from '../../components/CategoryPill';
 import { PriorityPill } from '../../components/PriorityPill';
 import { SlaBadge } from '../../components/SlaBadge';
 import { ReplyStatusBadge } from '../../components/ReplyStatusBadge';
@@ -166,6 +167,7 @@ export function TicketTable({
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-[14px] font-medium">{t.subject}</span>
                 {!hasPreview && <IconNote size={13} className="shrink-0 text-text-3" />}
+                <CategoryPill category={t.category} className="shrink-0" />
               </div>
               {hasPreview && (
                 <div className="truncate text-[13px] text-text-3">{t.lastMessagePreview}</div>

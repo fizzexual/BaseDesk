@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Contact, Ticket, TicketPriority } from '../data/types';
+import type { Contact, IntakeAnswer, Ticket, TicketPriority } from '../data/types';
 import { getToken, portalApi, setToken } from './api';
 
 export interface PortalState {
@@ -11,7 +11,15 @@ export interface PortalState {
   login(input: { email: string; password: string }): Promise<void>;
   logout(): void;
   refreshTickets(): Promise<void>;
-  createTicket(input: { subject: string; body: string; priority: TicketPriority; attachmentIds?: string[] }): Promise<string>;
+  createTicket(input: {
+    subject: string;
+    body: string;
+    priority: TicketPriority;
+    attachmentIds?: string[];
+    category?: string | null;
+    tags?: string[];
+    answers?: IntakeAnswer[];
+  }): Promise<string>;
   updateProfile(patch: Partial<Pick<Contact, 'name' | 'company' | 'location' | 'timezone'>>): Promise<void>;
 }
 

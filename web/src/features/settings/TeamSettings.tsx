@@ -112,6 +112,7 @@ function InviteDialog({ open, onClose }: { open: boolean; onClose: () => void })
 function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins: number; isSelf: boolean }) {
   const updateAgent = useApp((s) => s.updateAgent);
   const deleteAgent = useApp((s) => s.deleteAgent);
+  const categories = useApp((s) => s.categories);
   const lastAdmin = agent.role === 'admin' && agent.status === 'active' && activeAdmins <= 1;
 
   async function setRole(role: 'admin' | 'agent') {
@@ -130,6 +131,17 @@ function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins
       toast(`Removed ${agent.name}`);
     } catch {
       toast('Could not remove — a workspace needs at least one admin');
+    }
+  }
+
+  async function toggleCategory(category: string) {
+    const next = agent.categories.includes(category)
+      ? agent.categories.filter((c) => c !== category)
+      : [...agent.categories, category];
+    try {
+      await updateAgent(agent.id, { categories: next });
+    } catch {
+      toast('Could not update categories');
     }
   }
 
@@ -198,6 +210,43 @@ function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins
       </div>
 
       {agent.status === 'invited' && agent.inviteToken && <InviteLink token={agent.inviteToken} />}
+
+      <div className="mt-3 border-t border-line pt-3">
+        <Tooltip
+          title="Handles categories"
+          label="New tickets in these categories route to this teammate. Leave empty to cover every category."
+        >
+          <span className="text-[13px] font-medium">Handles categories</span>
+        </Tooltip>
+        {categories.length === 0 ? (
+          <p className="mt-1.5 text-[13px] text-text-3">Define categories in Settings → Ticket form.</p>
+        ) : (
+          <>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {categories.map((c) => {
+                const active = agent.categories.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={active}
+                    className={cx(
+                      'inline-flex h-7 items-center rounded-full border px-2.5 text-[12px] font-medium transition-colors',
+                      active
+                        ? 'border-accent bg-accent text-accent-fg'
+                        : 'border-line text-text-2 hover:bg-surface-2 hover:text-text',
+                    )}
+                    onClick={() => void toggleCategory(c)}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[12px] text-text-3">Empty = covers every category.</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

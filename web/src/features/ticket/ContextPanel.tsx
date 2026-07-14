@@ -157,6 +157,9 @@ function RevenueAwarePanel({
           {contact.company !== null && <DetailRow label="Company" value={contact.company} />}
           {contact.location !== null && <DetailRow label="Location" value={contact.location} />}
           {localTime !== null && <DetailRow label="Local time" value={localTime} />}
+          {ticket.category !== null && ticket.category.trim() !== '' && (
+            <DetailRow label="Category" value={ticket.category} />
+          )}
         </div>
       </section>
       {typeof ticket.satisfactionScore === 'number' && (

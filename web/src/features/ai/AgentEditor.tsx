@@ -46,6 +46,7 @@ export function AgentEditor({
   agent?: AiAgent;
 }) {
   const tickets = useApp((s) => s.tickets);
+  const categories = useApp((s) => s.categories);
   const createAiAgent = useApp((s) => s.createAiAgent);
   const updateAiAgent = useApp((s) => s.updateAiAgent);
   const deleteAiAgent = useApp((s) => s.deleteAiAgent);
@@ -57,6 +58,7 @@ export function AgentEditor({
   const [enabled, setEnabled] = useState(agent?.enabled ?? true);
   const [scopeTags, setScopeTags] = useState<string[]>(agent?.scopeTags ?? []);
   const [scopePriorities, setScopePriorities] = useState<TicketPriority[]>(agent?.scopePriorities ?? []);
+  const [scopeCategories, setScopeCategories] = useState<string[]>(agent?.scopeCategories ?? []);
   const [tagDraft, setTagDraft] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -68,7 +70,7 @@ export function AgentEditor({
   }, [tickets, scopeTags]);
 
   const valid = name.trim() !== '';
-  const allTickets = scopeTags.length === 0 && scopePriorities.length === 0;
+  const allTickets = scopeTags.length === 0 && scopePriorities.length === 0 && scopeCategories.length === 0;
 
   function addTag() {
     const tag = tagDraft.trim();
@@ -82,14 +84,20 @@ export function AgentEditor({
     );
   }
 
+  function toggleCategory(c: string) {
+    setScopeCategories(
+      scopeCategories.includes(c) ? scopeCategories.filter((x) => x !== c) : [...scopeCategories, c],
+    );
+  }
+
   async function save() {
     if (!valid) return;
     try {
       if (editing) {
-        await updateAiAgent(agent.id, { name: name.trim(), autonomy, enabled, scopeTags, scopePriorities });
+        await updateAiAgent(agent.id, { name: name.trim(), autonomy, enabled, scopeTags, scopePriorities, scopeCategories });
         toast('Agent saved');
       } else {
-        await createAiAgent({ name: name.trim(), autonomy, scopeTags, scopePriorities });
+        await createAiAgent({ name: name.trim(), autonomy, scopeTags, scopePriorities, scopeCategories });
         toast('Agent created');
       }
       onClose();
@@ -218,9 +226,38 @@ export function AgentEditor({
           </div>
         </div>
 
+        <div>
+          <span className={LABEL}>Scope — categories</span>
+          {categories.length === 0 ? (
+            <p className="text-[13px] text-text-3">Define categories in Settings → Ticket form.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((c) => {
+                const active = scopeCategories.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={active}
+                    className={cx(
+                      'inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                      active
+                        ? 'border-accent bg-accent text-accent-fg'
+                        : 'border-line text-text-2 hover:bg-surface-2 hover:text-text',
+                    )}
+                    onClick={() => toggleCategory(c)}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {allTickets && (
           <p className="text-[13px] text-text-3">
-            With no tags or priorities selected, this agent considers all open tickets.
+            With no tags, priorities, or categories selected, this agent considers all open tickets.
           </p>
         )}
 

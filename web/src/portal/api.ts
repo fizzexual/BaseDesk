@@ -2,7 +2,7 @@
 // from the agent-side Repository/store: a customer is a different principal, sees
 // only their own data, and authenticates with a bearer token kept in localStorage.
 
-import type { Attachment, Contact, KbArticle, Ticket, TicketPriority } from '../data/types';
+import type { Attachment, Contact, IntakeAnswer, IntakeForm, KbArticle, Ticket, TicketPriority } from '../data/types';
 
 const TOKEN_KEY = 'basedesk-portal-token';
 
@@ -78,8 +78,21 @@ export const portalApi = {
   getTicket(id: string) {
     return req<{ ticket: Ticket; messages: PortalMessage[] }>(`/tickets/${encodeURIComponent(id)}`);
   },
-  createTicket(input: { subject: string; body: string; priority: TicketPriority; attachmentIds?: string[] }) {
+  createTicket(input: {
+    subject: string;
+    body: string;
+    priority: TicketPriority;
+    attachmentIds?: string[];
+    /** Intake-wizard results: picked category, accumulated tags, and the full answer path. */
+    category?: string | null;
+    tags?: string[];
+    answers?: IntakeAnswer[];
+  }) {
     return req<{ ticket: Ticket }>('/tickets', body(input));
+  },
+  /** The branching intake form the customer walks before opening a ticket (enabled-only). */
+  intakeForm() {
+    return req<IntakeForm>('/intake-form');
   },
   reply(id: string, message: string, attachmentIds?: string[]) {
     return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/messages`, body({ body: message, attachmentIds }));

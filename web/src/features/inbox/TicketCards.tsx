@@ -4,6 +4,7 @@ import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
+import { CategoryPill } from '../../components/CategoryPill';
 import { PriorityPill } from '../../components/PriorityPill';
 import { SlaBadge } from '../../components/SlaBadge';
 import { ReplyStatusBadge } from '../../components/ReplyStatusBadge';
@@ -88,7 +89,10 @@ export function TicketCards({
               </div>
             </div>
 
-            <div className="mt-2.5 truncate text-[14px] font-medium">{t.subject}</div>
+            <div className="mt-2.5 flex items-center gap-1.5">
+              <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{t.subject}</span>
+              <CategoryPill category={t.category} className="shrink-0" />
+            </div>
             {t.lastMessagePreview !== '' && (
               <p className="mt-1 line-clamp-2 text-[13px] text-text-3">{t.lastMessagePreview}</p>
             )}

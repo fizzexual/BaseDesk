@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconImport, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
@@ -10,9 +10,10 @@ import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
 import { EmailSettings } from './EmailSettings';
 import { CustomFieldsSettings } from './CustomFieldsSettings';
+import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -24,6 +25,7 @@ const TABS: Array<{
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
   { id: 'fields', label: 'Ticket fields', icon: IconTag },
+  { id: 'form', label: 'Ticket form', icon: IconList },
   { id: 'sla', label: 'SLA', icon: IconClock },
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
@@ -38,6 +40,7 @@ export function SettingsPage() {
     params.tab === 'appearance' ||
     params.tab === 'canned' ||
     params.tab === 'fields' ||
+    params.tab === 'form' ||
     params.tab === 'sla' ||
     params.tab === 'automation' ||
     params.tab === 'ai' ||
@@ -74,6 +77,7 @@ export function SettingsPage() {
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
         {tab === 'fields' && <CustomFieldsSettings />}
+        {tab === 'form' && <IntakeFormSettings />}
         {tab === 'sla' && <SlaSettings />}
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
