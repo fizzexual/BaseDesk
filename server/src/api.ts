@@ -9,7 +9,7 @@ import {
   awaitingReplyMap, getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
-  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm,
+  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -881,6 +881,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.get('/api/tickets/:id/messages', (c) => {
     const id = c.req.param('id');
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    // Opening the thread marks it seen by the current agent (for read receipts).
+    recordSeen(db, id, currentAgentId(), 'agent', new Date().toISOString());
     return c.json(getMessages(db, id));
   });
 
@@ -888,6 +890,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     return c.json(getTicketEvents(db, id));
+  });
+
+  // Read receipts: when each participant last viewed this ticket's thread.
+  app.get('/api/tickets/:id/seen', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getTicketSeen(db, id));
   });
 
   app.post('/api/tickets/:id/messages', async (c) => {
@@ -2131,6 +2140,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (contact === null) return c.json({ error: 'not signed in' }, 401);
     const ticket = getTicket(db, c.req.param('id'));
     if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    recordSeen(db, ticket.id, contact.id, 'contact', new Date().toISOString()); // customer viewed the thread
     // Customers see public replies only — never internal notes.
     const messages = getMessages(db, ticket.id)
       .filter((m) => m.kind === 'reply')

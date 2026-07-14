@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../data/store';
 import { useDealsForContact } from '../../data/hooks';
+import { ConversationParticipants } from './ConversationParticipants';
 import { formatMoney } from '../../data/money';
 import type { Contact, Deal, DealStage, Ticket } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
@@ -161,6 +162,9 @@ function RevenueAwarePanel({
             <DetailRow label="Category" value={ticket.category} />
           )}
         </div>
+      </section>
+      <section className="border-t border-line p-4">
+        <ConversationParticipants ticket={ticket} />
       </section>
       {typeof ticket.satisfactionScore === 'number' && (
         <section className="border-t border-line p-4">

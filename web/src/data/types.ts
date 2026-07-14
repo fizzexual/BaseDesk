@@ -306,6 +306,13 @@ export interface TicketEvent {
   at: string;
 }
 
+/** When a participant (agent or the customer) last viewed a ticket's thread. */
+export interface TicketSeen {
+  viewerId: string;
+  viewerKind: 'agent' | 'contact';
+  at: string;
+}
+
 /** An @mention alert for the current agent. */
 /** What happened: a teammate @mentioned you, a customer replied, or a ticket was assigned to you. */
 export type NotificationKind = 'mention' | 'reply' | 'assigned';

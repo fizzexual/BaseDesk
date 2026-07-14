@@ -307,6 +307,13 @@ export interface TicketEvent {
   at: string;
 }
 
+/** When a participant (agent or the customer) last viewed a ticket's thread. */
+export interface TicketSeen {
+  viewerId: string;
+  viewerKind: 'agent' | 'contact';
+  at: string;
+}
+
 /**
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.

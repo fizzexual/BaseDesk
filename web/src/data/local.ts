@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
-  SummaryResult, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -667,6 +667,11 @@ export class LocalRepository implements Repository {
       .filter((e) => e.ticketId === ticketId)
       .sort((a, b) => a.at.localeCompare(b.at))
       .map((e) => ({ ...e }));
+  }
+
+  async getTicketSeen(_ticketId: string): Promise<TicketSeen[]> {
+    // The static demo has no cross-viewer tracking; the current agent is viewing now.
+    return [{ viewerId: CURRENT_AGENT_ID, viewerKind: 'agent', at: new Date().toISOString() }];
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

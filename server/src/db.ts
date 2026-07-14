@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -139,6 +139,13 @@ export function openDb(dataDir: string): DatabaseSync {
       promptTokens INTEGER NOT NULL,
       completionTokens INTEGER NOT NULL,
       at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ticket_seen (
+      ticketId TEXT NOT NULL,
+      viewerId TEXT NOT NULL,
+      viewerKind TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (ticketId, viewerId)
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -414,6 +421,18 @@ export function insertTicketEvent(
 ): void {
   db.prepare('INSERT INTO ticket_events (id, ticketId, kind, actorId, detail, at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(e.id, e.ticketId, e.kind, e.actorId, JSON.stringify(e.detail), e.at);
+}
+
+/** Upsert when a viewer last saw a ticket's thread (one row per viewer per ticket). */
+export function recordSeen(db: DatabaseSync, ticketId: string, viewerId: string, viewerKind: TicketSeen['viewerKind'], at: string): void {
+  db.prepare(
+    `INSERT INTO ticket_seen (ticketId, viewerId, viewerKind, at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(ticketId, viewerId) DO UPDATE SET at = excluded.at`,
+  ).run(ticketId, viewerId, viewerKind, at);
+}
+
+export function getTicketSeen(db: DatabaseSync, ticketId: string): TicketSeen[] {
+  return db.prepare('SELECT viewerId, viewerKind, at FROM ticket_seen WHERE ticketId = ?').all(ticketId) as unknown as TicketSeen[];
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */
