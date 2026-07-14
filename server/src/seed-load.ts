@@ -18,6 +18,7 @@ interface SeedData {
   channels: ChannelConn[];
   notifications?: Notification[];
   followers?: { ticketId: string; agentId: string; at: string }[];
+  intake?: { ticketId: string; answers: { prompt: string; label: string }[] }[];
 }
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -40,8 +41,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     `INSERT INTO tickets (
       id, number, subject, status, priority, bucket, requesterId, assigneeId,
       tags, channel, createdAt, updatedAt, snoozedUntil, lastMessageAt, lastMessagePreview,
-      firstRespondedAt, resolvedAt, channelId, satisfactionScore, satisfactionComment, satisfactionAt, category
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      firstRespondedAt, resolvedAt, channelId, satisfactionScore, satisfactionComment, satisfactionAt, category, mergedIntoId
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertMessage = db.prepare(
     'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -80,6 +81,7 @@ export function seedIfEmpty(db: DatabaseSync): void {
         JSON.stringify(t.tags), t.channel, t.createdAt, t.updatedAt, t.snoozedUntil,
         t.lastMessageAt, t.lastMessagePreview, t.firstRespondedAt, t.resolvedAt, t.channelId,
         t.satisfactionScore ?? null, t.satisfactionComment ?? null, t.satisfactionAt ?? null, t.category ?? null,
+        t.mergedIntoId ?? null,
       );
     }
     for (const m of seed.messages) {
@@ -114,6 +116,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     }
     const insertFollower = db.prepare('INSERT OR IGNORE INTO ticket_followers (ticketId, agentId, at) VALUES (?, ?, ?)');
     for (const f of seed.followers ?? []) insertFollower.run(f.ticketId, f.agentId, f.at);
+    const insertIntake = db.prepare('INSERT OR REPLACE INTO ticket_intake (ticketId, answers) VALUES (?, ?)');
+    for (const i of seed.intake ?? []) insertIntake.run(i.ticketId, JSON.stringify(i.answers));
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

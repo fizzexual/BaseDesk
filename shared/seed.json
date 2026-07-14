@@ -3428,6 +3428,254 @@
       "satisfactionComment": null,
       "satisfactionAt": null,
       "channelId": "ch_2"
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "p1",
+        "outage"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": null,
+      "snoozedUntil": null,
+      "firstRespondedAt": null,
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_1",
+      "number": 1208,
+      "subject": "URGENT: checkout is down for all our customers",
+      "status": "open",
+      "priority": "urgent",
+      "requesterId": "c_07",
+      "assigneeId": "a_2",
+      "createdAt": "2026-07-10T06:00:00.000Z",
+      "updatedAt": "2026-07-10T06:00:00.000Z",
+      "lastMessageAt": "2026-07-10T06:00:00.000Z",
+      "lastMessagePreview": "Nobody can check out — every payment fails at the last step."
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "refund",
+        "billing"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": "Billing",
+      "snoozedUntil": null,
+      "firstRespondedAt": "2026-07-09T10:00:00.000Z",
+      "resolvedAt": "2026-07-10T16:00:00.000Z",
+      "mergedIntoId": null,
+      "satisfactionScore": 5,
+      "satisfactionComment": "Incredibly fast and friendly — refund sorted in a single reply.",
+      "satisfactionAt": "2026-07-10T18:00:00.000Z",
+      "id": "ts_2",
+      "number": 1207,
+      "subject": "Refund for the duplicate charge",
+      "status": "solved",
+      "priority": "medium",
+      "requesterId": "c_03",
+      "assigneeId": "a_1",
+      "createdAt": "2026-07-09T08:00:00.000Z",
+      "updatedAt": "2026-07-10T16:00:00.000Z",
+      "lastMessageAt": "2026-07-10T16:00:00.000Z",
+      "lastMessagePreview": "All sorted — thanks so much!"
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "account"
+      ],
+      "channel": "web",
+      "channelId": "ch_1",
+      "category": "Account",
+      "snoozedUntil": null,
+      "firstRespondedAt": null,
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_3",
+      "number": 1206,
+      "subject": "How do I reset my password?",
+      "status": "open",
+      "priority": "low",
+      "requesterId": "c_11",
+      "assigneeId": "a_3",
+      "createdAt": "2026-07-11T06:00:00.000Z",
+      "updatedAt": "2026-07-11T06:00:00.000Z",
+      "lastMessageAt": "2026-07-11T06:00:00.000Z",
+      "lastMessagePreview": "I can't log in and the reset email never arrives."
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "billing"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": "Billing",
+      "snoozedUntil": null,
+      "firstRespondedAt": "2026-07-09T22:00:00.000Z",
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_4",
+      "number": 1205,
+      "subject": "When will my payout arrive?",
+      "status": "pending",
+      "priority": "medium",
+      "requesterId": "c_05",
+      "assigneeId": "a_2",
+      "createdAt": "2026-07-09T20:00:00.000Z",
+      "updatedAt": "2026-07-11T02:00:00.000Z",
+      "lastMessageAt": "2026-07-11T02:00:00.000Z",
+      "lastMessagePreview": "Merged a duplicate ticket into this thread."
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "billing"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": "Billing",
+      "snoozedUntil": null,
+      "firstRespondedAt": null,
+      "resolvedAt": "2026-07-11T02:00:00.000Z",
+      "mergedIntoId": "ts_4",
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_4b",
+      "number": 1204,
+      "subject": "Payout still pending?",
+      "status": "solved",
+      "priority": "medium",
+      "requesterId": "c_05",
+      "assigneeId": "a_2",
+      "createdAt": "2026-07-09T21:00:00.000Z",
+      "updatedAt": "2026-07-11T02:00:00.000Z",
+      "lastMessageAt": "2026-07-09T21:00:00.000Z",
+      "lastMessagePreview": "Same question as my other ticket."
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "sales",
+        "expansion"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": null,
+      "snoozedUntil": null,
+      "firstRespondedAt": "2026-07-10T10:00:00.000Z",
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_5",
+      "number": 1203,
+      "subject": "Interested in upgrading to the Team plan (15 seats)",
+      "status": "pending",
+      "priority": "medium",
+      "requesterId": "c_09",
+      "assigneeId": "a_1",
+      "createdAt": "2026-07-10T08:00:00.000Z",
+      "updatedAt": "2026-07-11T04:00:00.000Z",
+      "lastMessageAt": "2026-07-11T04:00:00.000Z",
+      "lastMessagePreview": "Sounds great — can you send pricing for 15 seats?"
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "bug",
+        "discord"
+      ],
+      "channel": "chat",
+      "channelId": "ch_3",
+      "category": "Bug",
+      "snoozedUntil": null,
+      "firstRespondedAt": null,
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_6",
+      "number": 1202,
+      "subject": "Bot stopped responding in our Discord server",
+      "status": "open",
+      "priority": "high",
+      "requesterId": "c_13",
+      "assigneeId": "a_3",
+      "createdAt": "2026-07-11T07:00:00.000Z",
+      "updatedAt": "2026-07-11T07:00:00.000Z",
+      "lastMessageAt": "2026-07-11T07:00:00.000Z",
+      "lastMessagePreview": "The support bot went quiet in our server about an hour ago."
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "account"
+      ],
+      "channel": "email",
+      "channelId": null,
+      "category": "Account",
+      "snoozedUntil": null,
+      "firstRespondedAt": "2026-07-08T14:00:00.000Z",
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_7",
+      "number": 1201,
+      "subject": "Any update on my data export request?",
+      "status": "pending",
+      "priority": "medium",
+      "requesterId": "c_02",
+      "assigneeId": "a_4",
+      "createdAt": "2026-07-08T12:00:00.000Z",
+      "updatedAt": "2026-07-11T09:00:00.000Z",
+      "lastMessageAt": "2026-07-11T09:00:00.000Z",
+      "lastMessagePreview": "Just checking in — any progress on the export?"
+    },
+    {
+      "bucket": "inbox",
+      "tags": [
+        "refund",
+        "billing"
+      ],
+      "channel": "web",
+      "channelId": null,
+      "category": "Billing",
+      "snoozedUntil": null,
+      "firstRespondedAt": "2026-07-11T04:00:00.000Z",
+      "resolvedAt": null,
+      "mergedIntoId": null,
+      "satisfactionScore": null,
+      "satisfactionComment": null,
+      "satisfactionAt": null,
+      "id": "ts_8",
+      "number": 1200,
+      "subject": "Charged after I cancelled my subscription",
+      "status": "open",
+      "priority": "high",
+      "requesterId": "c_06",
+      "assigneeId": "a_1",
+      "createdAt": "2026-07-11T03:00:00.000Z",
+      "updatedAt": "2026-07-11T04:00:00.000Z",
+      "lastMessageAt": "2026-07-11T04:00:00.000Z",
+      "lastMessagePreview": "Thanks for reaching out. Refunds are available within 30 days…"
     }
   ],
   "messages": [
@@ -7075,6 +7323,177 @@
       "kind": "note",
       "body": "Thanks @Sam, escalating to you since it touches billing. Flagged it urgent on my end.",
       "at": "2026-07-10T09:00:00.000Z"
+    },
+    {
+      "id": "m_sc_001",
+      "ticketId": "ts_1",
+      "authorKind": "contact",
+      "authorId": "c_07",
+      "kind": "reply",
+      "body": "Nobody can check out on our store — every payment fails at the final step. This is costing us sales by the minute, please help ASAP.",
+      "at": "2026-07-10T06:00:00.000Z"
+    },
+    {
+      "id": "m_sc_002",
+      "ticketId": "ts_2",
+      "authorKind": "contact",
+      "authorId": "c_03",
+      "kind": "reply",
+      "body": "I was charged twice for my May invoice — can you refund the extra one?",
+      "at": "2026-07-09T08:00:00.000Z"
+    },
+    {
+      "id": "m_sc_003",
+      "ticketId": "ts_2",
+      "authorKind": "agent",
+      "authorId": "a_1",
+      "kind": "reply",
+      "body": "So sorry about that! I can see the duplicate charge and have refunded it — it will land back on your card within 3–5 business days.",
+      "at": "2026-07-09T10:00:00.000Z"
+    },
+    {
+      "id": "m_sc_004",
+      "ticketId": "ts_2",
+      "authorKind": "contact",
+      "authorId": "c_03",
+      "kind": "reply",
+      "body": "All sorted — thanks so much!",
+      "at": "2026-07-10T16:00:00.000Z"
+    },
+    {
+      "id": "m_sc_005",
+      "ticketId": "ts_3",
+      "authorKind": "contact",
+      "authorId": "c_11",
+      "kind": "reply",
+      "body": "I can't log in and the password reset email never arrives. Can you help?",
+      "at": "2026-07-11T06:00:00.000Z"
+    },
+    {
+      "id": "m_sc_006",
+      "ticketId": "ts_4",
+      "authorKind": "contact",
+      "authorId": "c_05",
+      "kind": "reply",
+      "body": "My payout for last week is still showing as pending — when should I expect it?",
+      "at": "2026-07-09T20:00:00.000Z"
+    },
+    {
+      "id": "m_sc_007",
+      "ticketId": "ts_4",
+      "authorKind": "agent",
+      "authorId": "a_2",
+      "kind": "reply",
+      "body": "Payouts settle two business days after the period closes, so yours is scheduled for tomorrow. I’ll keep an eye on it and confirm once it lands.",
+      "at": "2026-07-09T22:00:00.000Z"
+    },
+    {
+      "id": "m_sc_008",
+      "ticketId": "ts_4",
+      "authorKind": "agent",
+      "authorId": "a_2",
+      "kind": "note",
+      "body": "Merged ticket #1204 — “Payout still pending?” — into this one.",
+      "at": "2026-07-11T02:00:00.000Z"
+    },
+    {
+      "id": "m_sc_009",
+      "ticketId": "ts_4b",
+      "authorKind": "contact",
+      "authorId": "c_05",
+      "kind": "reply",
+      "body": "Same question as my other ticket — when does the payout arrive?",
+      "at": "2026-07-09T21:00:00.000Z"
+    },
+    {
+      "id": "m_sc_010",
+      "ticketId": "ts_5",
+      "authorKind": "contact",
+      "authorId": "c_09",
+      "kind": "reply",
+      "body": "We’re growing and want to move our whole team onto BaseDesk — around 15 seats. What would that cost?",
+      "at": "2026-07-10T08:00:00.000Z"
+    },
+    {
+      "id": "m_sc_011",
+      "ticketId": "ts_5",
+      "authorKind": "agent",
+      "authorId": "a_1",
+      "kind": "reply",
+      "body": "Exciting! The Team plan covers up to 20 seats. I’ll put together a quote for 15 and send it over today.",
+      "at": "2026-07-10T10:00:00.000Z"
+    },
+    {
+      "id": "m_sc_012",
+      "ticketId": "ts_5",
+      "authorKind": "contact",
+      "authorId": "c_09",
+      "kind": "reply",
+      "body": "Sounds great — can you send pricing for 15 seats?",
+      "at": "2026-07-11T04:00:00.000Z"
+    },
+    {
+      "id": "m_sc_013",
+      "ticketId": "ts_6",
+      "authorKind": "contact",
+      "authorId": "c_13",
+      "kind": "reply",
+      "body": "The support bot in our Discord stopped responding about an hour ago — tickets from there aren’t coming through.",
+      "at": "2026-07-11T07:00:00.000Z"
+    },
+    {
+      "id": "m_sc_014",
+      "ticketId": "ts_7",
+      "authorKind": "contact",
+      "authorId": "c_02",
+      "kind": "reply",
+      "body": "I requested a full export of my account data a few days ago — any update?",
+      "at": "2026-07-08T12:00:00.000Z"
+    },
+    {
+      "id": "m_sc_015",
+      "ticketId": "ts_7",
+      "authorKind": "agent",
+      "authorId": "a_4",
+      "kind": "reply",
+      "body": "Thanks for your patience! The export is queued and I’ll share the download link as soon as it’s ready.",
+      "at": "2026-07-08T14:00:00.000Z"
+    },
+    {
+      "id": "m_sc_016",
+      "ticketId": "ts_7",
+      "authorKind": "contact",
+      "authorId": "c_02",
+      "kind": "reply",
+      "body": "Just checking in — any progress on the export?",
+      "at": "2026-07-11T09:00:00.000Z"
+    },
+    {
+      "id": "m_sc_017",
+      "ticketId": "ts_8",
+      "authorKind": "contact",
+      "authorId": "c_06",
+      "kind": "reply",
+      "body": "I cancelled my subscription last month but was charged again today. Please refund it.",
+      "at": "2026-07-11T03:00:00.000Z"
+    },
+    {
+      "id": "m_sc_018",
+      "ticketId": "ts_8",
+      "authorKind": "agent",
+      "authorId": "a_1",
+      "kind": "note",
+      "body": "Applied macro: Refund policy",
+      "at": "2026-07-11T03:30:00.000Z"
+    },
+    {
+      "id": "m_sc_019",
+      "ticketId": "ts_8",
+      "authorKind": "agent",
+      "authorId": "a_1",
+      "kind": "reply",
+      "body": "Thanks for reaching out. Refunds are available within 30 days of a charge. I can see the payment after your cancellation and have refunded it in full — it will land on your card within 3–5 business days.",
+      "at": "2026-07-11T04:00:00.000Z"
     }
   ],
   "canned": [
@@ -7654,6 +8073,21 @@
       "createdAt": "2026-05-27T04:00:00.000Z",
       "closedAt": "2026-05-29T01:00:00.000Z",
       "updatedAt": "2026-05-29T01:00:00.000Z"
+    },
+    {
+      "id": "d_sc_1",
+      "title": "Team plan — 15 seats",
+      "type": "expansion",
+      "stage": "open",
+      "value": 180000,
+      "currency": "USD",
+      "contactId": "c_09",
+      "ticketId": "ts_5",
+      "ownerId": "a_1",
+      "note": "Warm expansion from a growing team; wants ~15 seats.",
+      "createdAt": "2026-07-10T09:00:00.000Z",
+      "closedAt": null,
+      "updatedAt": "2026-07-11T04:00:00.000Z"
     }
   ],
   "kb": [
@@ -7905,6 +8339,21 @@
       "completionTokens": 200,
       "createdAt": "2026-06-15T07:48:46.000Z",
       "resolvedAt": "2026-06-15T18:36:24.000Z"
+    },
+    {
+      "id": "act_sc_1",
+      "agentId": "ai_1",
+      "ticketId": "ts_3",
+      "kind": "draft",
+      "status": "pending",
+      "draftBody": "Hi — happy to help! You can reset your password from the sign-in page via “Forgot password”; the email usually arrives within a minute. If it doesn’t, check your spam folder and make sure the address matches the one on your account. Reply here if you’re still stuck and I’ll reset it manually after a quick identity check.",
+      "suggestedPriority": null,
+      "suggestedTags": [],
+      "kbArticleId": null,
+      "promptTokens": 512,
+      "completionTokens": 88,
+      "createdAt": "2026-07-11T06:00:00.000Z",
+      "resolvedAt": null
     }
   ],
   "channels": [
@@ -7925,6 +8374,15 @@
       "inboundToken": "tok_email_b71e0439",
       "address": "support@basedesk.example",
       "createdAt": "2026-05-17T12:00:00.000Z"
+    },
+    {
+      "id": "ch_3",
+      "type": "discord",
+      "name": "Community Discord",
+      "enabled": true,
+      "inboundToken": "disc_showcase_token_demo",
+      "address": null,
+      "createdAt": "2026-05-12T12:00:00.000Z"
     }
   ],
   "notifications": [
@@ -8049,6 +8507,31 @@
       "ticketId": "t_076",
       "agentId": "a_1",
       "at": "2026-07-05T06:08:33.000Z"
+    },
+    {
+      "ticketId": "ts_5",
+      "agentId": "a_1",
+      "at": "2026-07-10T08:00:00.000Z"
+    },
+    {
+      "ticketId": "ts_5",
+      "agentId": "a_4",
+      "at": "2026-07-10T16:00:00.000Z"
+    }
+  ],
+  "intake": [
+    {
+      "ticketId": "ts_8",
+      "answers": [
+        {
+          "prompt": "What do you need help with?",
+          "label": "Billing & purchases"
+        },
+        {
+          "prompt": "What kind of billing issue?",
+          "label": "Charged after cancelling"
+        }
+      ]
     }
   ]
 }

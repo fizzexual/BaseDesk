@@ -778,7 +778,83 @@ for (const t of followSeed) {
   }
 }
 
-const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications, followers };
+// ---------------------------------------------------------------- showcase tickets
+// A curated set pinned to the top of the inbox — each ticket demonstrates a
+// different BaseDesk capability, so a first-time visitor sees the breadth at a
+// glance. Times are recent so they sort above the generated backlog.
+const intake = [];
+channels.push({
+  id: 'ch_3', type: 'discord', name: 'Community Discord', enabled: true,
+  inboundToken: 'disc_showcase_token_demo', address: null, createdAt: iso(NOW_MS - 60 * DAY),
+});
+
+const H = (h) => iso(NOW_MS - Math.round(h * HOUR));
+let scMsgN = 0;
+function scMsg(ticketId, authorKind, authorId, kind, body, at) {
+  scMsgN += 1;
+  messages.push({ id: 'm_sc_' + pad(scMsgN, 3), ticketId, authorKind, authorId, kind, body, at });
+}
+function scTicket(t) {
+  tickets.push({
+    bucket: 'inbox', tags: [], channel: 'email', channelId: null, category: null,
+    snoozedUntil: null, firstRespondedAt: null, resolvedAt: null, mergedIntoId: null,
+    satisfactionScore: null, satisfactionComment: null, satisfactionAt: null,
+    ...t,
+  });
+}
+
+// 1 — SLA breach: urgent, opened 30h ago, still no first response.
+scTicket({ id: 'ts_1', number: 1208, subject: 'URGENT: checkout is down for all our customers', status: 'open', priority: 'urgent', requesterId: 'c_07', assigneeId: 'a_2', tags: ['p1', 'outage'], channel: 'email', createdAt: H(30), updatedAt: H(30), lastMessageAt: H(30), lastMessagePreview: 'Nobody can check out — every payment fails at the last step.' });
+scMsg('ts_1', 'contact', 'c_07', 'reply', 'Nobody can check out on our store — every payment fails at the final step. This is costing us sales by the minute, please help ASAP.', H(30));
+
+// 2 — CSAT: solved with a 5★ rating + comment.
+scTicket({ id: 'ts_2', number: 1207, subject: 'Refund for the duplicate charge', status: 'solved', priority: 'medium', requesterId: 'c_03', assigneeId: 'a_1', tags: ['refund', 'billing'], category: 'Billing', createdAt: H(52), updatedAt: H(20), lastMessageAt: H(20), lastMessagePreview: 'All sorted — thanks so much!', firstRespondedAt: H(50), resolvedAt: H(20), satisfactionScore: 5, satisfactionComment: 'Incredibly fast and friendly — refund sorted in a single reply.', satisfactionAt: H(18) });
+scMsg('ts_2', 'contact', 'c_03', 'reply', 'I was charged twice for my May invoice — can you refund the extra one?', H(52));
+scMsg('ts_2', 'agent', 'a_1', 'reply', 'So sorry about that! I can see the duplicate charge and have refunded it — it will land back on your card within 3–5 business days.', H(50));
+scMsg('ts_2', 'contact', 'c_03', 'reply', 'All sorted — thanks so much!', H(20));
+
+// 3 — AI Agents: an AI-drafted reply waiting in the queue.
+scTicket({ id: 'ts_3', number: 1206, subject: 'How do I reset my password?', status: 'open', priority: 'low', requesterId: 'c_11', assigneeId: 'a_3', tags: ['account'], category: 'Account', channel: 'web', channelId: 'ch_1', createdAt: H(6), updatedAt: H(6), lastMessageAt: H(6), lastMessagePreview: "I can't log in and the reset email never arrives." });
+scMsg('ts_3', 'contact', 'c_11', 'reply', "I can't log in and the password reset email never arrives. Can you help?", H(6));
+aiActions.push({ id: 'act_sc_1', agentId: 'ai_1', ticketId: 'ts_3', kind: 'draft', status: 'pending', draftBody: 'Hi — happy to help! You can reset your password from the sign-in page via “Forgot password”; the email usually arrives within a minute. If it doesn’t, check your spam folder and make sure the address matches the one on your account. Reply here if you’re still stuck and I’ll reset it manually after a quick identity check.', suggestedPriority: null, suggestedTags: [], kbArticleId: null, promptTokens: 512, completionTokens: 88, createdAt: H(6), resolvedAt: null });
+
+// 4 — Merge: a duplicate merged into this thread (see the merged source below).
+scTicket({ id: 'ts_4', number: 1205, subject: 'When will my payout arrive?', status: 'pending', priority: 'medium', requesterId: 'c_05', assigneeId: 'a_2', tags: ['billing'], category: 'Billing', createdAt: H(40), updatedAt: H(10), lastMessageAt: H(10), lastMessagePreview: 'Merged a duplicate ticket into this thread.', firstRespondedAt: H(38) });
+scMsg('ts_4', 'contact', 'c_05', 'reply', 'My payout for last week is still showing as pending — when should I expect it?', H(40));
+scMsg('ts_4', 'agent', 'a_2', 'reply', 'Payouts settle two business days after the period closes, so yours is scheduled for tomorrow. I’ll keep an eye on it and confirm once it lands.', H(38));
+scMsg('ts_4', 'agent', 'a_2', 'note', 'Merged ticket #1204 — “Payout still pending?” — into this one.', H(10));
+scTicket({ id: 'ts_4b', number: 1204, subject: 'Payout still pending?', status: 'solved', priority: 'medium', requesterId: 'c_05', assigneeId: 'a_2', tags: ['billing'], category: 'Billing', createdAt: H(39), updatedAt: H(10), lastMessageAt: H(39), lastMessagePreview: 'Same question as my other ticket.', resolvedAt: H(10), mergedIntoId: 'ts_4' });
+scMsg('ts_4b', 'contact', 'c_05', 'reply', 'Same question as my other ticket — when does the payout arrive?', H(39));
+
+// 5 — Revenue + Followers: a linked expansion deal and two watchers.
+scTicket({ id: 'ts_5', number: 1203, subject: 'Interested in upgrading to the Team plan (15 seats)', status: 'pending', priority: 'medium', requesterId: 'c_09', assigneeId: 'a_1', tags: ['sales', 'expansion'], createdAt: H(28), updatedAt: H(8), lastMessageAt: H(8), lastMessagePreview: 'Sounds great — can you send pricing for 15 seats?', firstRespondedAt: H(26) });
+scMsg('ts_5', 'contact', 'c_09', 'reply', 'We’re growing and want to move our whole team onto BaseDesk — around 15 seats. What would that cost?', H(28));
+scMsg('ts_5', 'agent', 'a_1', 'reply', 'Exciting! The Team plan covers up to 20 seats. I’ll put together a quote for 15 and send it over today.', H(26));
+scMsg('ts_5', 'contact', 'c_09', 'reply', 'Sounds great — can you send pricing for 15 seats?', H(8));
+deals.push({ id: 'd_sc_1', title: 'Team plan — 15 seats', type: 'expansion', stage: 'open', value: 180000, currency: 'USD', contactId: 'c_09', ticketId: 'ts_5', ownerId: 'a_1', note: 'Warm expansion from a growing team; wants ~15 seats.', createdAt: H(27), closedAt: null, updatedAt: H(8) });
+followers.push({ ticketId: 'ts_5', agentId: 'a_1', at: H(28) }, { ticketId: 'ts_5', agentId: 'a_4', at: H(20) });
+
+// 6 — Channels: arrived from a connected Discord server.
+scTicket({ id: 'ts_6', number: 1202, subject: 'Bot stopped responding in our Discord server', status: 'open', priority: 'high', requesterId: 'c_13', assigneeId: 'a_3', tags: ['bug', 'discord'], category: 'Bug', channel: 'chat', channelId: 'ch_3', createdAt: H(5), updatedAt: H(5), lastMessageAt: H(5), lastMessagePreview: 'The support bot went quiet in our server about an hour ago.' });
+scMsg('ts_6', 'contact', 'c_13', 'reply', 'The support bot in our Discord stopped responding about an hour ago — tickets from there aren’t coming through.', H(5));
+
+// 7 — Awaiting reply: the customer is waiting on us.
+scTicket({ id: 'ts_7', number: 1201, subject: 'Any update on my data export request?', status: 'pending', priority: 'medium', requesterId: 'c_02', assigneeId: 'a_4', tags: ['account'], category: 'Account', createdAt: H(72), updatedAt: H(3), lastMessageAt: H(3), lastMessagePreview: 'Just checking in — any progress on the export?', firstRespondedAt: H(70) });
+scMsg('ts_7', 'contact', 'c_02', 'reply', 'I requested a full export of my account data a few days ago — any update?', H(72));
+scMsg('ts_7', 'agent', 'a_4', 'reply', 'Thanks for your patience! The export is queued and I’ll share the download link as soon as it’s ready.', H(70));
+scMsg('ts_7', 'contact', 'c_02', 'reply', 'Just checking in — any progress on the export?', H(3));
+
+// 8 — Intake form + Macro: categorised from the intake wizard, macro-answered.
+scTicket({ id: 'ts_8', number: 1200, subject: 'Charged after I cancelled my subscription', status: 'open', priority: 'high', requesterId: 'c_06', assigneeId: 'a_1', tags: ['refund', 'billing'], category: 'Billing', channel: 'web', createdAt: H(9), updatedAt: H(8), lastMessageAt: H(8), lastMessagePreview: 'Thanks for reaching out. Refunds are available within 30 days…', firstRespondedAt: H(8) });
+scMsg('ts_8', 'contact', 'c_06', 'reply', 'I cancelled my subscription last month but was charged again today. Please refund it.', H(9));
+scMsg('ts_8', 'agent', 'a_1', 'note', 'Applied macro: Refund policy', H(8.5));
+scMsg('ts_8', 'agent', 'a_1', 'reply', 'Thanks for reaching out. Refunds are available within 30 days of a charge. I can see the payment after your cancellation and have refunded it in full — it will land on your card within 3–5 business days.', H(8));
+intake.push({ ticketId: 'ts_8', answers: [
+  { prompt: 'What do you need help with?', label: 'Billing & purchases' },
+  { prompt: 'What kind of billing issue?', label: 'Charged after cancelling' },
+] });
+
+const out = { agents, contacts, tickets, messages, canned, deals, kb: kbSeed, aiAgents, aiActions, channels, notifications, followers, intake };
 const file = join(dirname(fileURLToPath(import.meta.url)), 'seed.json');
 writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
 console.log(`seed.json written: ${tickets.length} tickets, ${messages.length} messages, ${contacts.length} contacts, ${agents.length} agents, ${canned.length} canned, ${deals.length} deals, ${kbSeed.length} kb, ${aiAgents.length} aiAgents, ${aiActions.length} aiActions, ${channels.length} channels, ${notifications.length} notifications`);

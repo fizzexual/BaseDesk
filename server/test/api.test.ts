@@ -47,7 +47,7 @@ describe('health', () => {
 describe('bootstrap', () => {
   it('returns full dataset with currentAgentId = first admin agent', async () => {
     const body = await getBootstrap();
-    expect(body.tickets).toHaveLength(124);
+    expect(body.tickets).toHaveLength(133);
     expect(body.contacts).toHaveLength(18);
     expect(body.agents).toHaveLength(4);
     expect(body.canned).toHaveLength(6);
@@ -343,7 +343,7 @@ describe('seed-on-boot', () => {
     first.db.close();
     const second = createApp(dir2);
     const row = second.db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number };
-    expect(row.n).toBe(124);
+    expect(row.n).toBe(133);
     second.db.close();
     rmSync(dir2, { recursive: true, force: true });
   });
