@@ -19,6 +19,8 @@ export interface Ticket {
   channelId: string | null;
   /** When set, this ticket was merged into the referenced ticket and is a read-only tombstone. */
   mergedIntoId: string | null;
+  /** True when the customer sent the last public reply and support hasn't answered yet. */
+  awaitingReply: boolean;
   /** Values for admin-defined custom fields, keyed by field id. */
   customFields: Record<string, string>;
   /** Customer satisfaction rating (1–5), set from the portal on a solved/closed ticket. */

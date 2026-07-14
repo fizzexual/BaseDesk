@@ -11,6 +11,7 @@ export function rowToTicket(row: TicketRow): Ticket {
     ...row,
     tags: JSON.parse(row.tags) as string[],
     customFields: JSON.parse(row.customFields ?? '{}') as Record<string, string>,
+    awaitingReply: false, // placeholder — display paths compute it from the last reply
   };
 }
 
@@ -518,7 +519,25 @@ export function toPublicSmtp(cfg: SmtpConfig): SmtpSettings {
 
 export function getTicket(db: DatabaseSync, id: string): Ticket | null {
   const row = db.prepare('SELECT * FROM tickets WHERE id = ?').get(id) as TicketRow | undefined;
-  return row ? rowToTicket(row) : null;
+  if (row === undefined) return null;
+  return { ...rowToTicket(row), awaitingReply: awaitingReplyFor(db, id) };
+}
+
+/** True when a ticket's last public reply is from the customer (support hasn't answered). */
+export function awaitingReplyFor(db: DatabaseSync, ticketId: string): boolean {
+  const r = db
+    .prepare("SELECT authorKind FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC, rowid DESC LIMIT 1")
+    .get(ticketId) as { authorKind: string } | undefined;
+  return r !== undefined && r.authorKind === 'contact';
+}
+
+/** Batch "awaiting reply" for many tickets in one query — the last reply's author per ticket. */
+export function awaitingReplyMap(db: DatabaseSync): Map<string, boolean> {
+  // SQLite returns the row matching MAX(at) for the bare columns in a min/max group.
+  const rows = db
+    .prepare("SELECT ticketId, authorKind, MAX(at) AS at FROM messages WHERE kind = 'reply' AND deletedAt IS NULL GROUP BY ticketId")
+    .all() as { ticketId: string; authorKind: string }[];
+  return new Map(rows.map((r) => [r.ticketId, r.authorKind === 'contact']));
 }
 
 export function getContact(db: DatabaseSync, id: string): Contact | null {

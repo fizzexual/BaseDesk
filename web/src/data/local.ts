@@ -166,7 +166,7 @@ function nextId(items: { id: string }[], prefix: string, width: number): string 
 function seedData(): LocalData {
   const seed = seedJson as unknown as LocalData;
   return {
-    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, customFields: { ...(t.customFields ?? {}) } })),
+    tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, awaitingReply: t.awaitingReply ?? false, customFields: { ...(t.customFields ?? {}) } })),
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
     agents: seed.agents.map((a) => ({ ...a })),
@@ -290,9 +290,10 @@ export class LocalRepository implements Repository {
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
       }
-      // Older demo tickets predate merge; default the pointer to null.
+      // Older demo tickets predate merge / awaiting-reply; default them.
       for (const t of this.data.tickets) {
         if (t.mergedIntoId === undefined) t.mergedIntoId = null;
+        if (t.awaitingReply === undefined) t.awaitingReply = false;
       }
       // Backfill business-hours SLA + richer agent fields, and migrate v0.3
       // single-condition automation to the v0.4 multi-condition shape.
@@ -340,7 +341,7 @@ export class LocalRepository implements Repository {
 
   async bootstrap(): Promise<BootstrapData> {
     return {
-      tickets: this.data.tickets.map((t) => ({ ...t, tags: [...t.tags] })),
+      tickets: this.data.tickets.map((t) => this.stampAwaiting({ ...t, tags: [...t.tags] })),
       contacts: this.data.contacts.map((c) => ({ ...c })),
       agents: this.data.agents.map((a) => ({ ...a })),
       canned: this.data.canned.map((c) => ({ ...c })),
@@ -438,6 +439,7 @@ export class LocalRepository implements Repository {
       resolvedAt: null,
       channelId: null,
       mergedIntoId: null,
+      awaitingReply: true,
       customFields: {},
     };
     const message: Message = {
@@ -454,10 +456,18 @@ export class LocalRepository implements Repository {
     this.runAgentsOnTicket(ticket, input.body);
     this.autoAssign(ticket);
     this.persist();
-    return { ticket: { ...ticket, tags: [...ticket.tags] }, message: { ...message } };
+    return { ticket: this.stampAwaiting({ ...ticket, tags: [...ticket.tags] }), message: { ...message } };
   }
 
-  /** Mirrors the server: route an unassigned new ticket to an active agent when enabled. */
+  /** Mirrors the server: awaiting a reply when the last public reply is the customer's. */
+  private stampAwaiting(t: Ticket): Ticket {
+    const last = this.data.messages
+      .filter((m) => m.ticketId === t.id && m.kind === 'reply' && !m.deletedAt)
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .at(-1);
+    return { ...t, awaitingReply: last !== undefined && last.authorKind === 'contact' };
+  }
+
   private autoAssign(ticket: Ticket): void {
     if (ticket.assigneeId !== null || !this.data.assignment.enabled) return;
     const pool = this.data.agents.filter((a) => a.status === 'active');
@@ -542,7 +552,7 @@ export class LocalRepository implements Repository {
     t.updatedAt = now;
     this.logPatchEvents(id, before, patch, CURRENT_AGENT_ID, now);
     this.persist();
-    return { ...t, tags: [...t.tags] };
+    return this.stampAwaiting({ ...t, tags: [...t.tags] });
   }
 
   async bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]> {
@@ -562,7 +572,7 @@ export class LocalRepository implements Repository {
       }
       t.updatedAt = now;
       this.logPatchEvents(id, before, { ...patch, tags: t.tags }, CURRENT_AGENT_ID, now);
-      out.push({ ...t, tags: [...t.tags] });
+      out.push(this.stampAwaiting({ ...t, tags: [...t.tags] }));
     }
     this.persist();
     return out;
@@ -680,7 +690,7 @@ export class LocalRepository implements Repository {
       target.lastMessagePreview = preview(newestReply.body);
     }
     this.persist();
-    return { source: { ...source, tags: [...source.tags] }, target: { ...target, tags: [...target.tags] } };
+    return { source: this.stampAwaiting({ ...source, tags: [...source.tags] }), target: this.stampAwaiting({ ...target, tags: [...target.tags] }) };
   }
 
   async createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {
@@ -1254,6 +1264,7 @@ export class LocalRepository implements Repository {
             requesterId: contact.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
             snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
             firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, customFields: {},
+            awaitingReply: !resolved,
           };
           this.data.tickets.push(ticket);
           this.data.messages.push({ id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: bodyText, at: now });

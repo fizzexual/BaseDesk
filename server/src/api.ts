@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
+  awaitingReplyMap, getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
 } from './db.js';
@@ -532,8 +532,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
 
   app.get('/api/bootstrap', (c) => {
+    const awaiting = awaitingReplyMap(db);
     const tickets = (db.prepare('SELECT * FROM tickets ORDER BY lastMessageAt DESC').all() as unknown as TicketRow[])
-      .map(rowToTicket);
+      .map(rowToTicket)
+      .map((t) => ({ ...t, awaitingReply: awaiting.get(t.id) ?? false }));
     const contacts = db.prepare('SELECT * FROM contacts ORDER BY rowid').all() as unknown as Contact[];
     const agents = db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as Agent[];
     const canned = getCannedReplies(db);
@@ -594,7 +596,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const rows = db
       .prepare(`SELECT * FROM tickets ${where} ORDER BY lastMessageAt DESC`)
       .all(...params) as unknown as TicketRow[];
-    return c.json(rows.map(rowToTicket));
+    const awaiting = awaitingReplyMap(db);
+    return c.json(rows.map(rowToTicket).map((t) => ({ ...t, awaitingReply: awaiting.get(t.id) ?? false })));
   });
 
   app.post('/api/tickets', async (c) => {
@@ -646,6 +649,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       resolvedAt: null,
       channelId: null,
       mergedIntoId: null,
+      awaitingReply: true,
       customFields: {},
     };
     const message: Message = {
@@ -1161,7 +1165,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
               id: newId('t_'), number: maxRow.maxNumber + 1, subject, status, priority, bucket: 'inbox',
               requesterId: contact!.id, assigneeId: null, tags, channel: 'web', createdAt: now, updatedAt: now,
               snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(bodyText),
-              firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, customFields: {},
+              firstRespondedAt: null, resolvedAt: resolved ? now : null, channelId: null, mergedIntoId: null, awaitingReply: !resolved, customFields: {},
             };
             insertTicketRow(db, ticket);
             db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -2066,7 +2070,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
       bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: [], channel: 'web',
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
-      firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, customFields: {},
+      firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, awaitingReply: true, customFields: {},
     };
     const message: Message = {
       id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
@@ -2345,7 +2349,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject, status: 'open', priority: 'medium', bucket: 'inbox',
       requesterId: contact.id, assigneeId: null, tags: [], channel: CHANNEL_TO_TICKET[channel.type],
       createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: previewText,
-      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, customFields: {},
+      firstRespondedAt: null, resolvedAt: null, channelId: channel.id, mergedIntoId: null, awaitingReply: true, customFields: {},
     };
     const message: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now };
     db.exec('BEGIN');

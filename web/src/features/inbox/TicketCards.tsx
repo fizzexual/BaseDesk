@@ -6,6 +6,7 @@ import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { PriorityPill } from '../../components/PriorityPill';
 import { SlaBadge } from '../../components/SlaBadge';
+import { ReplyStatusBadge } from '../../components/ReplyStatusBadge';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
 import { cx } from '../../components/util';
@@ -75,6 +76,7 @@ export function TicketCards({
               </div>
               <div className="flex flex-col items-end gap-0.5">
                 <TimeAgo iso={t.lastMessageAt} />
+                <ReplyStatusBadge ticket={t} />
                 <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours))} />
               </div>
             </div>

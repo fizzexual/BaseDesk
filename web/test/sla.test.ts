@@ -15,6 +15,7 @@ function ticket(over: Partial<Ticket>): Ticket {
     createdAt: new Date(NOW).toISOString(), updatedAt: new Date(NOW).toISOString(),
     snoozedUntil: null, lastMessageAt: new Date(NOW).toISOString(), lastMessagePreview: '',
     firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, customFields: {},
+    awaitingReply: false,
     ...over,
   };
 }

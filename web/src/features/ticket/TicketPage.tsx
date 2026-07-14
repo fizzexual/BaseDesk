@@ -9,6 +9,7 @@ import { Menu, type MenuItem } from '../../components/Menu';
 import { PriorityPill } from '../../components/PriorityPill';
 import { StatusBadge } from '../../components/StatusBadge';
 import { SlaBadge } from '../../components/SlaBadge';
+import { ReplyStatusBadge } from '../../components/ReplyStatusBadge';
 import { EmptyState } from '../../components/EmptyState';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
@@ -349,6 +350,7 @@ export function TicketPage() {
           )}
           <SubjectTitle ticket={ticket} onRename={(subject) => patch({ subject })} />
           <div className="flex shrink-0 items-center gap-2">
+            <ReplyStatusBadge ticket={ticket} />
             <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now(), slaHours)} className="mr-1" />
             <Menu
               triggerLabel="Change status"
