@@ -120,4 +120,8 @@ export const portalApi = {
   kb() {
     return req<KbArticle[]>('/kb');
   },
+  /** Published articles most relevant to `q`, for deflecting a ticket (empty = none matched). */
+  kbSuggest(q: string) {
+    return req<KbArticle[]>(`/kb?q=${encodeURIComponent(q)}`);
+  },
 };

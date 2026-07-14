@@ -66,6 +66,22 @@ describe('intake form', () => {
     expect(msgs[0].body).toContain('Which server? — Skyblock');
   });
 
+  it('ranks help articles for a query (ticket deflection) and returns none for no match', async () => {
+    const app = makeApp();
+    const all = await (await app.request('/api/portal/kb')).json();
+    expect(all.length).toBeGreaterThan(0); // seed ships published articles
+
+    // A relevant query surfaces the matching article; the seed KB has one about refunds.
+    const hits = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('refund billing charge')}`)).json();
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.length).toBeLessThanOrEqual(all.length);
+    expect(hits.some((a: { title: string }) => /refund/i.test(a.title))).toBe(true);
+
+    // A query with no term overlap deflects nothing.
+    const none = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('zzqqx nonsense termz')}`)).json();
+    expect(none).toEqual([]);
+  });
+
   it('falls back to any active agent when nobody covers the category', async () => {
     const app = makeApp();
     await app.request('/api/agents/a_2', json('PATCH', { categories: ['Bug'] }));

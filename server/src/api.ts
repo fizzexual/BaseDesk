@@ -2266,7 +2266,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
 
   app.get('/api/portal/kb', (c) => {
     const rows = db.prepare("SELECT * FROM kb_articles WHERE status = 'published' ORDER BY category, title").all() as unknown as KbArticle[];
-    return c.json(rows);
+    // With `?q=…`, return only the most relevant articles (empty = nothing matched),
+    // used to deflect a ticket at the end of the intake form.
+    const q = c.req.query('q');
+    return c.json(q !== undefined && q.trim() !== '' ? rankKb(q, rows, 4) : rows);
   });
 
   app.post('/api/channels', async (c) => {

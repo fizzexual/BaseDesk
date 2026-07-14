@@ -7,8 +7,8 @@ import { Skeleton } from './Skeleton';
 import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { formatBytes } from '../data/attachments';
-import type { Attachment, IntakeAnswer, IntakeForm, IntakeNode, IntakeOption, TicketPriority } from '../data/types';
-import { IconChevronLeft, IconChevronRight, IconPaperclip, IconX } from '../icons';
+import type { Attachment, IntakeAnswer, IntakeForm, IntakeNode, IntakeOption, KbArticle, TicketPriority } from '../data/types';
+import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconPaperclip, IconX } from '../icons';
 
 const FIELD =
   'w-full rounded-md border border-line bg-bg px-3 text-[14px] outline-none focus:border-line-2 placeholder:text-text-3';
@@ -51,6 +51,12 @@ export function PortalNewTicket() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Deflection: after the wizard, suggest help articles so the customer can
+  // self-serve instead of opening a ticket. null = not fetched yet.
+  const [suggestions, setSuggestions] = useState<KbArticle[] | null>(null);
+  const [needHelp, setNeedHelp] = useState(false); // customer clicked "I still need help"
+  const [resolved, setResolved] = useState(false); // customer clicked "That solved it"
+
   useEffect(() => {
     let cancelled = false;
     portalApi
@@ -89,6 +95,25 @@ export function PortalNewTicket() {
     [steps],
   );
 
+  // The wizard is "finished" once the customer walked at least one step and there's
+  // no further question to show. That's when we offer help articles.
+  const wizardFinished = !showWizard && steps.length > 0;
+
+  useEffect(() => {
+    if (!wizardFinished || suggestions !== null) return;
+    const q = [category ?? '', ...answers.flatMap((a) => [a.prompt, a.label])].join(' ').trim();
+    if (q === '') {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    portalApi
+      .kbSuggest(q)
+      .then((list) => { if (!cancelled) setSuggestions(list); })
+      .catch(() => { if (!cancelled) setSuggestions([]); });
+    return () => { cancelled = true; };
+  }, [wizardFinished, suggestions, category, answers]);
+
   function choose(node: IntakeNode, option: IntakeOption) {
     const nextSteps = [...steps, { nodeId: node.id, prompt: node.prompt, option }];
     setSteps(nextSteps);
@@ -97,16 +122,25 @@ export function PortalNewTicket() {
     setCurrentId(finished ? null : option.next);
   }
 
+  // Re-entering the wizard invalidates any help suggestions we fetched.
+  function clearDeflection() {
+    setSuggestions(null);
+    setNeedHelp(false);
+    setResolved(false);
+  }
+
   function goBack() {
     if (steps.length === 0) return;
     const last = steps[steps.length - 1];
     setSteps(steps.slice(0, -1));
     setCurrentId(last.nodeId);
+    clearDeflection();
   }
 
   function resetWizard() {
     setSteps([]);
     setCurrentId(form?.rootId ?? null);
+    clearDeflection();
   }
 
   const valid = subject.trim() !== '' && message.trim() !== '';
@@ -212,6 +246,66 @@ export function PortalNewTicket() {
                     <IconChevronRight size={16} className="shrink-0 text-text-3" />
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : resolved ? (
+            <div className="rounded-lg border border-line bg-surface p-6 text-center">
+              <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-green-bg text-green">
+                <IconCheck size={22} />
+              </span>
+              <h2 className="mt-3 text-[16px] font-semibold">Glad that helped!</h2>
+              <p className="mx-auto mt-1 max-w-sm text-[13px] text-text-3">
+                No need to open a ticket. If something else comes up, you can always start a new one.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button variant="primary" size="md" onClick={() => navigate('/portal')}>
+                  Back to my tickets
+                </Button>
+                <Button variant="ghost" size="md" onClick={() => { setResolved(false); setNeedHelp(true); }}>
+                  Open a ticket anyway
+                </Button>
+              </div>
+            </div>
+          ) : wizardFinished && suggestions === null ? (
+            <div className="flex flex-col gap-2.5">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </div>
+          ) : wizardFinished && suggestions !== null && suggestions.length > 0 && !needHelp ? (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-blue-bg text-blue">
+                  <IconBook size={15} />
+                </span>
+                <h2 className="text-[15px] font-medium">These might answer your question</h2>
+              </div>
+              <p className="mt-1 text-[13px] text-text-3">
+                Based on your answers — a quick read here may save you the wait.
+              </p>
+              <div className="mt-3 flex flex-col gap-2">
+                {suggestions.map((a) => (
+                  <details
+                    key={a.id}
+                    className="group rounded-lg border border-line bg-surface px-4 py-3 [&_summary::-webkit-details-marker]:hidden"
+                  >
+                    <summary className="flex cursor-pointer items-center justify-between gap-3 text-[14px] font-medium">
+                      {a.title}
+                      <IconChevronRight size={16} className="shrink-0 text-text-3 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="mt-2.5 whitespace-pre-wrap border-t border-line pt-2.5 text-[13px] leading-relaxed text-text-2">
+                      {a.body}
+                    </div>
+                  </details>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button variant="primary" size="md" onClick={() => setResolved(true)}>
+                  That solved it — I&apos;m all set
+                </Button>
+                <Button variant="ghost" size="md" onClick={() => setNeedHelp(true)}>
+                  I still need help
+                </Button>
               </div>
             </div>
           ) : (
