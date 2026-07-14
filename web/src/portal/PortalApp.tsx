@@ -32,18 +32,18 @@ export function PortalApp() {
     <>
       <Routes>
         <Route path="/portal/login" element={contact ? <Navigate to="/portal" replace /> : <PortalAuth />} />
-        {contact ? (
+        {contact && (
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<PortalTickets />} />
             <Route path="new" element={<PortalNewTicket />} />
             <Route path="ticket/:id" element={<PortalTicket />} />
             <Route path="help" element={<PortalHelp />} />
             <Route path="profile" element={<PortalProfile />} />
-            <Route path="*" element={<Navigate to="/portal" replace />} />
           </Route>
-        ) : (
-          <Route path="*" element={<Navigate to="/portal/login" replace />} />
         )}
+        {/* Any other path (including the bare root "/") lands somewhere real:
+            signed-in customers go to their portal, everyone else to sign-in. */}
+        <Route path="*" element={<Navigate to={contact ? '/portal' : '/portal/login'} replace />} />
       </Routes>
       <Toaster />
     </>
