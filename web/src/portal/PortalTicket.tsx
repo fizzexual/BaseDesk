@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { portalApi, type PortalMessage, type PortalSupport } from './api';
 import { usePortal } from './store';
@@ -12,7 +12,7 @@ import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
 import type { Attachment, Ticket } from '../data/types';
-import { IconCheckCircle, IconChevronLeft, IconPaperclip, IconX } from '../icons';
+import { IconCheckCircle, IconChevronLeft, IconPaperclip, IconPlus, IconX } from '../icons';
 
 const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
 
@@ -278,6 +278,54 @@ function TicketSidebar({
   );
 }
 
+/** Left rail (Messenger-style): the customer's other tickets, so they can hop
+ *  between conversations without leaving the thread. Hidden below xl. */
+function TicketListPanel({ activeId }: { activeId: string }) {
+  const tickets = usePortal((s) => s.tickets);
+  return (
+    <aside className="hidden w-[280px] shrink-0 flex-col border-r border-line xl:flex">
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-4">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Your tickets</h2>
+        <Link
+          to="/portal/new"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+        >
+          <IconPlus size={13} />
+          New
+        </Link>
+      </div>
+      <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+        {tickets.map((t) => {
+          const active = t.id === activeId;
+          return (
+            <li key={t.id}>
+              <Link
+                to={`/portal/ticket/${t.id}`}
+                aria-current={active ? 'page' : undefined}
+                className={cx(
+                  'block rounded-lg px-3 py-2.5 transition-colors',
+                  active ? 'bg-surface-2' : 'hover:bg-surface-2/60',
+                )}
+              >
+                <div className="flex items-baseline gap-2">
+                  <span className={cx('min-w-0 flex-1 truncate text-[13px]', active ? 'font-semibold' : 'font-medium')}>
+                    {t.subject}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-text-3">#{t.number}</span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-[12px] text-text-3">{t.lastMessagePreview}</p>
+                  <TimeAgo iso={t.lastMessageAt} className="shrink-0 text-[11px] text-text-3" />
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </aside>
+  );
+}
+
 export function PortalTicket() {
   const { id = '' } = useParams();
   const refreshTickets = usePortal((s) => s.refreshTickets);
@@ -426,128 +474,135 @@ export function PortalTicket() {
     }
   }
 
+  const closed = ticket?.status === 'closed';
+  // "Seen your latest message" is measured against the customer's most recent reply.
+  const lastCustomerAt = [...messages].reverse().find((m) => m.authorKind === 'contact')?.at ?? null;
+
+  let body: ReactNode;
   if (state === 'loading') {
-    return (
-      <div className="h-full overflow-y-auto">
+    body = (
+      <div className="min-w-0 flex-1 overflow-y-auto">
         <TicketSkeleton />
       </div>
     );
-  }
-  if (state === 'error' || ticket === null) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center px-4 text-center">
+  } else if (state === 'error' || ticket === null) {
+    body = (
+      <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4 text-center">
         <p className="text-[14px] text-text-2">We couldn't find that ticket.</p>
         <Link to="/portal" className="mt-2 inline-block text-[13px] font-medium text-accent hover:underline">
           Back to your tickets
         </Link>
       </div>
     );
-  }
-
-  const closed = ticket.status === 'closed';
-  // "Seen your latest message" is measured against the customer's most recent reply.
-  const lastCustomerAt = [...messages].reverse().find((m) => m.authorKind === 'contact')?.at ?? null;
-
-  return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px]">
-      {/* Conversation — a header bar, the scrolling thread, and a composer pinned to the bottom */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-line px-4 py-4 sm:px-6 lg:px-8">
-          <Link to="/portal" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-2 hover:text-text">
-            <IconChevronLeft size={15} />
-            All tickets
-          </Link>
-          <div className="mt-2 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-[18px] font-semibold">{ticket.subject}</h1>
-              <p className="mt-0.5 text-[12px] text-text-3">Ticket #{ticket.number}</p>
+  } else {
+    body = (
+      <>
+        {/* Conversation — a header bar, the scrolling thread, and a composer pinned to the bottom */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="shrink-0 border-b border-line px-4 py-4 sm:px-6 lg:px-8">
+            <Link to="/portal" className="inline-flex items-center gap-1.5 text-[13px] font-medium text-text-2 hover:text-text">
+              <IconChevronLeft size={15} />
+              All tickets
+            </Link>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-[18px] font-semibold">{ticket.subject}</h1>
+                <p className="mt-0.5 text-[12px] text-text-3">Ticket #{ticket.number}</p>
+              </div>
+              <StatusBadge status={ticket.status} tooltip />
             </div>
-            <StatusBadge status={ticket.status} tooltip />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+            {/* On narrow screens the sidebar collapses into a card above the thread. */}
+            <div className="mb-5 rounded-lg border border-line bg-surface p-4 lg:hidden">
+              <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {messages.map((m) => (
+                <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} />
+              ))}
+            </div>
+            {/* Scroll target that keeps the newest message in view (see the effect above). */}
+            <div ref={bottomRef} aria-hidden />
+
+            {(ticket.status === 'solved' || ticket.status === 'closed') && (
+              <RatingCard ticket={ticket} onRated={setTicket} />
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-line bg-surface px-4 py-3 sm:px-6 lg:px-8">
+            {closed ? (
+              <p className="py-2 text-center text-[13px] text-text-3">This ticket is closed. Open a new ticket if you still need help.</p>
+            ) : (
+              <div className="rounded-lg border border-line bg-bg p-2.5">
+                <textarea
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  rows={2}
+                  placeholder="Write a reply…"
+                  className="w-full resize-none bg-transparent px-1 py-1 text-[14px] outline-none placeholder:text-text-3"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
+                {pending.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {pending.map((a) => (
+                      <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface py-1 pl-2 pr-1 text-[12px]">
+                        <IconPaperclip size={12} className="shrink-0 text-text-3" />
+                        <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
+                        <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${a.filename}`}
+                          onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
+                          className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+                        >
+                          <IconX size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+                <div className="mt-1.5 flex items-center justify-between">
+                  <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                    <IconPaperclip size={14} />
+                    {uploading ? 'Uploading…' : 'Attach'}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={(reply.trim() === '' && pending.length === 0) || sending}
+                    onClick={() => void send()}
+                  >
+                    {sending ? 'Sending…' : 'Send reply'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
-          {/* On narrow screens the sidebar collapses into a card above the thread. */}
-          <div className="mb-5 rounded-lg border border-line bg-surface p-4 lg:hidden">
+        {/* Real right sidebar — full height, ticket details + who's helping and what they've seen */}
+        <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-line lg:block">
+          <div className="px-5 py-6">
             <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />
           </div>
+        </aside>
+      </>
+    );
+  }
 
-          <div className="flex flex-col gap-4">
-            {messages.map((m) => (
-              <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} />
-            ))}
-          </div>
-          {/* Scroll target that keeps the newest message in view (see the effect above). */}
-          <div ref={bottomRef} aria-hidden />
-
-          {(ticket.status === 'solved' || ticket.status === 'closed') && (
-            <RatingCard ticket={ticket} onRated={setTicket} />
-          )}
-        </div>
-
-        <div className="shrink-0 border-t border-line bg-surface px-4 py-3 sm:px-6 lg:px-8">
-          {closed ? (
-            <p className="py-2 text-center text-[13px] text-text-3">This ticket is closed. Open a new ticket if you still need help.</p>
-          ) : (
-            <div className="rounded-lg border border-line bg-bg p-2.5">
-              <textarea
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-                rows={2}
-                placeholder="Write a reply…"
-                className="w-full resize-none bg-transparent px-1 py-1 text-[14px] outline-none placeholder:text-text-3"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-              />
-              {pending.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {pending.map((a) => (
-                    <span key={a.id} className="flex items-center gap-1.5 rounded-md border border-line bg-surface py-1 pl-2 pr-1 text-[12px]">
-                      <IconPaperclip size={12} className="shrink-0 text-text-3" />
-                      <span className="max-w-[160px] truncate font-medium">{a.filename}</span>
-                      <span className="tabular-nums text-text-3">{formatBytes(a.size)}</span>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${a.filename}`}
-                        onClick={() => setPending((prev) => prev.filter((x) => x.id !== a.id))}
-                        className="rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
-                      >
-                        <IconX size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => void onFiles(e.target.files)} />
-              <div className="mt-1.5 flex items-center justify-between">
-                <Button variant="ghost" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                  <IconPaperclip size={14} />
-                  {uploading ? 'Uploading…' : 'Attach'}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={(reply.trim() === '' && pending.length === 0) || sending}
-                  onClick={() => void send()}
-                >
-                  {sending ? 'Sending…' : 'Send reply'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Real right sidebar — full height, ticket details + who's helping and what they've seen */}
-      <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-line lg:block">
-        <div className="px-5 py-6">
-          <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />
-        </div>
-      </aside>
+  return (
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px]">
+      <TicketListPanel activeId={id} />
+      {body}
     </div>
   );
 }
