@@ -5,6 +5,7 @@ import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/
 import { computeTicketSla } from '../../data/sla';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
+import { cx } from '../../components/util';
 import { CategoryPill } from '../../components/CategoryPill';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { PriorityPill } from '../../components/PriorityPill';
@@ -22,6 +23,7 @@ import {
   IconChevronLeft,
   IconCircle,
   IconClock,
+  IconContacts,
   IconDots,
   IconInbox,
   IconMerge,
@@ -237,6 +239,9 @@ export function TicketPage() {
   const channels = useApp((s) => s.channels);
   const exists = ticket !== undefined;
   const [mergeOpen, setMergeOpen] = useState(false);
+  // The details panel is a fixed 300px column that won't fit on narrow windows,
+  // so it's a toggleable drawer: inline on wide screens, an overlay when narrow.
+  const [panelOpen, setPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1280);
 
   useEffect(() => {
     if (exists) void useApp.getState().loadMessages(id).catch(() => {});
@@ -333,7 +338,7 @@ export function TicketPage() {
   const mergedTarget = ticket.mergedIntoId !== null ? tickets[ticket.mergedIntoId] : undefined;
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="relative flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-line px-4">
           <Tooltip label="Back">
@@ -405,6 +410,17 @@ export function TicketPage() {
                 items={kebabItems}
               />
             </Tooltip>
+            <Tooltip label={panelOpen ? 'Hide details' : 'Show details'}>
+              <button
+                type="button"
+                aria-label={panelOpen ? 'Hide details' : 'Show details'}
+                aria-pressed={panelOpen}
+                className={cx(ICON_BUTTON, panelOpen && 'bg-surface-2 text-text')}
+                onClick={() => setPanelOpen((v) => !v)}
+              >
+                <IconContacts size={16} />
+              </button>
+            </Tooltip>
           </div>
         </header>
         <TagsRow ticket={ticket} onPatch={patch} />
@@ -432,7 +448,17 @@ export function TicketPage() {
           </>
         )}
       </div>
-      <ContextPanel ticket={ticket} />
+      {panelOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close details"
+            className="absolute inset-0 z-30 bg-black/30 xl:hidden"
+            onClick={() => setPanelOpen(false)}
+          />
+          <ContextPanel ticket={ticket} onClose={() => setPanelOpen(false)} />
+        </>
+      )}
       {mergeOpen && <MergeDialog source={ticket} onClose={() => setMergeOpen(false)} />}
     </div>
   );

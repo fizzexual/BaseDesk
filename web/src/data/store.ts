@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -36,6 +36,7 @@ export interface AppState {
   messages: Record<string, Message[]>; // keyed by ticketId, loaded lazily
   ticketEvents: Record<string, TicketEvent[]>; // activity timeline, keyed by ticketId
   ticketSeen: Record<string, TicketSeen[]>; // read receipts, keyed by ticketId
+  ticketIntake: Record<string, IntakeAnswer[]>; // intake-form answers, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
@@ -183,6 +184,7 @@ export function createAppStore(repository: Repository) {
     messages: {},
     ticketEvents: {},
     ticketSeen: {},
+    ticketIntake: {},
     composerPrefill: null,
     currentAgentId: '',
     theme: initialTheme(),
@@ -265,11 +267,15 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const seen = await repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]);
+      const [seen, intake] = await Promise.all([
+        repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
+        repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
+      ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
         ticketEvents: { ...s.ticketEvents, [ticketId]: events },
         ticketSeen: { ...s.ticketSeen, [ticketId]: seen },
+        ticketIntake: { ...s.ticketIntake, [ticketId]: intake },
       }));
     },
 

@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -69,6 +69,9 @@ export class ApiRepository implements Repository {
   }
   getTicketSeen(ticketId: string): Promise<TicketSeen[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/seen`);
+  }
+  getTicketIntake(ticketId: string): Promise<IntakeAnswer[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/intake`);
   }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();

@@ -61,9 +61,11 @@ describe('intake form', () => {
     expect(created.ticket.category).toBe('Bug');
     expect(created.ticket.assigneeId).toBe('a_2'); // routed to the Bug coverer
     expect(created.ticket.tags).toContain('skyblock');
-    // The answer path is prepended to the opening message for the agent to see.
+    // The opening message is just what the customer wrote — the Q&A is metadata, not conversation.
     const msgs = await (await app.request(`/api/tickets/${created.ticket.id}/messages`)).json();
-    expect(msgs[0].body).toContain('Which server? — Skyblock');
+    expect(msgs[0].body).toBe('help');
+    const intake = await (await app.request(`/api/tickets/${created.ticket.id}/intake`)).json();
+    expect(intake).toContainEqual({ prompt: 'Which server?', label: 'Skyblock' });
   });
 
   it('ranks help articles for a query (ticket deflection) and returns none for no match', async () => {

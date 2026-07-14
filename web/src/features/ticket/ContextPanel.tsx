@@ -11,7 +11,7 @@ import { DealStageBadge, DealTypeBadge } from '../../components/DealBadges';
 import { Menu, type MenuItem } from '../../components/Menu';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
-import { IconChevronDown, IconPlus, IconSparkle } from '../../icons';
+import { IconChevronDown, IconPlus, IconSparkle, IconX } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
 import { TicketCustomFields } from './TicketCustomFields';
 import { aiEnabled, aiFallbackMessage } from '../ai/engine';
@@ -72,7 +72,11 @@ function DealRow({ deal, onEdit }: { deal: Deal; onEdit: () => void }) {
   );
 }
 
-export function ContextPanel({ ticket }: { ticket: Ticket }) {
+// Inline 300px column on wide screens; a right-edge drawer overlay when narrow.
+const PANEL_CLS =
+  'w-[300px] shrink-0 overflow-y-auto border-l border-line bg-surface max-xl:absolute max-xl:inset-y-0 max-xl:right-0 max-xl:z-40 max-xl:shadow-2';
+
+export function ContextPanel({ ticket, onClose }: { ticket: Ticket; onClose?: () => void }) {
   const contact = useApp((s) => s.contacts[ticket.requesterId]) as Contact | undefined;
   const tickets = useApp((s) => s.tickets);
 
@@ -93,13 +97,13 @@ export function ContextPanel({ ticket }: { ticket: Ticket }) {
   );
 
   if (!contact) {
-    return <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-line" />;
+    return <aside className={PANEL_CLS} />;
   }
 
   const localTime = contact.timezone !== null ? formatLocalTime(contact.timezone) : null;
 
   return (
-    <RevenueAwarePanel ticket={ticket} contact={contact} localTime={localTime} recent={recent} />
+    <RevenueAwarePanel ticket={ticket} contact={contact} localTime={localTime} recent={recent} onClose={onClose} />
   );
 }
 
@@ -108,12 +112,15 @@ function RevenueAwarePanel({
   contact,
   localTime,
   recent,
+  onClose,
 }: {
   ticket: Ticket;
   contact: Contact;
   localTime: string | null;
   recent: Ticket[];
+  onClose?: () => void;
 }) {
+  const intake = useApp((s) => s.ticketIntake[ticket.id]);
   const deals = useDealsForContact(ticket.requesterId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Deal | undefined>(undefined);
@@ -145,14 +152,24 @@ function RevenueAwarePanel({
   }
 
   return (
-    <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-line">
+    <aside className={PANEL_CLS}>
       <section className="p-4">
         <div className="flex items-center gap-3">
           <Avatar name={contact.name} hue={contact.avatarHue} size={36} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold">{contact.name}</div>
             <div className="truncate text-[13px] text-text-3">{contact.email}</div>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              aria-label="Hide details"
+              className="-mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-text-3 hover:bg-surface-2 hover:text-text xl:hidden"
+              onClick={onClose}
+            >
+              <IconX size={16} />
+            </button>
+          )}
         </div>
         <div className="mt-4 flex flex-col gap-2">
           {contact.company !== null && <DetailRow label="Company" value={contact.company} />}
@@ -163,6 +180,23 @@ function RevenueAwarePanel({
           )}
         </div>
       </section>
+      {intake !== undefined && intake.length > 0 && (
+        <section className="border-t border-line p-4">
+          <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            <Tooltip title="Intake answers" label="What the customer selected in the intake form when opening this ticket — use the tags and category to sort and filter.">
+              <span>From the intake form</span>
+            </Tooltip>
+          </h3>
+          <div className="flex flex-col gap-2.5">
+            {intake.map((a, i) => (
+              <div key={i}>
+                <div className="text-[11px] text-text-3">{a.prompt}</div>
+                <div className="text-[13px] font-medium text-text">{a.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="border-t border-line p-4">
         <ConversationParticipants ticket={ticket} />
       </section>

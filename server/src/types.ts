@@ -57,6 +57,8 @@ export interface IntakeForm {
   rootId: string | null;
   nodes: Record<string, IntakeNode>;
 }
+/** One answered question captured from the intake form, stored as ticket metadata. */
+export interface IntakeAnswer { prompt: string; label: string; }
 
 /** Aggregate customer-satisfaction figures over rated tickets. */
 export interface CsatStats {

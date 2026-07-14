@@ -9,7 +9,7 @@ import {
   awaitingReplyMap, getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
-  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen,
+  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -897,6 +897,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const id = c.req.param('id');
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     return c.json(getTicketSeen(db, id));
+  });
+
+  // Intake-form answers captured when the ticket was opened (shown as metadata).
+  app.get('/api/tickets/:id/intake', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getTicketIntake(db, id));
   });
 
   app.post('/api/tickets/:id/messages', async (c) => {
@@ -2180,23 +2187,24 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
             typeof a === 'object' && a !== null && typeof (a as { prompt?: unknown }).prompt === 'string' && typeof (a as { label?: unknown }).label === 'string',
         )
       : [];
-    const intakeHeader = answers.length > 0 ? answers.map((a) => `${a.prompt} — ${a.label}`).join('\n') + '\n\n' : '';
-    const fullBody = intakeHeader + body;
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
     const ticket: Ticket = {
       id: newId('t_'), number: maxRow.maxNumber + 1, subject: subject.trim(), status: 'open',
       priority: PRIORITIES.includes(priority as TicketPriority) ? (priority as TicketPriority) : 'medium',
       bucket: 'inbox', requesterId: contact.id, assigneeId: null, tags: intakeTags, channel: 'web',
-      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(fullBody),
+      createdAt: now, updatedAt: now, snoozedUntil: null, lastMessageAt: now, lastMessagePreview: preview(body),
       firstRespondedAt: null, resolvedAt: null, channelId: null, mergedIntoId: null, awaitingReply: true, customFields: {}, category,
     };
+    // The opening message is just what the customer wrote; the question/answer path
+    // is stored as structured ticket metadata (not dumped into the conversation).
     const message: Message = {
-      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: fullBody, at: now,
+      id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body, at: now,
     };
     db.exec('BEGIN');
     try {
       insertTicketRow(db, ticket);
+      setTicketIntake(db, ticket.id, answers);
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
       if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, ticket.id);

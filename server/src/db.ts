@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -146,6 +146,10 @@ export function openDb(dataDir: string): DatabaseSync {
       viewerKind TEXT NOT NULL,
       at TEXT NOT NULL,
       PRIMARY KEY (ticketId, viewerId)
+    );
+    CREATE TABLE IF NOT EXISTS ticket_intake (
+      ticketId TEXT PRIMARY KEY,
+      answers TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -433,6 +437,24 @@ export function recordSeen(db: DatabaseSync, ticketId: string, viewerId: string,
 
 export function getTicketSeen(db: DatabaseSync, ticketId: string): TicketSeen[] {
   return db.prepare('SELECT viewerId, viewerKind, at FROM ticket_seen WHERE ticketId = ?').all(ticketId) as unknown as TicketSeen[];
+}
+
+/** The intake-form answers captured when a ticket was opened (metadata, not conversation). */
+export function setTicketIntake(db: DatabaseSync, ticketId: string, answers: IntakeAnswer[]): void {
+  if (answers.length === 0) return;
+  db.prepare(
+    `INSERT INTO ticket_intake (ticketId, answers) VALUES (?, ?)
+     ON CONFLICT(ticketId) DO UPDATE SET answers = excluded.answers`,
+  ).run(ticketId, JSON.stringify(answers));
+}
+export function getTicketIntake(db: DatabaseSync, ticketId: string): IntakeAnswer[] {
+  const row = db.prepare('SELECT answers FROM ticket_intake WHERE ticketId = ?').get(ticketId) as { answers: string } | undefined;
+  if (row === undefined) return [];
+  try {
+    return JSON.parse(row.answers) as IntakeAnswer[];
+  } catch {
+    return [];
+  }
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */
