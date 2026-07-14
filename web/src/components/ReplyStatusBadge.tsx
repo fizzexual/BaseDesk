@@ -15,8 +15,8 @@ export function ReplyStatusBadge({ ticket, className }: { ticket: Ticket; classN
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 text-[12px] font-medium',
-        awaiting ? 'text-amber' : 'text-text-3',
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium',
+        awaiting ? 'bg-amber-bg text-amber' : 'bg-green-bg text-green',
         className,
       )}
       title={awaiting ? 'Customer is waiting for a reply' : 'The team has replied to this thread'}

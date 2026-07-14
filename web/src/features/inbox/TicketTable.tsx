@@ -23,8 +23,8 @@ export function alertSla(sla: TicketSla | null): TicketSla | null {
     : null;
 }
 
-const GRID_FULL = 'grid-cols-[minmax(220px,1.2fr)_minmax(0,2.4fr)_150px_90px]';
-const GRID_NO_CUSTOMER = 'grid-cols-[minmax(0,2.4fr)_150px_90px]';
+const GRID_FULL = 'grid-cols-[minmax(220px,1.2fr)_minmax(0,2.4fr)_150px_128px]';
+const GRID_NO_CUSTOMER = 'grid-cols-[minmax(0,2.4fr)_150px_128px]';
 
 export function TicketTable({
   tickets,
@@ -64,8 +64,8 @@ export function TicketTable({
   const selectable = onToggleSelect !== undefined;
   const grid = selectable
     ? hideCustomer
-      ? 'grid-cols-[34px_minmax(0,2.4fr)_150px_90px]'
-      : 'grid-cols-[34px_minmax(200px,1.2fr)_minmax(0,2.4fr)_150px_90px]'
+      ? 'grid-cols-[34px_minmax(0,2.4fr)_150px_128px]'
+      : 'grid-cols-[34px_minmax(200px,1.2fr)_minmax(0,2.4fr)_150px_128px]'
     : hideCustomer
       ? GRID_NO_CUSTOMER
       : GRID_FULL;
@@ -104,6 +104,9 @@ export function TicketTable({
         const selected = t.id === selectedId;
         const checked = selectedIds?.has(t.id) ?? false;
         const hasPreview = t.lastMessagePreview !== '';
+        // One pill per row: an urgent first-response SLA already implies "awaiting",
+        // so show it in place of the reply badge; otherwise show the reply state.
+        const alert = alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours));
         return (
           <div
             key={t.id}
@@ -164,10 +167,9 @@ export function TicketTable({
             <div onClick={(e) => e.stopPropagation()}>
               <PriorityPill priority={t.priority} onSelect={(p) => setPriority(t, p)} />
             </div>
-            <div className="flex flex-col items-end gap-0.5">
+            <div className="flex flex-col items-end gap-1">
               <TimeAgo iso={t.lastMessageAt} />
-              <ReplyStatusBadge ticket={t} />
-              <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours))} />
+              {alert ? <SlaBadge sla={alert} /> : <ReplyStatusBadge ticket={t} />}
             </div>
           </div>
         );

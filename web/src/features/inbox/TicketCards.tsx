@@ -43,6 +43,8 @@ export function TicketCards({
       {tickets.map((t) => {
         const contact = contacts[t.requesterId] as Contact | undefined;
         const selected = t.id === selectedId;
+        // One pill per card: prefer the urgent SLA alert, else the reply state.
+        const alert = alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours));
         return (
           <div
             key={t.id}
@@ -74,10 +76,9 @@ export function TicketCards({
                 <div className="truncate text-[14px] font-medium">{contact?.name ?? 'Unknown contact'}</div>
                 <div className="truncate text-[13px] text-text-3">{contact?.email ?? ''}</div>
               </div>
-              <div className="flex flex-col items-end gap-0.5">
+              <div className="flex flex-col items-end gap-1">
                 <TimeAgo iso={t.lastMessageAt} />
-                <ReplyStatusBadge ticket={t} />
-                <SlaBadge sla={alertSla(computeTicketSla(t, slaTargets, nowMs, slaHours))} />
+                {alert ? <SlaBadge sla={alert} /> : <ReplyStatusBadge ticket={t} />}
               </div>
             </div>
 
