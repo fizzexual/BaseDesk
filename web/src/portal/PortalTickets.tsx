@@ -16,6 +16,13 @@ import { IconChevronRight, IconInbox, IconPlus, IconSearch, IconTicket } from '.
 type Segment = 'all' | 'open' | 'solved';
 
 const isOpen = (t: Ticket) => t.status === 'open' || t.status === 'pending' || t.status === 'on_hold';
+const isSolved = (t: Ticket) => t.status === 'solved' || t.status === 'closed';
+
+const VIEWS: { value: Segment; label: string }[] = [
+  { value: 'all', label: 'All tickets' },
+  { value: 'open', label: 'Open' },
+  { value: 'solved', label: 'Solved' },
+];
 
 /** One row in the customer's ticket list — a conversation they can jump back into. */
 function TicketCard({ ticket, isNew, onOpen }: { ticket: Ticket; isNew: boolean; onOpen: (id: string) => void }) {
@@ -67,8 +74,6 @@ export function PortalTickets() {
   // Tickets that gained a reply while this list was open, shown with a "new" dot
   // until the customer opens them.
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
-  // Local view controls over the polled `tickets` array — they never touch the
-  // store, so live polling and the "new reply" dot keep working underneath.
   const [segment, setSegment] = useState<Segment>('all');
   const [query, setQuery] = useState('');
 
@@ -80,7 +85,6 @@ export function PortalTickets() {
   // reply — the customer can't post from this screen) flag it and play the chime
   // at most once per cycle. Pauses while hidden and refetches when visible again.
   useEffect(() => {
-    // Seed the baseline from whatever is already loaded so nothing flags on mount.
     const seed = seenAtRef.current;
     for (const t of usePortal.getState().tickets) seed.set(t.id, t.lastMessageAt);
 
@@ -130,92 +134,131 @@ export function PortalTickets() {
     });
   }
 
-  const openCount = tickets.filter(isOpen).length;
+  const counts: Record<Segment, number> = {
+    all: tickets.length,
+    open: tickets.filter(isOpen).length,
+    solved: tickets.filter(isSolved).length,
+  };
   const q = query.trim().toLowerCase();
   const filtered = tickets.filter((t) => {
     const inSegment =
-      segment === 'all' ||
-      (segment === 'open' && isOpen(t)) ||
-      (segment === 'solved' && (t.status === 'solved' || t.status === 'closed'));
+      segment === 'all' || (segment === 'open' && isOpen(t)) || (segment === 'solved' && isSolved(t));
     if (!inSegment) return false;
     if (q === '') return true;
     return t.subject.toLowerCase().includes(q) || t.lastMessagePreview.toLowerCase().includes(q);
   });
 
-  return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold tracking-tight">Your tickets</h1>
-          <p className="mt-1 text-[13px] text-text-3">
-            {tickets.length === 0
-              ? 'You haven’t opened any tickets yet.'
-              : openCount > 0
-                ? `${openCount} open · ${tickets.length} total`
-                : `All caught up · ${tickets.length} total`}
-          </p>
-        </div>
-        <Link to="/portal/new" className={btnPrimary}>
-          <IconPlus size={15} />
-          New ticket
-        </Link>
-      </div>
+  const empty = tickets.length === 0;
 
-      {tickets.length === 0 ? (
-        <div className="rounded-xl border border-line bg-surface">
-          <EmptyState
-            icon={IconInbox}
-            title="No tickets yet"
-            hint="When you open a ticket it will appear here with its latest status and replies."
-          />
-          <div className="flex justify-center pb-6">
-            <Link to="/portal/new" className={btnPrimary}>
+  return (
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px]">
+      {/* Views sidebar — mirrors the docs / ticket structure */}
+      <aside className="hidden w-[240px] shrink-0 flex-col border-r border-line lg:flex">
+        <div className="border-b border-line p-3">
+          <Link to="/portal/new" className={cx(btnPrimary, 'w-full')}>
+            <IconPlus size={15} />
+            New ticket
+          </Link>
+        </div>
+        <nav className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">Views</div>
+          <ul className="flex flex-col gap-0.5">
+            {VIEWS.map((v) => (
+              <li key={v.value}>
+                <button
+                  type="button"
+                  onClick={() => setSegment(v.value)}
+                  aria-current={segment === v.value ? 'true' : undefined}
+                  className={cx(
+                    'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors',
+                    segment === v.value ? 'bg-surface-2 font-medium text-text' : 'text-text-2 hover:bg-surface-2/60 hover:text-text',
+                  )}
+                >
+                  <span>{v.label}</span>
+                  <span className="text-[12px] tabular-nums text-text-3">{counts[v.value]}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </aside>
+
+      {/* Main — header bar + scrolling list */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-line px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-[20px] font-semibold tracking-tight">Your tickets</h1>
+              <p className="mt-0.5 text-[12px] text-text-3">
+                {empty
+                  ? 'You haven’t opened any tickets yet.'
+                  : counts.open > 0
+                    ? `${counts.open} open · ${counts.all} total`
+                    : `All caught up · ${counts.all} total`}
+              </p>
+            </div>
+            <Link to="/portal/new" className={cx(btnPrimary, 'lg:hidden')}>
               <IconPlus size={15} />
-              Open your first ticket
+              New
             </Link>
           </div>
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <SegmentedControl
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'open', label: 'Open' },
-                { value: 'solved', label: 'Solved' },
-              ]}
-              value={segment}
-              onChange={setSegment}
-            />
-            <div className="relative sm:w-64">
-              <IconSearch
-                size={15}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3"
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search tickets"
-                aria-label="Search tickets"
-                className="h-9 w-full rounded-md border border-line bg-surface pl-8 pr-3 text-[13px] outline-none placeholder:text-text-3 focus:border-line-2"
-              />
-            </div>
-          </div>
 
-          {filtered.length === 0 ? (
+          {!empty && (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="lg:hidden">
+                <SegmentedControl
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'open', label: 'Open' },
+                    { value: 'solved', label: 'Solved' },
+                  ]}
+                  value={segment}
+                  onChange={setSegment}
+                />
+              </div>
+              <div className="relative flex-1 sm:max-w-xs">
+                <IconSearch size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search tickets"
+                  aria-label="Search tickets"
+                  className="h-9 w-full rounded-md border border-line bg-surface pl-8 pr-3 text-[13px] outline-none placeholder:text-text-3 focus:border-line-2"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          {empty ? (
+            <div className="rounded-xl border border-line bg-surface">
+              <EmptyState
+                icon={IconInbox}
+                title="No tickets yet"
+                hint="When you open a ticket it will appear here with its latest status and replies."
+              />
+              <div className="flex justify-center pb-6">
+                <Link to="/portal/new" className={btnPrimary}>
+                  <IconPlus size={15} />
+                  Open your first ticket
+                </Link>
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-line bg-surface">
               <EmptyState icon={IconSearch} title="No matching tickets" hint="Try a different search or filter." />
             </div>
           ) : (
-            <ul className="flex flex-col gap-2.5">
+            <ul className="mx-auto flex max-w-3xl flex-col gap-2.5">
               {filtered.map((t) => (
                 <TicketCard key={t.id} ticket={t} isNew={newIds.has(t.id)} onOpen={openTicket} />
               ))}
             </ul>
           )}
-        </>
-      )}
-    </section>
+        </div>
+      </div>
+    </div>
   );
 }

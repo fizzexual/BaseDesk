@@ -69,7 +69,7 @@ export function HelpLayout() {
   const ctx: HelpContext = { articles, loading, query, setQuery, categories, byCategory, ordered };
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px]">
       <DocsSidebar ctx={ctx} />
       <div className="min-w-0 flex-1 overflow-y-auto">
         <Outlet context={ctx} />
