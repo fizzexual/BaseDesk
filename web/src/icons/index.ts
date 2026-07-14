@@ -1,4 +1,5 @@
 export { IconLogo } from './IconLogo';
+export { IconLogOut } from './IconLogOut';
 export { IconBell } from './IconBell';
 export { IconMerge } from './IconMerge';
 export { IconImport } from './IconImport';

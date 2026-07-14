@@ -32,6 +32,7 @@ export function Menu({
   align = 'start',
   triggerClassName,
   triggerLabel,
+  header,
 }: {
   trigger: ReactNode | ((open: boolean) => ReactNode);
   items: MenuItem[];
@@ -40,6 +41,8 @@ export function Menu({
   triggerClassName?: string;
   /** Accessible name for icon-only triggers. */
   triggerLabel?: string;
+  /** Optional non-interactive block rendered above the items (e.g. an account header). */
+  header?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -183,6 +186,7 @@ export function Menu({
             }}
             className="z-[100] max-h-[min(70vh,420px)] min-w-44 overflow-y-auto rounded-md border border-line bg-surface p-1 shadow-2"
           >
+            {header != null && <div className="mb-1 border-b border-line px-2.5 pb-2 pt-1.5">{header}</div>}
             {items.map((item, i) =>
               isSeparator(item) ? (
                 <div key={`sep-${i}`} role="separator" className="my-1 h-px bg-line" />

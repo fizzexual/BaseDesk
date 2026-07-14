@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router';
 import { useApp } from '../data/store';
 import { Avatar } from '../components/Avatar';
+import { Menu } from '../components/Menu';
 import { Tooltip } from '../components/Tooltip';
 import {
   IconBook,
@@ -9,9 +10,12 @@ import {
   IconContacts,
   IconInbox,
   IconLogo,
+  IconLogOut,
   IconRevenue,
   IconSettings,
   IconSparkle,
+  IconSun,
+  IconUser,
 } from '../icons';
 import { cx } from '../components/util';
 import { ThemeToggle } from './ThemeToggle';
@@ -92,15 +96,39 @@ export function Rail() {
         <IconSettings size={20} />
       </RailButton>
       {currentAgent && (
-        <button
-          type="button"
-          aria-label={`Signed in as ${currentAgent.name}`}
-          className="mt-1"
-          onClick={() => navigate('/settings')}
-        >
-          <Avatar name={currentAgent.name} hue={currentAgent.avatarHue} size={28} />
-        </button>
+        <Menu
+          align="start"
+          triggerLabel={`Account: ${currentAgent.name}`}
+          triggerClassName="mt-1 rounded-full ring-offset-2 ring-offset-bg transition-shadow hover:ring-2 hover:ring-line-2"
+          header={
+            <div className="flex items-center gap-2.5">
+              <Avatar name={currentAgent.name} hue={currentAgent.avatarHue} size={32} />
+              <div className="min-w-0">
+                <div className="truncate text-[13px] font-semibold text-text">{currentAgent.name}</div>
+                <div className="truncate text-[12px] capitalize text-text-3">{currentAgent.role}</div>
+              </div>
+            </div>
+          }
+          trigger={<Avatar name={currentAgent.name} hue={currentAgent.avatarHue} size={28} />}
+          items={[
+            { label: 'My profile', icon: <IconUser size={16} />, onSelect: () => navigate('/settings/profile') },
+            { label: 'My team', icon: <IconContacts size={16} />, onSelect: () => navigate('/settings/team') },
+            { separator: true },
+            { label: 'Settings', icon: <IconSettings size={16} />, onSelect: () => navigate('/settings') },
+            { label: 'Appearance', icon: <IconSun size={16} />, onSelect: () => navigate('/settings/appearance') },
+            { separator: true },
+            { label: 'Sign out', icon: <IconLogOut size={16} />, danger: true, onSelect: signOut },
+          ]}
+        />
       )}
     </nav>
   );
+}
+
+/**
+ * BaseDesk admin is a single-operator, self-hosted tool with no separate login,
+ * so "Sign out" just returns to a fresh session rather than clearing credentials.
+ */
+function signOut() {
+  window.location.assign('/');
 }
