@@ -159,6 +159,23 @@ function median(values: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/** Least-squares linear fit over `counts`, projected `ahead` steps forward (clamped to ≥ 0). Mirrors the server. */
+function linearForecast(counts: number[], ahead: number): number[] {
+  const n = counts.length;
+  if (n === 0) return Array<number>(ahead).fill(0);
+  const meanX = (n - 1) / 2;
+  const meanY = counts.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - meanX) * (counts[i] - meanY);
+    den += (i - meanX) ** 2;
+  }
+  const slope = den === 0 ? 0 : num / den;
+  const intercept = meanY - slope * meanX;
+  return Array.from({ length: ahead }, (_, i) => Math.max(0, Math.round(intercept + slope * (n + i))));
+}
+
 /** Next sequential id for a `prefix`-style id family (e.g. t_125, m_00395). */
 function nextId(items: { id: string }[], prefix: string, width: number): string {
   let max = 0;
@@ -1875,6 +1892,10 @@ export class LocalRepository implements Repository {
       perAgentPerformance,
       topTags: [...tagCounts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count).slice(0, 10),
       byCategory: [...catCounts.entries()].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+      forecastNext7Days: linearForecast(days.map((d) => createdByDay.get(d)!), 7).map((count, i) => ({
+        date: new Date(now.getTime() + (i + 1) * DAY).toISOString().slice(0, 10),
+        count,
+      })),
       medianFirstReplyMinutes: Math.round(median(firstReplyMinutes)),
       medianResolutionHours: Math.round(median(resolutionHours) * 10) / 10,
       openNow,

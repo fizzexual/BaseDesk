@@ -61,11 +61,14 @@ export function AreaChart({
   series,
   height = 220,
   formatValue = (v: number) => nf.format(v),
+  dashFrom,
 }: {
   series: AreaSeries[];
   height?: number;
   /** Formats y-axis labels and tooltip values. Defaults to plain integers. */
   formatValue?: (v: number) => string;
+  /** Draw the line dashed from this index onward (a forecast tail), with a divider. */
+  dashFrom?: number;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -162,22 +165,50 @@ export function AreaChart({
               </text>
             ) : null,
           )}
-          {/* areas + lines */}
+          {/* forecast divider — where actual data ends and the projection begins */}
+          {dashFrom !== undefined && dashFrom > 0 && dashFrom < n - 1 ? (
+            <line
+              x1={x(dashFrom)}
+              x2={x(dashFrom)}
+              y1={M.top}
+              y2={height - M.bottom}
+              stroke="var(--line-2)"
+              strokeWidth={1}
+              strokeDasharray="2 3"
+              shapeRendering="crispEdges"
+            />
+          ) : null}
+          {/* areas + lines (solid history, dashed forecast tail when dashFrom is set) */}
           {series.map((s) => {
             const xs = s.points.map((_, i) => x(i));
             const ys = s.points.map((p) => y(p.count));
-            const line = monotonePath(xs, ys);
-            const area = `${line}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`;
+            const split = dashFrom !== undefined && dashFrom > 0 && dashFrom < n - 1;
+            if (!split) {
+              const line = monotonePath(xs, ys);
+              const area = `${line}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`;
+              return (
+                <g key={s.name}>
+                  <path d={area} fill={s.color} fillOpacity={0.08} stroke="none" />
+                  <path d={line} fill="none" stroke={s.color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              );
+            }
+            const solidLine = monotonePath(xs.slice(0, dashFrom + 1), ys.slice(0, dashFrom + 1));
+            const dashLine = monotonePath(xs.slice(dashFrom), ys.slice(dashFrom));
+            const solidArea = `${solidLine}L${x(dashFrom)},${y(0)}L${x(0)},${y(0)}Z`;
             return (
               <g key={s.name}>
-                <path d={area} fill={s.color} fillOpacity={0.08} stroke="none" />
+                <path d={solidArea} fill={s.color} fillOpacity={0.08} stroke="none" />
+                <path d={solidLine} fill="none" stroke={s.color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                 <path
-                  d={line}
+                  d={dashLine}
                   fill="none"
                   stroke={s.color}
                   strokeWidth={1.5}
+                  strokeDasharray="4 4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  opacity={0.75}
                 />
               </g>
             );

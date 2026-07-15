@@ -114,6 +114,39 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
+function ForecastCard({ stats }: { stats: StatsOverview }) {
+  const historical = stats.createdLast14Days;
+  const forecast = stats.forecastNext7Days;
+  const combined = [...historical, ...forecast];
+  const projectedTotal = forecast.reduce((s, p) => s + p.count, 0);
+  const last7Actual = historical.slice(-7).reduce((s, p) => s + p.count, 0);
+  const deltaPct = last7Actual === 0 ? 0 : Math.round(((projectedTotal - last7Actual) / last7Actual) * 100);
+  // More incoming volume than the last week reads as caution (amber); less is a relief (green).
+  const trendClass = deltaPct > 0 ? 'text-amber' : deltaPct < 0 ? 'text-green' : 'text-text-3';
+  return (
+    <ChartCard
+      title="Ticket volume forecast"
+      tooltip={{
+        title: 'Forecast',
+        desc: 'Projected new-ticket volume for the next 7 days, from a linear fit over the last 14. The dashed line past today is the projection.',
+      }}
+      aside={
+        <div className="flex items-baseline gap-2">
+          <span className="text-[15px] font-semibold tabular-nums text-text">≈{nf.format(projectedTotal)}</span>
+          <span className="text-[12px] text-text-3">next 7 days</span>
+          {last7Actual > 0 && deltaPct !== 0 && (
+            <span className={`text-[12px] font-medium tabular-nums ${trendClass}`}>
+              {deltaPct > 0 ? '▲' : '▼'} {Math.abs(deltaPct)}% vs last 7
+            </span>
+          )}
+        </div>
+      }
+    >
+      <AreaChart series={[{ name: 'Tickets', color: 'var(--blue)', points: combined }]} dashFrom={historical.length - 1} />
+    </ChartCard>
+  );
+}
+
 const CATEGORY_COLORS = ['var(--blue)', 'var(--green)', 'var(--amber)', 'var(--gray-dot)', 'var(--red)'];
 
 function TopicAnalytics({ stats }: { stats: StatsOverview }) {
@@ -415,6 +448,8 @@ export function ReportsPage() {
               )}
             </ChartCard>
           </div>
+
+          <ForecastCard stats={stats} />
 
           <TopicAnalytics stats={stats} />
 

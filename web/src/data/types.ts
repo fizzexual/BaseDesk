@@ -305,6 +305,7 @@ export interface StatsOverview {
   perAgentPerformance: PerAgentPerformance[];
   topTags: { tag: string; count: number }[];
   byCategory: { category: string; count: number }[];
+  forecastNext7Days: { date: string; count: number }[];
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

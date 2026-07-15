@@ -306,6 +306,7 @@ export interface StatsOverview {
   perAgentPerformance: PerAgentPerformance[];
   topTags: { tag: string; count: number }[]; // most common tags across all tickets
   byCategory: { category: string; count: number }[]; // ticket volume per category
+  forecastNext7Days: { date: string; count: number }[]; // projected new-ticket volume, next 7 days
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

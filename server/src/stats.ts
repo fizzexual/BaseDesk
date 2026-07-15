@@ -12,6 +12,23 @@ function median(values: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+/** Least-squares linear fit over `counts`, projected `ahead` steps forward (clamped to ≥ 0). */
+export function linearForecast(counts: number[], ahead: number): number[] {
+  const n = counts.length;
+  if (n === 0) return Array<number>(ahead).fill(0);
+  const meanX = (n - 1) / 2;
+  const meanY = counts.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - meanX) * (counts[i]! - meanY);
+    den += (i - meanX) ** 2;
+  }
+  const slope = den === 0 ? 0 : num / den;
+  const intercept = meanY - slope * meanX;
+  return Array.from({ length: ahead }, (_, i) => Math.max(0, Math.round(intercept + slope * (n + i))));
+}
+
 function dayKey(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -107,6 +124,13 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
   const topTags = [...tagCounts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count).slice(0, 10);
   const byCategory = [...catCounts.entries()].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count);
 
+  // Project the next 7 days of new-ticket volume from the 14-day trend.
+  const createdCounts = days.map((d) => createdByDay.get(d)!);
+  const forecastNext7Days = linearForecast(createdCounts, 7).map((count, i) => ({
+    date: dayKey(new Date(now.getTime() + (i + 1) * DAY_MS).toISOString()),
+    count,
+  }));
+
   const openNow = inbox.filter((t) => notSnoozed(t, nowIso) && t.status === 'open').length;
   const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS).toISOString();
 
@@ -163,6 +187,7 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     perAgentPerformance,
     topTags,
     byCategory,
+    forecastNext7Days,
     medianFirstReplyMinutes: Math.round(median(firstReplyDeltasMin)),
     medianResolutionHours: Math.round(median(resolutionDeltasH) * 10) / 10,
     openNow,
