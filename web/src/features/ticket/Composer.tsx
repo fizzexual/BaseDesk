@@ -57,15 +57,37 @@ export function Composer({ ticket }: { ticket: Ticket }) {
       .slice(0, 6);
   }, [mention, agentsMap]);
 
-  /** Track the body + detect an in-progress "@mention" at the caret. */
+  // "/" snippet typeahead: type "/name" to drop in a canned reply (macros included).
+  const [snippet, setSnippet] = useState<{ query: string; start: number } | null>(null);
+  const [snippetIdx, setSnippetIdx] = useState(0);
+  const snippetMatches = useMemo(() => {
+    if (snippet === null) return [] as CannedReply[];
+    const q = snippet.query.toLowerCase();
+    return canned.filter((c) => `${c.title} ${c.body}`.toLowerCase().includes(q)).slice(0, 6);
+  }, [snippet, canned]);
+
+  // Draft autosave: keep the reply text per ticket so a refresh or ticket switch
+  // never loses it. `skipSave` swallows the write triggered by loading a draft.
+  const draftKey = `bd-draft-${ticket.id}`;
+  const skipSave = useRef(false);
+
+  /** Track the body + detect an in-progress "@mention" or "/snippet" at the caret. */
   function onBody(value: string, caret: number) {
     setBody(value);
-    const m = /(?:^|\s)@(\w*)$/.exec(value.slice(0, caret));
-    if (m) {
-      setMention({ query: m[1], start: caret - m[1].length - 1 }); // index of the '@'
+    const before = value.slice(0, caret);
+    const at = /(?:^|\s)@(\w*)$/.exec(before);
+    const slash = /(?:^|\s)\/(\w*)$/.exec(before);
+    if (at) {
+      setMention({ query: at[1], start: caret - at[1].length - 1 });
       setMentionIdx(0);
+      setSnippet(null);
+    } else if (slash) {
+      setSnippet({ query: slash[1], start: caret - slash[1].length - 1 });
+      setSnippetIdx(0);
+      setMention(null);
     } else {
       setMention(null);
+      setSnippet(null);
     }
   }
 
@@ -107,6 +129,34 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     focusTextarea();
   }, [composerPrefill, setComposerPrefill]);
 
+  // Load this ticket's saved draft on mount / ticket change (a pending prefill wins).
+  useEffect(() => {
+    skipSave.current = true;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(draftKey);
+    } catch {
+      /* storage unavailable */
+    }
+    setBody(composerPrefill === null && saved ? saved : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket.id]);
+
+  // Persist the draft as it changes; clear the key once it's empty (e.g. after send).
+  useEffect(() => {
+    if (skipSave.current) {
+      skipSave.current = false;
+      return;
+    }
+    try {
+      if (body.trim() === '') localStorage.removeItem(draftKey);
+      else localStorage.setItem(draftKey, body);
+    } catch {
+      /* storage unavailable */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body]);
+
   function switchMode(next: Mode) {
     setMode(next);
     focusTextarea();
@@ -131,10 +181,9 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     });
   }
 
-  // Insert a canned reply's body and, if it's a macro, apply its ticket actions
-  // in one shot — skipping any change that's already true so the toast is honest.
-  function applyCanned(c: CannedReply) {
-    insertAtCursor(c.body);
+  // A macro's ticket actions (status/priority/assignee/tags), applied in one shot —
+  // skipping any change that's already true so the toast stays honest.
+  function applyCannedActions(c: CannedReply) {
     const a = c.actions;
     if (a === null || a === undefined) return;
     const patch: TicketPatch = {};
@@ -164,6 +213,28 @@ export function Composer({ ticket }: { ticket: Ticket }) {
       .patchTicket(ticket.id, patch)
       .then(() => toast(`Macro applied — ${summary.join(', ')}`))
       .catch(() => toast('Could not apply the macro actions'));
+  }
+
+  /** From the Canned menu: insert the body at the cursor, then apply any actions. */
+  function applyCanned(c: CannedReply) {
+    insertAtCursor(c.body);
+    applyCannedActions(c);
+  }
+
+  /** From "/snippet": replace the typed "/query" with the canned body, then apply actions. */
+  function insertSnippet(c: CannedReply) {
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? body.length;
+    const start = snippet?.start ?? caret;
+    const next = body.slice(0, start) + c.body + body.slice(caret);
+    setBody(next);
+    setSnippet(null);
+    const pos = start + c.body.length;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+    applyCannedActions(c);
   }
 
   async function draftWithAi() {
@@ -299,6 +370,12 @@ export function Composer({ ticket }: { ticket: Ticket }) {
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionIdx]); return; }
               if (e.key === 'Escape') { e.preventDefault(); setMention(null); return; }
             }
+            if (snippet !== null && snippetMatches.length > 0) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setSnippetIdx((i) => (i + 1) % snippetMatches.length); return; }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setSnippetIdx((i) => (i - 1 + snippetMatches.length) % snippetMatches.length); return; }
+              if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertSnippet(snippetMatches[snippetIdx]); return; }
+              if (e.key === 'Escape') { e.preventDefault(); setSnippet(null); return; }
+            }
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               send();
@@ -325,6 +402,27 @@ export function Composer({ ticket }: { ticket: Ticket }) {
                 <Avatar name={a.name} hue={a.avatarHue} size={20} />
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{a.name}</span>
                 <span className="shrink-0 text-[11px] text-text-3">@{a.name.trim().split(/\s+/)[0]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {snippet !== null && snippetMatches.length > 0 && (
+          <div className="absolute bottom-full left-2 z-30 mb-1 w-64 overflow-hidden rounded-md border border-line bg-surface py-1 shadow-2">
+            {snippetMatches.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                className={cx('flex w-full items-center gap-2 px-2.5 py-1.5 text-left', i === snippetIdx ? 'bg-surface-2' : 'hover:bg-surface-2')}
+                // mousedown (not click) so the textarea keeps focus through the insert
+                onMouseDown={(e) => { e.preventDefault(); insertSnippet(c); }}
+                onMouseEnter={() => setSnippetIdx(i)}
+              >
+                {c.actions ? (
+                  <IconSparkle size={14} className="shrink-0 text-accent" />
+                ) : (
+                  <IconNote size={14} className="shrink-0 text-text-3" />
+                )}
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{c.title}</span>
               </button>
             ))}
           </div>
