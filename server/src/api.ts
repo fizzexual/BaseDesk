@@ -6,6 +6,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getCustomReports, getChannel, getChannels, getContact,
+  getStatusComponents, insertStatusComponent, updateStatusComponent, deleteStatusComponent, maxComponentPosition,
+  getStatusIncidents, getStatusIncident, insertStatusIncident, updateStatusIncident, deleteStatusIncident,
   awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
@@ -31,7 +33,7 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, TicketTemplate, CustomReport, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -1724,6 +1726,95 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.delete('/api/reports/:id', (c) => {
     db.prepare('DELETE FROM custom_reports WHERE id = ?').run(c.req.param('id'));
     return c.json({ ok: true });
+  });
+
+  // --- Status page: PUBLIC read, admin-managed components + incidents ---
+  const COMPONENT_STATUSES: ComponentStatus[] = ['operational', 'degraded', 'partial_outage', 'major_outage', 'maintenance'];
+  const INCIDENT_STATUSES: IncidentStatus[] = ['investigating', 'identified', 'monitoring', 'resolved'];
+  const INCIDENT_IMPACTS: IncidentImpact[] = ['minor', 'major', 'critical', 'maintenance'];
+
+  // Public: anyone (incl. the un-authed portal) can read the status page.
+  app.get('/api/status', (c) => c.json({ components: getStatusComponents(db), incidents: getStatusIncidents(db) }));
+
+  app.post('/api/status/components', async (c) => {
+    let body: { name?: unknown; status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.name !== 'string' || body.name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    const status = typeof body.status === 'string' && COMPONENT_STATUSES.includes(body.status as ComponentStatus) ? (body.status as ComponentStatus) : 'operational';
+    const component: StatusComponent = { id: newId('sc_'), name: body.name.trim(), status, position: maxComponentPosition(db) + 1 };
+    insertStatusComponent(db, component);
+    return c.json(getStatusComponents(db));
+  });
+  app.put('/api/status/components/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!getStatusComponents(db).some((x) => x.id === id)) return c.json({ error: 'component not found' }, 404);
+    let body: { name?: unknown; status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.name !== 'string' || body.name.trim() === '') return c.json({ error: 'name is required' }, 400);
+    if (typeof body.status !== 'string' || !COMPONENT_STATUSES.includes(body.status as ComponentStatus)) return c.json({ error: 'invalid status' }, 400);
+    updateStatusComponent(db, { id, name: body.name.trim(), status: body.status });
+    return c.json(getStatusComponents(db));
+  });
+  app.delete('/api/status/components/:id', (c) => {
+    deleteStatusComponent(db, c.req.param('id'));
+    return c.json(getStatusComponents(db));
+  });
+
+  app.post('/api/status/incidents', async (c) => {
+    let body: { title?: unknown; impact?: unknown; body?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.title !== 'string' || body.title.trim() === '') return c.json({ error: 'title is required' }, 400);
+    const impact = typeof body.impact === 'string' && INCIDENT_IMPACTS.includes(body.impact as IncidentImpact) ? (body.impact as IncidentImpact) : 'minor';
+    const message = typeof body.body === 'string' ? body.body.trim() : '';
+    const now = new Date().toISOString();
+    const incident: StatusIncident = {
+      id: newId('si_'),
+      title: body.title.trim(),
+      impact,
+      status: 'investigating',
+      createdAt: now,
+      resolvedAt: null,
+      updates: [{ at: now, status: 'investigating', body: message !== '' ? message : 'We are investigating this incident.' }],
+    };
+    insertStatusIncident(db, incident);
+    return c.json(getStatusIncidents(db));
+  });
+  app.post('/api/status/incidents/:id/updates', async (c) => {
+    const id = c.req.param('id');
+    const incident = getStatusIncident(db, id);
+    if (incident === null) return c.json({ error: 'incident not found' }, 404);
+    let body: { status?: unknown; body?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.status !== 'string' || !INCIDENT_STATUSES.includes(body.status as IncidentStatus)) return c.json({ error: 'invalid status' }, 400);
+    const message = typeof body.body === 'string' ? body.body.trim() : '';
+    if (message === '') return c.json({ error: 'an update message is required' }, 400);
+    const now = new Date().toISOString();
+    const status = body.status as IncidentStatus;
+    const update: IncidentUpdate = { at: now, status, body: message };
+    const updates = [...incident.updates, update];
+    const resolvedAt = status === 'resolved' ? now : null;
+    updateStatusIncident(db, { id, status, resolvedAt, updates });
+    return c.json(getStatusIncidents(db));
+  });
+  app.delete('/api/status/incidents/:id', (c) => {
+    deleteStatusIncident(db, c.req.param('id'));
+    return c.json(getStatusIncidents(db));
   });
 
   app.get('/api/notifications', (c) => c.json(getNotifications(db, currentAgentId())));

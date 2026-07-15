@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar';
 import { Menu } from '../components/Menu';
 import { Tooltip } from '../components/Tooltip';
 import {
+  IconActivity,
   IconBook,
   IconChannels,
   IconChart,
@@ -31,6 +32,7 @@ const NAV = [
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
   { to: '/audit', label: 'Audit log', icon: IconHistory, matches: ['/audit'] },
   { to: '/handover', label: 'Handover', icon: IconClipboard, matches: ['/handover'] },
+  { to: '/status', label: 'Status', icon: IconActivity, matches: ['/status'] },
   { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
 ];
 

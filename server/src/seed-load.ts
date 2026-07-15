@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
 import type { AiAction, AiAgent, Agent, CannedReply, ChannelConn, Contact, Deal, KbArticle, Message, Notification, Ticket } from './types.js';
 import { insertNotification } from './db.js';
-import { DEFAULT_TICKET_TEMPLATES } from './defaults.js';
+import { DEFAULT_TICKET_TEMPLATES, DEFAULT_STATUS_COMPONENTS } from './defaults.js';
 
 interface SeedData {
   agents: Agent[];
@@ -124,6 +124,18 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const t of seed.tasks ?? []) insertTask.run(t.id, t.ticketId, t.title, t.done ? 1 : 0, t.position, t.createdAt, t.doneAt);
     const insertTemplate = db.prepare('INSERT INTO ticket_templates (id, name, subject, body, priority, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?)');
     for (const t of DEFAULT_TICKET_TEMPLATES) insertTemplate.run(t.id, t.name, t.subject, t.body, t.priority, t.category, JSON.stringify(t.tags));
+    const insertComponent = db.prepare('INSERT INTO status_components (id, name, status, position) VALUES (?, ?, ?, ?)');
+    for (const cmp of DEFAULT_STATUS_COMPONENTS) insertComponent.run(cmp.id, cmp.name, cmp.status, cmp.position);
+    // One resolved showcase incident so the status history isn't empty.
+    const nowMs = Date.now();
+    const hoursAgo = (h: number) => new Date(nowMs - h * 3_600_000).toISOString();
+    const incidentUpdates = [
+      { at: hoursAgo(50), status: 'investigating', body: 'We are investigating reports of delayed outbound email notifications.' },
+      { at: hoursAgo(49), status: 'identified', body: 'A queue backlog at our email provider was identified as the cause.' },
+      { at: hoursAgo(47), status: 'resolved', body: 'The backlog has cleared and email delivery times are back to normal.' },
+    ];
+    db.prepare('INSERT INTO status_incidents (id, title, impact, status, createdAt, resolvedAt, updates) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run('si_seed', 'Elevated email delivery latency', 'minor', 'resolved', hoursAgo(50), hoursAgo(47), JSON.stringify(incidentUpdates));
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

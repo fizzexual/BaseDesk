@@ -11,6 +11,7 @@ import { PortalTicket } from './PortalTicket';
 import { PortalNewTicket } from './PortalNewTicket';
 import { PortalProfile } from './PortalProfile';
 import { HelpLayout, HelpIndex, HelpArticle } from './PortalHelp';
+import { PortalStatus } from './PortalStatus';
 
 /** Scrollable, centered column for the portal's non-ticket pages. */
 function ContainedPage() {
@@ -44,6 +45,8 @@ export function PortalApp() {
     <>
       <Routes>
         <Route path="/portal/login" element={contact ? <Navigate to="/portal" replace /> : <PortalAuth />} />
+        {/* Public — the service status page is visible to anyone, signed in or not. */}
+        <Route path="/portal/status" element={<PortalStatus />} />
         {contact && (
           <Route path="/portal" element={<PortalLayout />}>
             {/* The list, composer, ticket view and help center are all full-bleed

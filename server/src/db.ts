@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -128,6 +128,21 @@ export function openDb(dataDir: string): DatabaseSync {
       metric TEXT NOT NULL,
       dimension TEXT NOT NULL,
       range TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS status_components (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS status_incidents (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      impact TEXT NOT NULL,
+      status TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      resolvedAt TEXT,
+      updates TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
@@ -422,6 +437,56 @@ export function getCustomReports(db: DatabaseSync): CustomReport[] {
   return db
     .prepare('SELECT id, name, metric, dimension, range FROM custom_reports ORDER BY rowid')
     .all() as unknown as CustomReport[];
+}
+
+// --- Status page: components + incidents ---
+export function getStatusComponents(db: DatabaseSync): StatusComponent[] {
+  return db
+    .prepare('SELECT id, name, status, position FROM status_components ORDER BY position, rowid')
+    .all() as unknown as StatusComponent[];
+}
+export function insertStatusComponent(db: DatabaseSync, c: StatusComponent): void {
+  db.prepare('INSERT INTO status_components (id, name, status, position) VALUES (?, ?, ?, ?)')
+    .run(c.id, c.name, c.status, c.position);
+}
+export function updateStatusComponent(db: DatabaseSync, c: { id: string; name: string; status: string }): void {
+  db.prepare('UPDATE status_components SET name = ?, status = ? WHERE id = ?').run(c.name, c.status, c.id);
+}
+export function deleteStatusComponent(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM status_components WHERE id = ?').run(id);
+}
+export function maxComponentPosition(db: DatabaseSync): number {
+  return (db.prepare('SELECT COALESCE(MAX(position), -1) AS n FROM status_components').get() as { n: number }).n;
+}
+
+export function getStatusIncidents(db: DatabaseSync): StatusIncident[] {
+  const rows = db
+    .prepare('SELECT id, title, impact, status, createdAt, resolvedAt, updates FROM status_incidents ORDER BY createdAt DESC, rowid DESC')
+    .all() as { id: string; title: string; impact: string; status: string; createdAt: string; resolvedAt: string | null; updates: string }[];
+  return rows.map((r) => {
+    let updates: IncidentUpdate[] = [];
+    try {
+      const parsed = JSON.parse(r.updates);
+      if (Array.isArray(parsed)) updates = parsed as IncidentUpdate[];
+    } catch {
+      updates = [];
+    }
+    return { ...r, impact: r.impact as StatusIncident['impact'], status: r.status as StatusIncident['status'], updates };
+  });
+}
+export function getStatusIncident(db: DatabaseSync, id: string): StatusIncident | null {
+  return getStatusIncidents(db).find((i) => i.id === id) ?? null;
+}
+export function insertStatusIncident(db: DatabaseSync, i: StatusIncident): void {
+  db.prepare('INSERT INTO status_incidents (id, title, impact, status, createdAt, resolvedAt, updates) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(i.id, i.title, i.impact, i.status, i.createdAt, i.resolvedAt, JSON.stringify(i.updates));
+}
+export function updateStatusIncident(db: DatabaseSync, i: { id: string; status: string; resolvedAt: string | null; updates: IncidentUpdate[] }): void {
+  db.prepare('UPDATE status_incidents SET status = ?, resolvedAt = ?, updates = ? WHERE id = ?')
+    .run(i.status, i.resolvedAt, JSON.stringify(i.updates), i.id);
+}
+export function deleteStatusIncident(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM status_incidents WHERE id = ?').run(id);
 }
 
 /** Read every ticket template, decoding the JSON `tags` column. */

@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -73,6 +73,14 @@ export interface Repository {
   deleteTemplate(id: string): Promise<void>;
   saveReport(r: CustomReport): Promise<CustomReport>;
   deleteReport(id: string): Promise<void>;
+  /** Public status page: components + incidents (no auth required). */
+  getStatusPage(): Promise<StatusPageData>;
+  addStatusComponent(name: string): Promise<StatusComponent[]>;
+  saveStatusComponent(id: string, name: string, status: ComponentStatus): Promise<StatusComponent[]>;
+  removeStatusComponent(id: string): Promise<StatusComponent[]>;
+  createIncident(title: string, impact: IncidentImpact, body: string): Promise<StatusIncident[]>;
+  postIncidentUpdate(id: string, status: IncidentStatus, body: string): Promise<StatusIncident[]>;
+  removeIncident(id: string): Promise<StatusIncident[]>;
   getStats(): Promise<StatsOverview>;
   search(q: string): Promise<{ ticketIds: string[] }>;
   listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]>;

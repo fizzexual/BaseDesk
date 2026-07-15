@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -173,6 +173,28 @@ export class ApiRepository implements Repository {
   }
   async deleteReport(id: string): Promise<void> {
     await request<{ ok: true }>(`/reports/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  getStatusPage(): Promise<StatusPageData> {
+    return request('/status');
+  }
+  addStatusComponent(name: string): Promise<StatusComponent[]> {
+    return request('/status/components', jsonInit('POST', { name }));
+  }
+  saveStatusComponent(id: string, name: string, status: ComponentStatus): Promise<StatusComponent[]> {
+    return request(`/status/components/${encodeURIComponent(id)}`, jsonInit('PUT', { name, status }));
+  }
+  removeStatusComponent(id: string): Promise<StatusComponent[]> {
+    return request(`/status/components/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  createIncident(title: string, impact: IncidentImpact, body: string): Promise<StatusIncident[]> {
+    return request('/status/incidents', jsonInit('POST', { title, impact, body }));
+  }
+  postIncidentUpdate(id: string, status: IncidentStatus, body: string): Promise<StatusIncident[]> {
+    return request(`/status/incidents/${encodeURIComponent(id)}/updates`, jsonInit('POST', { status, body }));
+  }
+  removeIncident(id: string): Promise<StatusIncident[]> {
+    return request(`/status/incidents/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   getStats(): Promise<StatsOverview> {

@@ -260,6 +260,23 @@ export interface CustomReport {
   range: ReportRange;
 }
 
+// --- Public status page ---
+export type ComponentStatus = 'operational' | 'degraded' | 'partial_outage' | 'major_outage' | 'maintenance';
+export interface StatusComponent { id: string; name: string; status: ComponentStatus; position: number; }
+export type IncidentStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
+export type IncidentImpact = 'minor' | 'major' | 'critical' | 'maintenance';
+export interface IncidentUpdate { at: string; status: IncidentStatus; body: string; }
+export interface StatusIncident {
+  id: string;
+  title: string;
+  impact: IncidentImpact;
+  status: IncidentStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+  updates: IncidentUpdate[];
+}
+export interface StatusPageData { components: StatusComponent[]; incidents: StatusIncident[]; }
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 

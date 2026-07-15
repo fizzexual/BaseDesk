@@ -1,4 +1,12 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, TicketTemplate, TimeRule } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
+
+/** Starter status-page components (all healthy) so the public status page isn't blank. */
+export const DEFAULT_STATUS_COMPONENTS: StatusComponent[] = [
+  { id: 'sc_api', name: 'API', status: 'operational', position: 0 },
+  { id: 'sc_dashboard', name: 'Agent dashboard', status: 'operational', position: 1 },
+  { id: 'sc_portal', name: 'Customer portal', status: 'operational', position: 2 },
+  { id: 'sc_email', name: 'Email delivery', status: 'operational', position: 3 },
+];
 
 /** On-call rotation, disabled by default with no one in the rotation yet. Anchored to a Monday. */
 export const DEFAULT_ON_CALL: OnCallConfig = {

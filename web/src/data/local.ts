@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, CustomReport, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -290,6 +290,13 @@ export class LocalRepository implements Repository {
     id: string; ticketId: string; requestedById: string; approverId: string | null; reason: string;
     status: ApprovalStatus; decidedById: string | null; decisionNote: string | null; createdAt: string; decidedAt: string | null;
   }[] = []; // demo-only, in-memory
+  private statusComponents: StatusComponent[] = [
+    { id: 'sc_api', name: 'API', status: 'operational', position: 0 },
+    { id: 'sc_dashboard', name: 'Agent dashboard', status: 'operational', position: 1 },
+    { id: 'sc_portal', name: 'Customer portal', status: 'operational', position: 2 },
+    { id: 'sc_email', name: 'Email delivery', status: 'operational', position: 3 },
+  ]; // demo-only, in-memory
+  private statusIncidents: StatusIncident[] = [];
   private sideConvos: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[] = []; // demo-only
   private sideMsgs: { id: string; sideId: string; authorId: string; body: string; at: string }[] = []; // demo-only
   private handover: { id: string; authorId: string; body: string; createdAt: string }[] = []; // demo-only
@@ -1259,6 +1266,64 @@ export class LocalRepository implements Repository {
   async deleteReport(id: string): Promise<void> {
     this.data.customReports = this.data.customReports.filter((r) => r.id !== id);
     this.persist();
+  }
+
+  private cloneComponents(): StatusComponent[] {
+    return this.statusComponents.map((c) => ({ ...c }));
+  }
+  private cloneIncidents(): StatusIncident[] {
+    return this.statusIncidents.map((i) => ({ ...i, updates: i.updates.map((u) => ({ ...u })) }));
+  }
+  async getStatusPage(): Promise<StatusPageData> {
+    return { components: this.cloneComponents(), incidents: this.cloneIncidents() };
+  }
+  async addStatusComponent(name: string): Promise<StatusComponent[]> {
+    const n = name.trim();
+    if (n === '') throw new Error('name is required');
+    const position = this.statusComponents.reduce((m, c) => Math.max(m, c.position), -1) + 1;
+    this.statusComponents.push({ id: `sc_${Date.now().toString(36)}_${this.statusComponents.length}`, name: n, status: 'operational', position });
+    return this.cloneComponents();
+  }
+  async saveStatusComponent(id: string, name: string, status: ComponentStatus): Promise<StatusComponent[]> {
+    const c = this.statusComponents.find((x) => x.id === id);
+    if (c) {
+      c.name = name.trim();
+      c.status = status;
+    }
+    return this.cloneComponents();
+  }
+  async removeStatusComponent(id: string): Promise<StatusComponent[]> {
+    this.statusComponents = this.statusComponents.filter((c) => c.id !== id);
+    return this.cloneComponents();
+  }
+  async createIncident(title: string, impact: IncidentImpact, body: string): Promise<StatusIncident[]> {
+    const t = title.trim();
+    if (t === '') throw new Error('title is required');
+    const now = new Date().toISOString();
+    this.statusIncidents.unshift({
+      id: `si_${Date.now().toString(36)}`,
+      title: t,
+      impact,
+      status: 'investigating',
+      createdAt: now,
+      resolvedAt: null,
+      updates: [{ at: now, status: 'investigating', body: body.trim() !== '' ? body.trim() : 'We are investigating this incident.' }],
+    });
+    return this.cloneIncidents();
+  }
+  async postIncidentUpdate(id: string, status: IncidentStatus, body: string): Promise<StatusIncident[]> {
+    const i = this.statusIncidents.find((x) => x.id === id);
+    if (i && body.trim() !== '') {
+      const now = new Date().toISOString();
+      i.updates.push({ at: now, status, body: body.trim() });
+      i.status = status;
+      i.resolvedAt = status === 'resolved' ? now : null;
+    }
+    return this.cloneIncidents();
+  }
+  async removeIncident(id: string): Promise<StatusIncident[]> {
+    this.statusIncidents = this.statusIncidents.filter((i) => i.id !== id);
+    return this.cloneIncidents();
   }
 
   async listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]> {
