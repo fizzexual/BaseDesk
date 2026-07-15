@@ -304,6 +304,8 @@ export interface StatsOverview {
   byStatus: Record<TicketStatus, number>;
   perAgentOpen: { agentId: string; count: number }[];
   perAgentPerformance: PerAgentPerformance[];
+  topTags: { tag: string; count: number }[]; // most common tags across all tickets
+  byCategory: { category: string; count: number }[]; // ticket volume per category
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

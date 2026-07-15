@@ -97,6 +97,16 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     .map((t) => (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / 3600000)
     .filter((h) => h >= 0);
 
+  // Topic volume: tags (a ticket contributes to each of its tags) and categories.
+  const tagCounts = new Map<string, number>();
+  const catCounts = new Map<string, number>();
+  for (const t of tickets) {
+    for (const tag of t.tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    if (t.category !== null && t.category.trim() !== '') catCounts.set(t.category, (catCounts.get(t.category) ?? 0) + 1);
+  }
+  const topTags = [...tagCounts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count).slice(0, 10);
+  const byCategory = [...catCounts.entries()].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count);
+
   const openNow = inbox.filter((t) => notSnoozed(t, nowIso) && t.status === 'open').length;
   const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS).toISOString();
 
@@ -151,6 +161,8 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     byStatus,
     perAgentOpen,
     perAgentPerformance,
+    topTags,
+    byCategory,
     medianFirstReplyMinutes: Math.round(median(firstReplyDeltasMin)),
     medianResolutionHours: Math.round(median(resolutionDeltasH) * 10) / 10,
     openNow,

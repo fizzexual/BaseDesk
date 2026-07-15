@@ -303,6 +303,8 @@ export interface StatsOverview {
   byStatus: Record<TicketStatus, number>;
   perAgentOpen: { agentId: string; count: number }[];
   perAgentPerformance: PerAgentPerformance[];
+  topTags: { tag: string; count: number }[];
+  byCategory: { category: string; count: number }[];
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

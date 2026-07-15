@@ -8,7 +8,7 @@ import type { Agent, DealType, StatsOverview, TicketPriority, TicketStatus } fro
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { Tooltip } from '../../components/Tooltip';
-import { IconChart, IconUser } from '../../icons';
+import { IconChart, IconTag, IconUser } from '../../icons';
 import { AreaChart } from './charts/AreaChart';
 import { Donut } from './charts/Donut';
 import { HBars } from './charts/HBars';
@@ -111,6 +111,41 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: color }} />
       {label}
     </span>
+  );
+}
+
+const CATEGORY_COLORS = ['var(--blue)', 'var(--green)', 'var(--amber)', 'var(--gray-dot)', 'var(--red)'];
+
+function TopicAnalytics({ stats }: { stats: StatsOverview }) {
+  return (
+    <div className="grid min-w-0 grid-cols-2 gap-4">
+      <ChartCard
+        title="Top tags"
+        tooltip={{ title: 'Top tags', desc: 'The most-applied tags across all tickets — a quick read on what customers are contacting you about.' }}
+      >
+        {stats.topTags.length === 0 ? (
+          <EmptyState icon={<IconTag size={28} />} title="No tags yet" hint="Tag tickets to see topic volume here." />
+        ) : (
+          <HBars
+            rows={stats.topTags.map((t) => ({ key: t.tag, label: `#${t.tag}`, count: t.count, color: 'var(--blue)' }))}
+            labelWidth="w-32"
+          />
+        )}
+      </ChartCard>
+      <ChartCard
+        title="By category"
+        tooltip={{ title: 'By category', desc: 'Ticket volume per category — the topics your intake form routes tickets into.' }}
+      >
+        {stats.byCategory.length === 0 ? (
+          <EmptyState icon={<IconTag size={28} />} title="No categories yet" hint="Categorized tickets will chart here." />
+        ) : (
+          <HBars
+            rows={stats.byCategory.map((c, i) => ({ key: c.category, label: c.category, count: c.count, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }))}
+            labelWidth="w-32"
+          />
+        )}
+      </ChartCard>
+    </div>
   );
 }
 
@@ -380,6 +415,8 @@ export function ReportsPage() {
               )}
             </ChartCard>
           </div>
+
+          <TopicAnalytics stats={stats} />
 
           <AgentPerformanceTable stats={stats} agents={agents} />
 

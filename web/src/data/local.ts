@@ -1779,6 +1779,8 @@ export class LocalRepository implements Repository {
     let openNow = 0;
     let createdLast7Days = 0;
     let solvedLast7Days = 0;
+    const tagCounts = new Map<string, number>();
+    const catCounts = new Map<string, number>();
 
     for (const t of this.data.tickets) {
       // Priority/status mix is scoped to the inbox bucket, matching the server.
@@ -1786,6 +1788,8 @@ export class LocalRepository implements Repository {
         byPriority[t.priority] += 1;
         byStatus[t.status] += 1;
       }
+      for (const tag of t.tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+      if (t.category !== null && t.category.trim() !== '') catCounts.set(t.category, (catCounts.get(t.category) ?? 0) + 1);
       const createdDay = t.createdAt.slice(0, 10);
       if (createdByDay.has(createdDay)) createdByDay.set(createdDay, createdByDay.get(createdDay)! + 1);
       if (t.createdAt >= sevenDaysAgo) createdLast7Days += 1;
@@ -1869,6 +1873,8 @@ export class LocalRepository implements Repository {
       byStatus,
       perAgentOpen,
       perAgentPerformance,
+      topTags: [...tagCounts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count).slice(0, 10),
+      byCategory: [...catCounts.entries()].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
       medianFirstReplyMinutes: Math.round(median(firstReplyMinutes)),
       medianResolutionHours: Math.round(median(resolutionHours) * 10) / 10,
       openNow,
