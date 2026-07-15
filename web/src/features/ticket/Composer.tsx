@@ -10,6 +10,7 @@ import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconBook, IconCheckCircle, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+import { KbQuoteDialog } from './KbQuoteDialog';
 import { Link } from 'react-router';
 import { useShortcuts } from '../palette/shortcuts';
 import { aiEnabled, aiFallbackMessage } from '../ai/engine';
@@ -41,6 +42,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage; reason?: string } | null>(null);
   const [pending, setPending] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [kbOpen, setKbOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -474,6 +476,12 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           <IconPaperclip size={14} />
           {uploading ? 'Uploading…' : 'Attach'}
         </Button>
+        <Tooltip title="Cite a help article" label="Pull a passage from a published knowledge-base article into your reply, quoted and attributed.">
+          <Button variant="ghost" size="sm" onClick={() => setKbOpen(true)}>
+            <IconBook size={14} />
+            Cite
+          </Button>
+        </Tooltip>
         {aiEnabled() && (
           <Tooltip title="Draft with AI" label="Generates a suggested reply using AI and your knowledge base — review before sending.">
             <Button variant="ghost" size="sm" onClick={() => void draftWithAi()} disabled={drafting}>
@@ -510,6 +518,15 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           {mode === 'reply' ? 'Reply' : 'Add note'}
         </Button>
       </div>
+      {kbOpen && (
+        <KbQuoteDialog
+          onClose={() => setKbOpen(false)}
+          onInsert={(text) => {
+            insertAtCursor(text);
+            setKbOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
