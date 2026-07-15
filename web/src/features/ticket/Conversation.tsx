@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
-import type { Agent, Attachment, Message, Ticket, TicketEvent } from '../../data/types';
+import type { Attachment, Message, Ticket, TicketEvent } from '../../data/types';
 import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
@@ -8,6 +8,7 @@ import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconPaperclip, IconTrash } from '../../icons';
+import { describeTicketEvent } from './eventText';
 
 /** Renders a message body, highlighting @mentions. */
 function Body({ text }: { text: string }) {
@@ -56,38 +57,13 @@ function Attachments({ items }: { items: Attachment[] }) {
   );
 }
 
-/** Human sentence for an activity event. */
-function eventText(e: TicketEvent, agents: Record<string, Agent>): string {
-  const d = e.detail;
-  const agentName = (id: unknown): string => (typeof id === 'string' && id !== '' ? agents[id]?.name ?? 'someone' : 'no one');
-  switch (e.kind) {
-    case 'status':
-      return `changed status to ${String(d.to).replace('_', ' ')}`;
-    case 'priority':
-      return `set priority to ${String(d.to)}`;
-    case 'assignee':
-      if (d.to === null || d.to === undefined) return 'unassigned the ticket';
-      return d.auto === true ? `auto-assigned to ${agentName(d.to)}` : `assigned to ${agentName(d.to)}`;
-    case 'tags': {
-      const parts: string[] = [];
-      if (Array.isArray(d.added) && d.added.length > 0) parts.push(`added ${d.added.map((t) => `#${t}`).join(' ')}`);
-      if (Array.isArray(d.removed) && d.removed.length > 0) parts.push(`removed ${d.removed.map((t) => `#${t}`).join(' ')}`);
-      return parts.length > 0 ? parts.join(', ') : 'updated tags';
-    }
-    case 'merged':
-      return `merged this into #${String(d.targetNumber)}`;
-    default:
-      return 'updated the ticket';
-  }
-}
-
 function EventRow({ event }: { event: TicketEvent }) {
   const agents = useApp((s) => s.agents);
   const actor = event.actorName ?? (event.actorId !== null ? agents[event.actorId]?.name : null) ?? 'Automation';
   return (
     <div className="flex justify-center">
       <span className="rounded-full bg-surface-2 px-3 py-1 text-[12px] text-text-3">
-        <span className="font-medium text-text-2">{actor}</span> {eventText(event, agents)} · <TimeAgo iso={event.at} />
+        <span className="font-medium text-text-2">{actor}</span> {describeTicketEvent(event, agents)} · <TimeAgo iso={event.at} />
       </span>
     </div>
   );

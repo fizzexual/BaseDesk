@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -435,6 +435,33 @@ export function getTicketEvents(db: DatabaseSync, ticketId: string): TicketEvent
     actorName: r.actorName,
     detail: safeParse(r.detail),
     at: r.at,
+  }));
+}
+
+/** Recent activity across every ticket, newest first, for the global audit log. */
+export function getAllEvents(db: DatabaseSync, opts: { limit?: number } = {}): AuditEvent[] {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 500), 1), 2000);
+  const rows = db
+    .prepare(
+      `SELECT e.id, e.ticketId, e.kind, e.actorId, e.detail, e.at,
+              a.name AS actorName, t.number AS ticketNumber, t.subject AS ticketSubject
+         FROM ticket_events e
+         LEFT JOIN agents a ON a.id = e.actorId
+         LEFT JOIN tickets t ON t.id = e.ticketId
+        ORDER BY e.at DESC, e.rowid DESC
+        LIMIT ?`,
+    )
+    .all(limit) as { id: string; ticketId: string; kind: string; actorId: string | null; detail: string; at: string; actorName: string | null; ticketNumber: number | null; ticketSubject: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    ticketId: r.ticketId,
+    kind: r.kind as TicketEvent['kind'],
+    actorId: r.actorId,
+    actorName: r.actorName,
+    detail: safeParse(r.detail),
+    at: r.at,
+    ticketNumber: r.ticketNumber ?? 0,
+    ticketSubject: r.ticketSubject ?? '(deleted ticket)',
   }));
 }
 

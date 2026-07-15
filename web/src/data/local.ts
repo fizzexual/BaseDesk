@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
+  AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
@@ -545,6 +545,7 @@ export class LocalRepository implements Repository {
     };
     this.data.tickets.push(ticket);
     this.data.messages.push(message);
+    this.pushEvent(ticket.id, 'created', CURRENT_AGENT_ID, {}, now);
     this.runAgentsOnTicket(ticket, input.body);
     this.autoAssign(ticket);
     // Auto-acknowledgement: an instant first reply if enabled (doesn't stamp SLA).
@@ -764,6 +765,19 @@ export class LocalRepository implements Repository {
       .map((e) => ({ ...e }));
   }
 
+  async getAuditLog(limit = 500): Promise<AuditEvent[]> {
+    const byId = new Map(this.data.tickets.map((t) => [t.id, t]));
+    return this.data.events
+      .map((e, i) => ({ e, i }))
+      // Newest first; break ties on insertion order so same-timestamp events keep server order.
+      .sort((a, b) => (a.e.at < b.e.at ? 1 : a.e.at > b.e.at ? -1 : b.i - a.i))
+      .slice(0, Math.min(Math.max(Math.trunc(limit), 1), 2000))
+      .map(({ e }) => {
+        const t = byId.get(e.ticketId);
+        return { ...e, ticketNumber: t?.number ?? 0, ticketSubject: t?.subject ?? '(deleted ticket)' };
+      });
+  }
+
   async getTicketSeen(_ticketId: string): Promise<TicketSeen[]> {
     // The static demo has no cross-viewer tracking; the current agent is viewing now.
     return [{ viewerId: CURRENT_AGENT_ID, viewerKind: 'agent', at: new Date().toISOString() }];
@@ -850,6 +864,7 @@ export class LocalRepository implements Repository {
       else if (type === 'blocked_by') { stored = 'blocks'; fromId = linkedTicketId; toId = ticketId; }
       else if (type === 'duplicate_of') stored = 'duplicate';
       this.links.push({ id: `lk_${Date.now().toString(36)}_${this.links.length}`, fromId, toId, type: stored });
+      this.pushEvent(ticketId, 'link', CURRENT_AGENT_ID, { targetId: linkedTicketId, targetNumber: other.number, linkType: type }, new Date().toISOString());
     }
     return this.linksFor(ticketId);
   }

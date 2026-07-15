@@ -8,6 +8,7 @@ import {
   IconChannels,
   IconChart,
   IconContacts,
+  IconHistory,
   IconInbox,
   IconLogo,
   IconLogOut,
@@ -27,6 +28,7 @@ const NAV = [
   { to: '/revenue', label: 'Revenue', icon: IconRevenue, matches: ['/revenue'] },
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
+  { to: '/audit', label: 'Audit log', icon: IconHistory, matches: ['/audit'] },
   { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
 ];
 

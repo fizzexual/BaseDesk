@@ -297,13 +297,19 @@ export interface SavedView {
 }
 export type SavedViewCreate = Omit<SavedView, 'id'>;
 
-export type TicketEventKind = 'status' | 'priority' | 'assignee' | 'tags' | 'merged';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link';
 /** A structured change on a ticket's activity timeline. actorName null = automation/system. */
 export interface TicketEvent {
   id: string; ticketId: string; kind: TicketEventKind;
   actorId: string | null; actorName: string | null;
   detail: Record<string, unknown>;
   at: string;
+}
+
+/** A ticket event widened with its ticket's number and subject, for the global audit log. */
+export interface AuditEvent extends TicketEvent {
+  ticketNumber: number;
+  ticketSubject: string;
 }
 
 /** When a participant (agent or the customer) last viewed a ticket's thread. */

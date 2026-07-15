@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
-  awaitingReplyMap, getAiUsage, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
+  awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
   getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
@@ -876,6 +876,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       db.exec('ROLLBACK');
       throw err;
     }
+    logEvent(ticket.id, 'created', currentAgentId(), {}, now);
     // AI agents evaluate the new ticket (may auto-resolve it).
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, ticket.assigneeId, ticket.category);
@@ -1010,6 +1011,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(getTicketEvents(db, id));
   });
 
+  // Global audit log — recent activity across every ticket, newest first.
+  app.get('/api/events', (c) => {
+    const raw = Number(c.req.query('limit'));
+    const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 2000) : 500;
+    return c.json(getAllEvents(db, { limit }));
+  });
+
   // Read receipts: when each participant last viewed this ticket's thread.
   app.get('/api/tickets/:id/seen', (c) => {
     const id = c.req.param('id');
@@ -1142,7 +1150,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (type === 'blocks') stored = 'blocks';
     else if (type === 'blocked_by') { stored = 'blocks'; fromId = linkedId; toId = id; }
     else if (type === 'duplicate_of') stored = 'duplicate';
-    insertLink(db, { id: newId('lk_'), fromId, toId, type: stored, createdAt: new Date().toISOString() });
+    const linkAt = new Date().toISOString();
+    insertLink(db, { id: newId('lk_'), fromId, toId, type: stored, createdAt: linkAt });
+    const linked = getTicket(db, linkedId);
+    if (linked !== null) logEvent(id, 'link', currentAgentId(), { targetId: linkedId, targetNumber: linked.number, linkType: type }, linkAt);
     return c.json(linksJson(id));
   });
   app.delete('/api/tickets/:id/links/:linkId', (c) => {

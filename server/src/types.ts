@@ -295,18 +295,24 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 
-export type TicketEventKind = 'status' | 'priority' | 'assignee' | 'tags' | 'merged';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link';
 /**
  * A structured change to a ticket, for its activity timeline. actorName is
  * resolved at read time (null = a system/automation action). `detail` holds the
- * change: { from, to } for scalar fields, { added, removed } for tags,
- * { targetNumber } for a merge.
+ * change: {} for created, { from, to } for scalar fields, { added, removed } for
+ * tags, { targetNumber } for a merge, { targetNumber, linkType } for a link.
  */
 export interface TicketEvent {
   id: string; ticketId: string; kind: TicketEventKind;
   actorId: string | null; actorName: string | null;
   detail: Record<string, unknown>;
   at: string;
+}
+
+/** A ticket event widened with its ticket's number and subject, for the global audit log. */
+export interface AuditEvent extends TicketEvent {
+  ticketNumber: number;
+  ticketSubject: string;
 }
 
 /** When a participant (agent or the customer) last viewed a ticket's thread. */
