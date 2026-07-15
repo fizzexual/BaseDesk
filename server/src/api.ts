@@ -23,14 +23,14 @@ import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
-import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, TicketTemplate, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -355,6 +355,19 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return { enabled: raw.enabled === true, message: typeof raw.message === 'string' ? raw.message : DEFAULT_AUTO_ACK.message };
     } catch {
       return DEFAULT_AUTO_ACK;
+    }
+  };
+  const onCall = (): OnCallConfig => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'on_call') ?? '') as Partial<OnCallConfig>;
+      return {
+        enabled: raw.enabled === true,
+        cadence: raw.cadence === 'daily' ? 'daily' : 'weekly',
+        startDate: typeof raw.startDate === 'string' ? raw.startDate : DEFAULT_ON_CALL.startDate,
+        rotation: Array.isArray(raw.rotation) ? raw.rotation.filter((id): id is string => typeof id === 'string') : [],
+      };
+    } catch {
+      return DEFAULT_ON_CALL;
     }
   };
   const timeRules = (): TimeRule[] => {
@@ -757,6 +770,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       notifications: getNotifications(db, currentAgentId()),
       assignment: assignmentSettings(),
       autoAck: autoAck(),
+      onCall: onCall(),
       timeRules: timeRules(),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
@@ -2049,6 +2063,26 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     const value: AutoAck = { enabled: a.enabled, message: a.message };
     setSetting(db, 'auto_ack', JSON.stringify(value));
+    return c.json(value);
+  });
+
+  app.put('/api/settings/on-call', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const o = input as Record<string, unknown>;
+    if (typeof o?.enabled !== 'boolean' || (o.cadence !== 'daily' && o.cadence !== 'weekly') || typeof o.startDate !== 'string') {
+      return c.json({ error: 'invalid on-call settings' }, 400);
+    }
+    // Keep only ids that map to a real agent, preserving order.
+    const rotation = Array.isArray(o.rotation)
+      ? o.rotation.filter((id): id is string => typeof id === 'string' && getAgent(db, id) !== null)
+      : [];
+    const value: OnCallConfig = { enabled: o.enabled, cadence: o.cadence, startDate: o.startDate, rotation };
+    setSetting(db, 'on_call', JSON.stringify(value));
     return c.json(value);
   });
 

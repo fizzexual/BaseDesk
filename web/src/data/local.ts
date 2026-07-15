@@ -3,13 +3,13 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -96,6 +96,7 @@ interface LocalData {
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
   autoAck: AutoAck;
+  onCall: OnCallConfig;
   timeRules: TimeRule[];
   events: TicketEvent[];
   templates: TicketTemplate[];
@@ -239,6 +240,7 @@ function seedData(): LocalData {
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
     autoAck: { ...DEFAULT_AUTO_ACK },
+    onCall: { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] },
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
     events: [],
     templates: DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] })),
@@ -357,6 +359,10 @@ export class LocalRepository implements Repository {
         this.data.autoAck = { ...DEFAULT_AUTO_ACK };
         this.persist();
       }
+      if (this.data.onCall === undefined) {
+        this.data.onCall = { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] };
+        this.persist();
+      }
       if (this.data.timeRules === undefined) {
         this.data.timeRules = DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) }));
         this.persist();
@@ -459,6 +465,7 @@ export class LocalRepository implements Repository {
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
       autoAck: { ...this.data.autoAck },
+      onCall: { ...this.data.onCall, rotation: [...this.data.onCall.rotation] },
       timeRules: this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
       intakeForm: this.data.intakeForm,
       categories: categoriesFromForm(this.data.intakeForm),
@@ -635,6 +642,18 @@ export class LocalRepository implements Repository {
     this.data.autoAck = { enabled: settings.enabled === true, message: String(settings.message) };
     this.persist();
     return { ...this.data.autoAck };
+  }
+
+  async saveOnCall(config: OnCallConfig): Promise<OnCallConfig> {
+    const known = new Set(this.data.agents.map((a) => a.id));
+    this.data.onCall = {
+      enabled: config.enabled === true,
+      cadence: config.cadence === 'daily' ? 'daily' : 'weekly',
+      startDate: String(config.startDate),
+      rotation: (Array.isArray(config.rotation) ? config.rotation : []).filter((id) => known.has(id)),
+    };
+    this.persist();
+    return { ...this.data.onCall, rotation: [...this.data.onCall.rotation] };
   }
 
   async saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {

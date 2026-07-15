@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -207,6 +207,9 @@ export class ApiRepository implements Repository {
   }
   saveAutoAck(settings: AutoAck): Promise<AutoAck> {
     return request('/settings/auto-ack', jsonInit('PUT', settings));
+  }
+  saveOnCall(config: OnCallConfig): Promise<OnCallConfig> {
+    return request('/settings/on-call', jsonInit('PUT', config));
   }
   saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {
     return request('/settings/time-rules', jsonInit('PUT', rules));

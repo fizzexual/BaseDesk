@@ -427,6 +427,15 @@ export interface AutoAck {
   message: string;
 }
 
+export type OnCallCadence = 'daily' | 'weekly';
+/** An on-call rotation. Who's on call now is computed from the anchor date + cadence + rotation order. */
+export interface OnCallConfig {
+  enabled: boolean;
+  cadence: OnCallCadence;
+  startDate: string; // ISO anchor for rotation index 0
+  rotation: string[]; // agent ids, in rotation order
+}
+
 /**
  * A time-based rule: when a ticket has sat in a given state for `hours`, run its
  * actions once. Powers SLA escalations and stale-ticket cleanup.
@@ -468,6 +477,7 @@ export interface BootstrapData {
   savedViews: SavedView[];
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  onCall: OnCallConfig;
   timeRules: TimeRule[];
   intakeForm: IntakeForm;
   /** Distinct categories defined across the intake form, for coverage pickers. */

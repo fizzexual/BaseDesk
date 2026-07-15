@@ -1,4 +1,4 @@
-import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
+import type { AiProvider, AutoAck, AutomationRule, OnCallConfig, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
 
 /** Starter ticket templates so the New Ticket dialog is useful out of the box (mirrors the server). */
 export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [
@@ -77,6 +77,14 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   enabled: false,
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
+};
+
+/** On-call rotation, disabled by default (mirrors the server). */
+export const DEFAULT_ON_CALL: OnCallConfig = {
+  enabled: false,
+  cadence: 'weekly',
+  startDate: '2024-01-01T00:00:00.000Z',
+  rotation: [],
 };
 
 export const DEFAULT_TIME_RULES: TimeRule[] = [

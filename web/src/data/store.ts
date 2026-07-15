@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, TimeRule, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -8,7 +8,7 @@ import type {
 import type { Repository } from './repository';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -19,6 +19,7 @@ export interface AppState {
   sla: SlaTargets;
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  onCall: OnCallConfig;
   timeRules: TimeRule[];
   slaHours: SlaHours;
   automation: AutomationRule[];
@@ -96,6 +97,7 @@ export interface AppState {
   saveAutomation(rules: AutomationRule[]): Promise<void>;
   saveAssignment(settings: AssignmentSettings): Promise<void>;
   saveAutoAck(settings: AutoAck): Promise<void>;
+  saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
   runTimeRules(): Promise<number>;
   saveIntakeForm(form: IntakeForm): Promise<void>;
@@ -201,6 +203,7 @@ export function createAppStore(repository: Repository) {
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
+    onCall: DEFAULT_ON_CALL,
     timeRules: DEFAULT_TIME_RULES,
     slaHours: DEFAULT_SLA_HOURS,
     automation: [],
@@ -243,6 +246,7 @@ export function createAppStore(repository: Repository) {
         sla: data.sla,
         assignment: data.assignment,
         autoAck: data.autoAck,
+        onCall: data.onCall,
         timeRules: data.timeRules,
         slaHours: data.slaHours,
         automation: data.automation,
@@ -792,6 +796,18 @@ export function createAppStore(repository: Repository) {
         set({ autoAck: saved });
       } catch (err) {
         set({ autoAck: prev });
+        throw err;
+      }
+    },
+
+    async saveOnCall(config) {
+      const prev = get().onCall;
+      set({ onCall: config });
+      try {
+        const saved = await repository.saveOnCall(config);
+        set({ onCall: saved });
+      } catch (err) {
+        set({ onCall: prev });
         throw err;
       }
     },

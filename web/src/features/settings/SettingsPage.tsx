@@ -1,8 +1,9 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
+import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
+import { OnCallSettings } from './OnCallSettings';
 import { Appearance } from './Appearance';
 import { CannedReplies } from './CannedReplies';
 import { TicketTemplates } from './TicketTemplates';
@@ -14,7 +15,7 @@ import { CustomFieldsSettings } from './CustomFieldsSettings';
 import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
+type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -23,6 +24,7 @@ const TABS: Array<{
 }> = [
   { id: 'profile', label: 'Profile', icon: IconUser },
   { id: 'team', label: 'Team', icon: IconContacts },
+  { id: 'oncall', label: 'On-call', icon: IconBell },
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
   { id: 'templates', label: 'Templates', icon: IconTicket },
@@ -39,6 +41,7 @@ export function SettingsPage() {
   const params = useParams<{ tab?: string }>();
   const tab: TabId =
     params.tab === 'team' ||
+    params.tab === 'oncall' ||
     params.tab === 'appearance' ||
     params.tab === 'canned' ||
     params.tab === 'templates' ||
@@ -77,6 +80,7 @@ export function SettingsPage() {
       <div className="min-w-0 max-w-[560px] flex-1 overflow-y-auto p-6">
         {tab === 'profile' && <Profile />}
         {tab === 'team' && <TeamSettings />}
+        {tab === 'oncall' && <OnCallSettings />}
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
         {tab === 'templates' && <TicketTemplates />}

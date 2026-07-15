@@ -417,6 +417,14 @@ export interface AutoAck {
   message: string;
 }
 
+export type OnCallCadence = 'daily' | 'weekly';
+export interface OnCallConfig {
+  enabled: boolean;
+  cadence: OnCallCadence;
+  startDate: string;
+  rotation: string[];
+}
+
 /** A time-based rule: run actions once when a ticket sits in a state for `hours`. */
 export type TimeTrigger = 'awaiting_first_response' | 'awaiting_reply' | 'awaiting_customer';
 export interface TimeRule {

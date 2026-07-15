@@ -1,4 +1,12 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig, TicketTemplate, TimeRule } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, TicketTemplate, TimeRule } from './types.js';
+
+/** On-call rotation, disabled by default with no one in the rotation yet. Anchored to a Monday. */
+export const DEFAULT_ON_CALL: OnCallConfig = {
+  enabled: false,
+  cadence: 'weekly',
+  startDate: '2024-01-01T00:00:00.000Z',
+  rotation: [],
+};
 
 /**
  * A ready-to-use branching intake form. Admins can edit or disable it; it ships
