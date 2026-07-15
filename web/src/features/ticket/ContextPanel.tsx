@@ -20,6 +20,7 @@ import { IconChevronDown, IconPlus, IconSparkle, IconX } from '../../icons';
 import { DealDialog } from '../revenue/DealDialog';
 import { TicketCustomFields } from './TicketCustomFields';
 import { aiEnabled, aiFallbackMessage } from '../ai/engine';
+import { ticketSentiment, SENTIMENT_META } from '../../data/sentiment';
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -127,6 +128,11 @@ function RevenueAwarePanel({
 }) {
   const intake = useApp((s) => s.ticketIntake[ticket.id]);
   const deals = useDealsForContact(ticket.requesterId);
+  const messages = useApp((s) => s.messages[ticket.id]);
+  const sentiment = useMemo(() => {
+    const texts = (messages ?? []).filter((m) => m.authorKind === 'contact' && m.kind === 'reply').map((m) => m.body);
+    return texts.length > 0 ? ticketSentiment(texts) : null;
+  }, [messages]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Deal | undefined>(undefined);
   const aiSummarize = useApp((s) => s.aiSummarize);
@@ -182,6 +188,22 @@ function RevenueAwarePanel({
           {localTime !== null && <DetailRow label="Local time" value={localTime} />}
           {ticket.category !== null && ticket.category.trim() !== '' && (
             <DetailRow label="Category" value={ticket.category} />
+          )}
+          {sentiment !== null && (
+            <div className="flex items-baseline gap-2">
+              <span className="w-20 shrink-0 text-[12px] font-medium text-text-3">
+                <Tooltip title="Customer sentiment" label="The emotional tone of the customer's messages, from a keyword read — a quick cue for who to reassure first.">
+                  <span>Sentiment</span>
+                </Tooltip>
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium"
+                style={{ color: SENTIMENT_META[sentiment].color, background: `color-mix(in oklab, ${SENTIMENT_META[sentiment].color} 14%, transparent)` }}
+              >
+                <span aria-hidden className="size-1.5 rounded-full" style={{ background: SENTIMENT_META[sentiment].color }} />
+                {SENTIMENT_META[sentiment].label}
+              </span>
+            </div>
           )}
         </div>
       </section>

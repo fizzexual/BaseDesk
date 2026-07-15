@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Contact, Ticket, TicketPriority, TicketSla } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
+import { classify, scoreText } from '../../data/sentiment';
+import { Tooltip } from '../../components/Tooltip';
 import { Avatar } from '../../components/Avatar';
 import { CategoryPill } from '../../components/CategoryPill';
 import { PriorityPill } from '../../components/PriorityPill';
@@ -111,6 +113,8 @@ export function TicketTable({
         // Rows that owe the customer a reply get an amber left stripe so they're
         // easy to spot at a glance; it layers over the keyboard-selection stripe.
         const needsReply = t.awaitingReply && t.status !== 'solved' && t.status !== 'closed';
+        // Flag a waiting customer whose latest message reads as frustrated.
+        const frustrated = needsReply && hasPreview && classify(scoreText(t.lastMessagePreview)) === 'negative';
         const stripes = [
           needsReply ? 'inset 3px 0 0 0 var(--amber)' : '',
           selected ? 'inset 2px 0 0 0 var(--focus)' : '',
@@ -166,6 +170,11 @@ export function TicketTable({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-[14px] font-medium">{t.subject}</span>
+                {frustrated && (
+                  <Tooltip label="This customer sounds frustrated — worth a quick, careful reply.">
+                    <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: 'var(--red)' }} />
+                  </Tooltip>
+                )}
                 {!hasPreview && <IconNote size={13} className="shrink-0 text-text-3" />}
                 <CategoryPill category={t.category} className="shrink-0" />
               </div>
