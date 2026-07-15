@@ -12,7 +12,15 @@ import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
 import type { Attachment, Ticket } from '../data/types';
-import { IconCheckCircle, IconChevronLeft, IconPaperclip, IconPlus, IconX } from '../icons';
+import { IconCheckCircle, IconChevronLeft, IconClock, IconPaperclip, IconPlus, IconX } from '../icons';
+
+/** Friendly "by 3:45 PM today" / "by Mon, Jul 20, 3:45 PM" for an expected-reply time. */
+function formatExpected(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return `by ${time} today`;
+  return `by ${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}, ${time}`;
+}
 
 const MAX_UPLOAD = 10 * 1024 * 1024; // keep in step with the server
 
@@ -332,6 +340,7 @@ export function PortalTicket() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<PortalMessage[]>([]);
   const [support, setSupport] = useState<PortalSupport[]>([]);
+  const [expectedReplyAt, setExpectedReplyAt] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
@@ -353,12 +362,13 @@ export function PortalTicket() {
   // Fold a fresh snapshot into state. `sound` is false for the first load and the
   // customer's own replies, so the chime and highlight only fire for agent replies
   // that arrive while the customer is watching the thread.
-  function apply(data: { ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[] }, sound: boolean) {
+  function apply(data: { ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[]; expectedFirstReplyAt?: string | null }, sound: boolean) {
     const seen = seenRef.current;
     const inbound = data.messages.filter((m) => !seen.has(m.id) && m.authorKind === 'agent');
     setTicket(data.ticket);
     setMessages(data.messages);
     setSupport(data.support ?? []);
+    setExpectedReplyAt(data.expectedFirstReplyAt ?? null);
     setState('ready');
     seenRef.current = new Set(data.messages.map((m) => m.id));
 
@@ -514,6 +524,15 @@ export function PortalTicket() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+            {/* While the customer is still waiting on a first reply, tell them when to expect one. */}
+            {expectedReplyAt !== null && (
+              <div className="mb-5 flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-[13px] text-text-2">
+                <IconClock size={15} className="shrink-0 text-text-3" />
+                <span>
+                  Our team aims to reply <span className="font-medium text-text">{formatExpected(expectedReplyAt)}</span>.
+                </span>
+              </div>
+            )}
             {/* On narrow screens the sidebar collapses into a card above the thread. */}
             <div className="mb-5 rounded-lg border border-line bg-surface p-4 lg:hidden">
               <TicketSidebar ticket={ticket} support={support} lastCustomerAt={lastCustomerAt} />

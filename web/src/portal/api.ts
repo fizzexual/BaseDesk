@@ -84,7 +84,9 @@ export const portalApi = {
     return req<Ticket[]>('/tickets');
   },
   getTicket(id: string) {
-    return req<{ ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[] }>(`/tickets/${encodeURIComponent(id)}`);
+    return req<{ ticket: Ticket; messages: PortalMessage[]; support: PortalSupport[]; expectedFirstReplyAt: string | null }>(
+      `/tickets/${encodeURIComponent(id)}`,
+    );
   },
   createTicket(input: {
     subject: string;

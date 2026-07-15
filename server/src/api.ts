@@ -27,6 +27,7 @@ import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
+import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
@@ -36,7 +37,7 @@ import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
-  SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
+  SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -2951,7 +2952,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       const a = getAgent(db, aid);
       return { name: a?.name ?? 'Support', avatarHue: a?.avatarHue ?? 0, seenAt: seenByAgent.get(aid) ?? null };
     });
-    return c.json({ ticket, messages, support });
+    return c.json({ ticket, messages, support, expectedFirstReplyAt: expectedFirstReplyAt(ticket, slaTargets(), slaHours() as SlaHours) });
   });
 
   app.post('/api/portal/tickets', async (c) => {
