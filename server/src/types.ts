@@ -246,6 +246,17 @@ export interface MacroActions {
 }
 export interface CannedReply { id: string; title: string; body: string; actions: MacroActions | null; }
 
+/** A reusable starting point for a new ticket — prefills subject/body/priority and applies a category + tags. */
+export interface TicketTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  priority: TicketPriority;
+  category: string | null;
+  tags: string[];
+}
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 
@@ -409,7 +420,7 @@ export interface ModelCache { baseUrl: string; models: string[]; fetchedAt: stri
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; currentAgentId: string; deals: Deal[];
+  canned: CannedReply[]; templates: TicketTemplate[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: PublicChannel[];
   availableModels: ModelCache | null;

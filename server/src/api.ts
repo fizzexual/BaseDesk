@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getChannel, getChannels, getContact,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getChannel, getChannels, getContact,
   awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
@@ -28,7 +28,7 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -740,7 +740,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
-      tickets, contacts, agents, canned, deals,
+      tickets, contacts, agents, canned, templates: getTicketTemplates(db), deals,
       currentAgentId: currentAgentId(),
       sla: slaTargets(),
       automation: automationRules(),
@@ -823,7 +823,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   });
 
   app.post('/api/tickets', async (c) => {
-    let input: { subject?: unknown; body?: unknown; requesterId?: unknown; priority?: unknown };
+    let input: { subject?: unknown; body?: unknown; requesterId?: unknown; priority?: unknown; category?: unknown; tags?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -838,13 +838,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (typeof priority !== 'string' || !PRIORITIES.includes(priority as TicketPriority)) {
       return c.json({ error: 'invalid priority' }, 400);
     }
+    // Optional starting category + tags (e.g. applied from a ticket template).
+    const seedCategory = typeof input.category === 'string' && input.category.trim() !== '' ? input.category.trim() : null;
+    const seedTags = Array.isArray(input.tags)
+      ? [...new Set(input.tags.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter((t) => t !== ''))]
+      : [];
 
     const now = new Date().toISOString();
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
-    // Automation rules may adjust priority/tags/assignee/status at creation time.
+    // Automation rules may adjust priority/tags/assignee/status at creation time (on top of any template seed).
     const requester = getContact(db, requesterId);
     const shaped: AutoMut = {
-      subject: subject.trim(), priority: priority as TicketPriority, tags: [], assigneeId: null, status: 'open', category: null,
+      subject: subject.trim(), priority: priority as TicketPriority, tags: [...seedTags], assigneeId: null, status: 'open', category: seedCategory,
     };
     runAutomation(automationRules(), shaped, {
       subjectLc: shaped.subject.toLowerCase(), bodyLc: body.toLowerCase(),
@@ -1490,6 +1495,61 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.delete('/api/canned/:id', (c) => {
     const id = c.req.param('id');
     db.prepare('DELETE FROM canned_replies WHERE id = ?').run(id);
+    return c.json({ ok: true });
+  });
+
+  // --- Ticket templates: reusable starting points for the New Ticket dialog ---
+  const parseTemplateInput = (input: Record<string, unknown>): Omit<TicketTemplate, 'id'> | null => {
+    if (typeof input.name !== 'string' || input.name.trim() === '') return null;
+    const priority = typeof input.priority === 'string' && PRIORITIES.includes(input.priority as TicketPriority) ? (input.priority as TicketPriority) : 'medium';
+    const category = typeof input.category === 'string' && input.category.trim() !== '' ? input.category.trim() : null;
+    const tags = Array.isArray(input.tags)
+      ? [...new Set(input.tags.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter((t) => t !== ''))]
+      : [];
+    return {
+      name: input.name.trim(),
+      subject: typeof input.subject === 'string' ? input.subject : '',
+      body: typeof input.body === 'string' ? input.body : '',
+      priority,
+      category,
+      tags,
+    };
+  };
+
+  app.post('/api/templates', async (c) => {
+    let input: Record<string, unknown>;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const shaped = parseTemplateInput(input);
+    if (shaped === null) return c.json({ error: 'name is required' }, 400);
+    const template: TicketTemplate = { id: newId('tpl_'), ...shaped };
+    db.prepare('INSERT INTO ticket_templates (id, name, subject, body, priority, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(template.id, template.name, template.subject, template.body, template.priority, template.category, JSON.stringify(template.tags));
+    return c.json(template);
+  });
+
+  app.put('/api/templates/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = db.prepare('SELECT id FROM ticket_templates WHERE id = ?').get(id) as { id: string } | undefined;
+    if (existing === undefined) return c.json({ error: `template not found: ${id}` }, 404);
+    let input: Record<string, unknown>;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const shaped = parseTemplateInput(input);
+    if (shaped === null) return c.json({ error: 'name is required' }, 400);
+    db.prepare('UPDATE ticket_templates SET name = ?, subject = ?, body = ?, priority = ?, category = ?, tags = ? WHERE id = ?')
+      .run(shaped.name, shaped.subject, shaped.body, shaped.priority, shaped.category, JSON.stringify(shaped.tags), id);
+    return c.json({ id, ...shaped } satisfies TicketTemplate);
+  });
+
+  app.delete('/api/templates/:id', (c) => {
+    db.prepare('DELETE FROM ticket_templates WHERE id = ?').run(c.req.param('id'));
     return c.json({ ok: true });
   });
 

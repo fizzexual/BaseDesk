@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { DatabaseSync } from 'node:sqlite';
 import type { AiAction, AiAgent, Agent, CannedReply, ChannelConn, Contact, Deal, KbArticle, Message, Notification, Ticket } from './types.js';
 import { insertNotification } from './db.js';
+import { DEFAULT_TICKET_TEMPLATES } from './defaults.js';
 
 interface SeedData {
   agents: Agent[];
@@ -121,6 +122,8 @@ export function seedIfEmpty(db: DatabaseSync): void {
     for (const i of seed.intake ?? []) insertIntake.run(i.ticketId, JSON.stringify(i.answers));
     const insertTask = db.prepare('INSERT INTO ticket_tasks (id, ticketId, title, done, position, createdAt, doneAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
     for (const t of seed.tasks ?? []) insertTask.run(t.id, t.ticketId, t.title, t.done ? 1 : 0, t.position, t.createdAt, t.doneAt);
+    const insertTemplate = db.prepare('INSERT INTO ticket_templates (id, name, subject, body, priority, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const t of DEFAULT_TICKET_TEMPLATES) insertTemplate.run(t.id, t.name, t.subject, t.body, t.priority, t.category, JSON.stringify(t.tags));
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

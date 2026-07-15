@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask } from './types.js';
+import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -112,6 +112,15 @@ export function openDb(dataDir: string): DatabaseSync {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       body TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ticket_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      category TEXT,
+      tags TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
@@ -367,6 +376,23 @@ export function getCannedReplies(db: DatabaseSync): CannedReply[] {
     body: r.body,
     actions: parseMacroActions(r.actions),
   }));
+}
+
+/** Read every ticket template, decoding the JSON `tags` column. */
+export function getTicketTemplates(db: DatabaseSync): TicketTemplate[] {
+  const rows = db
+    .prepare('SELECT id, name, subject, body, priority, category, tags FROM ticket_templates ORDER BY rowid')
+    .all() as { id: string; name: string; subject: string; body: string; priority: string; category: string | null; tags: string }[];
+  return rows.map((r) => {
+    let tags: string[] = [];
+    try {
+      const parsed = JSON.parse(r.tags);
+      if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === 'string');
+    } catch {
+      tags = [];
+    }
+    return { id: r.id, name: r.name, subject: r.subject, body: r.body, priority: r.priority as TicketPriority, category: r.category, tags };
+  });
 }
 
 function parseMacroActions(raw: string | null): MacroActions | null {

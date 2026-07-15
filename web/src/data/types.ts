@@ -238,6 +238,17 @@ export interface MacroActions {
 }
 export interface CannedReply { id: string; title: string; body: string; actions: MacroActions | null; }
 
+/** A reusable starting point for a new ticket — prefills subject/body/priority and applies a category + tags. */
+export interface TicketTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  priority: TicketPriority;
+  category: string | null;
+  tags: string[];
+}
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 

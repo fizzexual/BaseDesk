@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, TimeRule, ModelCache,
-  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
+  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
@@ -14,7 +14,7 @@ import { applyTheme, readThemePref } from '../app/theme';
 export interface AppState {
   ready: boolean;
   tickets: Record<string, Ticket>; contacts: Record<string, Contact>;
-  agents: Record<string, Agent>; canned: CannedReply[];
+  agents: Record<string, Agent>; canned: CannedReply[]; templates: TicketTemplate[];
   deals: Record<string, Deal>;
   sla: SlaTargets;
   assignment: AssignmentSettings;
@@ -75,9 +75,10 @@ export interface AppState {
   deleteMessage(ticketId: string, messageId: string): Promise<void>;
   uploadAttachment(file: File): Promise<Attachment>;
   setComposerPrefill(text: string | null): void;
-  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<string>; // returns id
+  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority; category?: string | null; tags?: string[] }): Promise<string>; // returns id
   createContact(input: { name: string; email: string; company?: string }): Promise<string>;
   saveCanned(c: CannedReply): Promise<void>; deleteCanned(id: string): Promise<void>;
+  saveTemplate(t: TicketTemplate): Promise<void>; deleteTemplate(id: string): Promise<void>;
   createDeal(input: DealCreate): Promise<string>;               // returns id
   updateDeal(id: string, patch: DealPatch): Promise<void>;      // optimistic + rollback
   deleteDeal(id: string): Promise<void>;                        // optimistic + rollback
@@ -189,6 +190,7 @@ export function createAppStore(repository: Repository) {
     contacts: {},
     agents: {},
     canned: [],
+    templates: [],
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
@@ -228,6 +230,7 @@ export function createAppStore(repository: Repository) {
         contacts: Object.fromEntries(data.contacts.map((c) => [c.id, c])),
         agents: Object.fromEntries(data.agents.map((a) => [a.id, a])),
         canned: data.canned,
+        templates: data.templates,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
         assignment: data.assignment,
@@ -565,6 +568,20 @@ export function createAppStore(repository: Repository) {
     async deleteCanned(id) {
       await repository.deleteCanned(id);
       set((s) => ({ canned: s.canned.filter((c) => c.id !== id) }));
+    },
+
+    async saveTemplate(t) {
+      const saved = await repository.saveTemplate(t);
+      set((s) => ({
+        templates: s.templates.some((x) => x.id === saved.id)
+          ? s.templates.map((x) => (x.id === saved.id ? saved : x))
+          : [...s.templates, saved],
+      }));
+    },
+
+    async deleteTemplate(id) {
+      await repository.deleteTemplate(id);
+      set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
     },
 
     async createDeal(input) {

@@ -1,10 +1,11 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconUser } from '../../icons';
+import { IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { Appearance } from './Appearance';
 import { CannedReplies } from './CannedReplies';
+import { TicketTemplates } from './TicketTemplates';
 import { SlaSettings } from './SlaSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { AiSettings } from './AiSettings';
@@ -13,7 +14,7 @@ import { CustomFieldsSettings } from './CustomFieldsSettings';
 import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
 
-type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
+type TabId = 'profile' | 'team' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -24,6 +25,7 @@ const TABS: Array<{
   { id: 'team', label: 'Team', icon: IconContacts },
   { id: 'appearance', label: 'Appearance', icon: IconSun },
   { id: 'canned', label: 'Canned replies', icon: IconNote },
+  { id: 'templates', label: 'Templates', icon: IconTicket },
   { id: 'fields', label: 'Ticket fields', icon: IconTag },
   { id: 'form', label: 'Ticket form', icon: IconList },
   { id: 'sla', label: 'SLA', icon: IconClock },
@@ -39,6 +41,7 @@ export function SettingsPage() {
     params.tab === 'team' ||
     params.tab === 'appearance' ||
     params.tab === 'canned' ||
+    params.tab === 'templates' ||
     params.tab === 'fields' ||
     params.tab === 'form' ||
     params.tab === 'sla' ||
@@ -76,6 +79,7 @@ export function SettingsPage() {
         {tab === 'team' && <TeamSettings />}
         {tab === 'appearance' && <Appearance />}
         {tab === 'canned' && <CannedReplies />}
+        {tab === 'templates' && <TicketTemplates />}
         {tab === 'fields' && <CustomFieldsSettings />}
         {tab === 'form' && <IntakeFormSettings />}
         {tab === 'sla' && <SlaSettings />}

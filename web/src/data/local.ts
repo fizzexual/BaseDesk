@@ -3,13 +3,13 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -98,6 +98,7 @@ interface LocalData {
   autoAck: AutoAck;
   timeRules: TimeRule[];
   events: TicketEvent[];
+  templates: TicketTemplate[];
 }
 
 function slugify(title: string): string {
@@ -240,6 +241,7 @@ function seedData(): LocalData {
     autoAck: { ...DEFAULT_AUTO_ACK },
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
     events: [],
+    templates: DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] })),
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -357,6 +359,10 @@ export class LocalRepository implements Repository {
         this.data.events = [];
         this.persist();
       }
+      if (!Array.isArray(this.data.templates)) {
+        this.data.templates = DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] }));
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -416,6 +422,7 @@ export class LocalRepository implements Repository {
       contacts: this.data.contacts.map((c) => ({ ...c })),
       agents: this.data.agents.map((a) => ({ ...a })),
       canned: this.data.canned.map((c) => ({ ...c })),
+      templates: this.data.templates.map((t) => ({ ...t, tags: [...t.tags] })),
       deals: [...this.data.deals]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((d) => ({ ...d })),
@@ -505,10 +512,13 @@ export class LocalRepository implements Repository {
     return { ...attachment };
   }
 
-  async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
+  async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority; category?: string | null; tags?: string[] }): Promise<{ ticket: Ticket; message: Message }> {
     const now = new Date().toISOString();
     const number = this.data.tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1;
-    const shaped: AutoMut = { subject: input.subject, priority: input.priority, tags: [], assigneeId: null, status: 'open', category: null };
+    // Optional starting category + tags (e.g. applied from a ticket template); automation rules run on top.
+    const seedTags = [...new Set((input.tags ?? []).map((t) => t.trim()).filter((t) => t !== ''))];
+    const seedCategory = typeof input.category === 'string' && input.category.trim() !== '' ? input.category.trim() : null;
+    const shaped: AutoMut = { subject: input.subject, priority: input.priority, tags: seedTags, assigneeId: null, status: 'open', category: seedCategory };
     applyAutomationLocal(this.data.automation, shaped, { body: input.body, channelType: 'web', from: '' });
     const ticket: Ticket = {
       id: nextId(this.data.tickets, 't_', 3),
@@ -1065,6 +1075,32 @@ export class LocalRepository implements Repository {
 
   async deleteCanned(id: string): Promise<void> {
     this.data.canned = this.data.canned.filter((c) => c.id !== id);
+    this.persist();
+  }
+
+  async saveTemplate(t: TicketTemplate): Promise<TicketTemplate> {
+    const shaped = {
+      name: t.name.trim(),
+      subject: t.subject,
+      body: t.body,
+      priority: t.priority,
+      category: t.category && t.category.trim() !== '' ? t.category.trim() : null,
+      tags: [...new Set(t.tags.map((x) => x.trim()).filter((x) => x !== ''))],
+    };
+    const existing = t.id ? this.data.templates.find((x) => x.id === t.id) : undefined;
+    if (existing) {
+      Object.assign(existing, shaped);
+      this.persist();
+      return { ...existing, tags: [...existing.tags] };
+    }
+    const created: TicketTemplate = { id: t.id || nextId(this.data.templates, 'tpl_', 1), ...shaped };
+    this.data.templates.push(created);
+    this.persist();
+    return { ...created, tags: [...created.tags] };
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    this.data.templates = this.data.templates.filter((t) => t.id !== id);
     this.persist();
   }
 

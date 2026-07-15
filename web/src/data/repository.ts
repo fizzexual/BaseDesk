@@ -1,14 +1,14 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; currentAgentId: string; deals: Deal[];
+  canned: CannedReply[]; templates: TicketTemplate[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; availableModels: ModelCache | null; channels: ChannelConn[];
   slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
@@ -48,7 +48,7 @@ export interface Repository {
   getLinks(ticketId: string): Promise<TicketLink[]>;
   addLink(ticketId: string, linkedTicketId: string, type: TicketLinkType): Promise<TicketLink[]>;
   removeLink(ticketId: string, linkId: string): Promise<TicketLink[]>;
-  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }>;
+  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority; category?: string | null; tags?: string[] }): Promise<{ ticket: Ticket; message: Message }>;
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket>;
   bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]>;
   addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }>;
@@ -61,6 +61,9 @@ export interface Repository {
   createContact(input: { name: string; email: string; company?: string }): Promise<Contact>;
   saveCanned(c: CannedReply): Promise<CannedReply>;
   deleteCanned(id: string): Promise<void>;
+  /** Create a template (empty id) or update an existing one; returns the saved record with its id. */
+  saveTemplate(t: TicketTemplate): Promise<TicketTemplate>;
+  deleteTemplate(id: string): Promise<void>;
   getStats(): Promise<StatsOverview>;
   search(q: string): Promise<{ ticketIds: string[] }>;
   listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]>;

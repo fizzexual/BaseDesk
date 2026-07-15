@@ -1,4 +1,4 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig, TimeRule } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig, TicketTemplate, TimeRule } from './types.js';
 
 /**
  * A ready-to-use branching intake form. Admins can edit or disable it; it ships
@@ -88,6 +88,37 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
+
+/** Starter ticket templates so the New Ticket dialog is useful out of the box. */
+export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [
+  {
+    id: 'tpl_bug',
+    name: 'Bug report',
+    subject: '',
+    body: 'Steps to reproduce:\n1. \n2. \n\nExpected result:\n\nActual result:\n\nEnvironment (browser / OS / app version):',
+    priority: 'high',
+    category: null,
+    tags: ['bug'],
+  },
+  {
+    id: 'tpl_refund',
+    name: 'Refund request',
+    subject: 'Refund request',
+    body: 'Order number:\nReason for the refund:\nAmount:\n\nAnything else we should know:',
+    priority: 'medium',
+    category: null,
+    tags: ['refund', 'billing'],
+  },
+  {
+    id: 'tpl_feature',
+    name: 'Feature request',
+    subject: '',
+    body: 'What the customer is asking for:\n\nWhy it matters / their use case:\n\nWorkaround they use today:',
+    priority: 'low',
+    category: null,
+    tags: ['feature-request'],
+  },
+];
 
 /** Sample time-based rules (both disabled) so escalations/cleanup demo instantly. */
 export const DEFAULT_TIME_RULES: TimeRule[] = [

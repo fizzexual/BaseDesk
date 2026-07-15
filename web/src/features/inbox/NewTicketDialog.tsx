@@ -21,12 +21,14 @@ const PRIORITY_OPTIONS: SegmentedOption<TicketPriority>[] = [
 export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const contacts = useApp((s) => s.contacts);
+  const templates = useApp((s) => s.templates);
   const createTicket = useApp((s) => s.createTicket);
 
   const [subject, setSubject] = useState('');
   const [requesterId, setRequesterId] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [body, setBody] = useState('');
+  const [templateId, setTemplateId] = useState('');
   const [busy, setBusy] = useState(false);
 
   const contactList = useMemo(
@@ -40,9 +42,20 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
       setRequesterId('');
       setPriority('medium');
       setBody('');
+      setTemplateId('');
       setBusy(false);
     }
   }, [open]);
+
+  // Applying a template prefills subject/body/priority; its category + tags ride along on submit.
+  function applyTemplate(id: string) {
+    setTemplateId(id);
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    if (t.subject.trim() !== '') setSubject(t.subject);
+    if (t.body.trim() !== '') setBody(t.body);
+    setPriority(t.priority);
+  }
 
   const canSubmit = subject.trim() !== '' && requesterId !== '' && body.trim() !== '';
 
@@ -50,11 +63,14 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
     if (!canSubmit || busy) return;
     setBusy(true);
     try {
+      const template = templates.find((x) => x.id === templateId);
       const id = await createTicket({
         subject: subject.trim(),
         body: body.trim(),
         requesterId,
         priority,
+        category: template?.category ?? null,
+        tags: template?.tags ?? [],
       });
       onClose();
       navigate(`/ticket/${id}`);
@@ -73,6 +89,19 @@ export function NewTicketDialog({ open, onClose }: { open: boolean; onClose: () 
           void submit();
         }}
       >
+        {templates.length > 0 && (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-text-2">Start from template</span>
+            <select className={cx(FIELD, 'h-9')} value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+              <option value="">Blank ticket</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-medium text-text-2">Subject</span>
           <input

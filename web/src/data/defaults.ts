@@ -1,4 +1,35 @@
-import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings, TimeRule } from './types';
+import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
+
+/** Starter ticket templates so the New Ticket dialog is useful out of the box (mirrors the server). */
+export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [
+  {
+    id: 'tpl_bug',
+    name: 'Bug report',
+    subject: '',
+    body: 'Steps to reproduce:\n1. \n2. \n\nExpected result:\n\nActual result:\n\nEnvironment (browser / OS / app version):',
+    priority: 'high',
+    category: null,
+    tags: ['bug'],
+  },
+  {
+    id: 'tpl_refund',
+    name: 'Refund request',
+    subject: 'Refund request',
+    body: 'Order number:\nReason for the refund:\nAmount:\n\nAnything else we should know:',
+    priority: 'medium',
+    category: null,
+    tags: ['refund', 'billing'],
+  },
+  {
+    id: 'tpl_feature',
+    name: 'Feature request',
+    subject: '',
+    body: 'What the customer is asking for:\n\nWhy it matters / their use case:\n\nWorkaround they use today:',
+    priority: 'low',
+    category: null,
+    tags: ['feature-request'],
+  },
+];
 
 /** Client-facing default SMTP settings: no email configured. */
 export const DEFAULT_SMTP: SmtpSettings = {

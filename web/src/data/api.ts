@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -45,7 +45,7 @@ export class ApiRepository implements Repository {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`);
   }
 
-  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
+  createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority; category?: string | null; tags?: string[] }): Promise<{ ticket: Ticket; message: Message }> {
     return request('/tickets', jsonInit('POST', input));
   }
 
@@ -134,6 +134,17 @@ export class ApiRepository implements Repository {
 
   async deleteCanned(id: string): Promise<void> {
     await request<{ ok: true }>(`/canned/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  saveTemplate(t: TicketTemplate): Promise<TicketTemplate> {
+    const body = { name: t.name, subject: t.subject, body: t.body, priority: t.priority, category: t.category, tags: t.tags };
+    return t.id
+      ? request(`/templates/${encodeURIComponent(t.id)}`, jsonInit('PUT', body))
+      : request('/templates', jsonInit('POST', body));
+  }
+
+  async deleteTemplate(id: string): Promise<void> {
+    await request<{ ok: true }>(`/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   getStats(): Promise<StatsOverview> {
