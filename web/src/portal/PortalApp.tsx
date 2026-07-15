@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router';
 import { usePortal } from './store';
 import { Toaster } from '../components/Toast';
+import { ContextMenuHost } from '../components/ContextMenu';
 import { IconLogo } from '../icons';
 import { PortalLayout } from './PortalLayout';
 import { PortalAuth } from './PortalAuth';
@@ -65,6 +66,7 @@ export function PortalApp() {
         <Route path="*" element={<Navigate to={contact ? '/portal' : '/portal/login'} replace />} />
       </Routes>
       <Toaster />
+      <ContextMenuHost />
     </>
   );
 }

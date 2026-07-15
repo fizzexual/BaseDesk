@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { Palette } from '../features/palette/Palette';
 import { HelpOverlay } from '../features/palette/HelpOverlay';
+import { ContextMenuHost } from '../components/ContextMenu';
 import { openHelp, openPalette, useShortcuts } from '../features/palette/shortcuts';
 import { useLiveSync } from './useLiveSync';
 
@@ -36,6 +37,7 @@ export function Shell() {
       </div>
       <Palette />
       <HelpOverlay />
+      <ContextMenuHost />
     </div>
   );
 }
