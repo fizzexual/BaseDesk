@@ -55,6 +55,8 @@ export interface Repository {
   deleteMessage(ticketId: string, messageId: string): Promise<Message>;
   /** Fold `ticketId` into `into`: moves messages, closes the source as a tombstone. */
   mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }>;
+  /** Split the given messages out of `ticketId` into a new, related ticket. */
+  splitTicket(ticketId: string, subject: string, messageIds: string[]): Promise<{ source: Ticket; created: Ticket }>;
   uploadAttachment(file: File): Promise<Attachment>;
   createContact(input: { name: string; email: string; company?: string }): Promise<Contact>;
   saveCanned(c: CannedReply): Promise<CannedReply>;

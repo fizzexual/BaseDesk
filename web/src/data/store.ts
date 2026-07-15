@@ -70,6 +70,8 @@ export interface AppState {
   bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
   sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
   mergeTicket(ticketId: string, into: string): Promise<void>;
+  /** Split messages out into a new related ticket; resolves to the new ticket's id. */
+  splitTicket(ticketId: string, subject: string, messageIds: string[]): Promise<string>;
   deleteMessage(ticketId: string, messageId: string): Promise<void>;
   uploadAttachment(file: File): Promise<Attachment>;
   setComposerPrefill(text: string | null): void;
@@ -506,6 +508,26 @@ export function createAppStore(repository: Repository) {
           ticketEvents,
         };
       });
+    },
+
+    async splitTicket(ticketId, subject, messageIds) {
+      const { source, created } = await repository.splitTicket(ticketId, subject, messageIds);
+      set((s) => {
+        // The source thread, its timeline and its links all changed — drop the caches.
+        const messages = { ...s.messages };
+        const ticketEvents = { ...s.ticketEvents };
+        const ticketLinks = { ...s.ticketLinks };
+        delete messages[ticketId];
+        delete ticketEvents[ticketId];
+        delete ticketLinks[ticketId];
+        return {
+          tickets: { ...s.tickets, [source.id]: source, [created.id]: created },
+          messages,
+          ticketEvents,
+          ticketLinks,
+        };
+      });
+      return created.id;
     },
 
     async uploadAttachment(file) {

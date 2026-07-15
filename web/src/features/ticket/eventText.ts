@@ -37,6 +37,12 @@ export function describeTicketEvent(e: TicketEvent, agents: Record<string, Agent
       return `merged this into #${String(d.targetNumber)}`;
     case 'link':
       return `linked #${String(d.targetNumber)} as ${LINK_VERB[String(d.linkType)] ?? 'related'}`;
+    case 'split': {
+      const n = typeof d.count === 'number' ? d.count : 0;
+      return n > 0
+        ? `split ${n} message${n === 1 ? '' : 's'} into #${String(d.targetNumber)}`
+        : `split off #${String(d.targetNumber)}`;
+    }
     default:
       return 'updated the ticket';
   }

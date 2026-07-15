@@ -574,6 +574,20 @@ export class LocalRepository implements Repository {
     return { ...t, awaitingReply: last !== undefined && last.authorKind === 'contact' };
   }
 
+  /** Recompute stored derived fields from a ticket's current messages (mirrors the server after a split). */
+  private recomputeDerived(t: Ticket): void {
+    const msgs = this.data.messages.filter((m) => m.ticketId === t.id && !m.deletedAt).sort((a, b) => a.at.localeCompare(b.at));
+    const replies = msgs.filter((m) => m.kind === 'reply');
+    const last = replies.at(-1) ?? msgs.at(-1);
+    if (last !== undefined) {
+      t.lastMessageAt = last.at;
+      t.lastMessagePreview = preview(last.body);
+    }
+    const firstAgent = replies.find((m) => m.authorKind === 'agent');
+    t.firstRespondedAt = firstAgent !== undefined ? firstAgent.at : null;
+    t.updatedAt = new Date().toISOString();
+  }
+
   private autoAssign(ticket: Ticket): void {
     if (ticket.assigneeId !== null || !this.data.assignment.enabled) return;
     const pool = this.data.agents.filter((a) => a.status === 'active');
@@ -959,6 +973,56 @@ export class LocalRepository implements Repository {
     }
     this.persist();
     return { source: this.stampAwaiting({ ...source, tags: [...source.tags] }), target: this.stampAwaiting({ ...target, tags: [...target.tags] }) };
+  }
+
+  async splitTicket(ticketId: string, subject: string, messageIds: string[]): Promise<{ source: Ticket; created: Ticket }> {
+    const source = this.data.tickets.find((t) => t.id === ticketId);
+    if (!source) throw new Error('source ticket not found');
+    if (source.mergedIntoId !== null) throw new Error('cannot split a merged ticket');
+    const subj = subject.trim();
+    if (subj === '') throw new Error('subject is required');
+    const ids = new Set(messageIds);
+    const owned = this.data.messages.filter((m) => m.ticketId === ticketId);
+    const moving = owned.filter((m) => ids.has(m.id));
+    if (moving.length === 0) throw new Error('select at least one message to split out');
+    if (moving.length >= owned.length) throw new Error('a split must leave at least one message behind');
+
+    const now = new Date().toISOString();
+    const number = this.data.tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1;
+    const created: Ticket = {
+      id: nextId(this.data.tickets, 't_', 3),
+      number,
+      subject: subj,
+      status: 'open',
+      priority: source.priority,
+      bucket: 'inbox',
+      requesterId: source.requesterId,
+      assigneeId: null,
+      tags: [],
+      channel: source.channel,
+      createdAt: now,
+      updatedAt: now,
+      snoozedUntil: null,
+      lastMessageAt: now,
+      lastMessagePreview: '',
+      firstRespondedAt: null,
+      resolvedAt: null,
+      channelId: null,
+      mergedIntoId: null,
+      awaitingReply: true,
+      customFields: {},
+      category: source.category,
+    };
+    this.data.tickets.push(created);
+    for (const m of moving) m.ticketId = created.id;
+    for (const a of this.data.attachments) if (a.messageId !== null && ids.has(a.messageId)) a.ticketId = created.id;
+    this.recomputeDerived(source);
+    this.recomputeDerived(created);
+    this.links.push({ id: `lk_${Date.now().toString(36)}_${this.links.length}`, fromId: source.id, toId: created.id, type: 'related' });
+    this.pushEvent(source.id, 'split', CURRENT_AGENT_ID, { targetId: created.id, targetNumber: created.number, count: moving.length }, now);
+    this.pushEvent(created.id, 'created', CURRENT_AGENT_ID, {}, now);
+    this.persist();
+    return { source: this.stampAwaiting({ ...source, tags: [...source.tags] }), created: this.stampAwaiting({ ...created, tags: [...created.tags] }) };
   }
 
   async createContact(input: { name: string; email: string; company?: string }): Promise<Contact> {

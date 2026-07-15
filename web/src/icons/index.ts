@@ -2,6 +2,7 @@ export { IconLogo } from './IconLogo';
 export { IconLogOut } from './IconLogOut';
 export { IconBell } from './IconBell';
 export { IconMerge } from './IconMerge';
+export { IconSplit } from './IconSplit';
 export { IconImport } from './IconImport';
 export { IconInbox } from './IconInbox';
 export { IconTicket } from './IconTicket';

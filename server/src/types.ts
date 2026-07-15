@@ -295,12 +295,13 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 
-export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split';
 /**
  * A structured change to a ticket, for its activity timeline. actorName is
  * resolved at read time (null = a system/automation action). `detail` holds the
  * change: {} for created, { from, to } for scalar fields, { added, removed } for
- * tags, { targetNumber } for a merge, { targetNumber, linkType } for a link.
+ * tags, { targetNumber } for a merge, { targetNumber, linkType } for a link,
+ * { targetNumber, count } for a split.
  */
 export interface TicketEvent {
   id: string; ticketId: string; kind: TicketEventKind;

@@ -422,6 +422,26 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
   };
 
+  /** Recompute a ticket's stored derived fields from its current messages — used after a split moves messages out/in. */
+  const recomputeDerived = (ticketId: string): void => {
+    const newestReply = db
+      .prepare("SELECT body, at FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC, rowid DESC LIMIT 1")
+      .get(ticketId) as { body: string; at: string } | undefined;
+    const newestAny = db
+      .prepare('SELECT body, at FROM messages WHERE ticketId = ? AND deletedAt IS NULL ORDER BY at DESC, rowid DESC LIMIT 1')
+      .get(ticketId) as { body: string; at: string } | undefined;
+    const last = newestReply ?? newestAny;
+    const firstAgent = db
+      .prepare("SELECT at FROM messages WHERE ticketId = ? AND kind = 'reply' AND authorKind = 'agent' AND deletedAt IS NULL ORDER BY at ASC, rowid ASC LIMIT 1")
+      .get(ticketId) as { at: string } | undefined;
+    if (last !== undefined) {
+      db.prepare('UPDATE tickets SET lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
+        .run(last.at, preview(last.body), firstAgent?.at ?? null, ticketId);
+    } else {
+      db.prepare('UPDATE tickets SET firstRespondedAt = ? WHERE id = ?').run(firstAgent?.at ?? null, ticketId);
+    }
+  };
+
   const autoAssign = (ticketId: string, currentAssignee: string | null, category: string | null = null): string | null => {
     if (currentAssignee !== null) return currentAssignee;
     const cfg = assignmentSettings();
@@ -1292,6 +1312,73 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     return c.json({ source: getTicket(db, id), target: getTicket(db, into) });
+  });
+
+  // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
+  app.post('/api/tickets/:id/split', async (c) => {
+    const id = c.req.param('id');
+    const source = getTicket(db, id);
+    if (source === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    if (source.mergedIntoId !== null) return c.json({ error: 'cannot split a merged ticket' }, 409);
+    let input: { subject?: unknown; messageIds?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const subject = typeof input.subject === 'string' ? input.subject.trim() : '';
+    if (subject === '') return c.json({ error: 'subject is required' }, 400);
+    const messageIds = Array.isArray(input.messageIds) ? input.messageIds.filter((x): x is string => typeof x === 'string') : [];
+    if (messageIds.length === 0) return c.json({ error: 'select at least one message to split out' }, 400);
+    const owned = db.prepare('SELECT id FROM messages WHERE ticketId = ?').all(id) as { id: string }[];
+    const ownedSet = new Set(owned.map((r) => r.id));
+    if (!messageIds.every((m) => ownedSet.has(m))) return c.json({ error: 'a message does not belong to this ticket' }, 400);
+    if (messageIds.length >= ownedSet.size) return c.json({ error: 'a split must leave at least one message behind' }, 400);
+
+    const now = new Date().toISOString();
+    const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
+    const created: Ticket = {
+      id: newId('t_'),
+      number: maxRow.maxNumber + 1,
+      subject,
+      status: 'open',
+      priority: source.priority,
+      bucket: 'inbox',
+      requesterId: source.requesterId,
+      assigneeId: null,
+      tags: [],
+      channel: source.channel,
+      createdAt: now,
+      updatedAt: now,
+      snoozedUntil: null,
+      lastMessageAt: now,
+      lastMessagePreview: '',
+      firstRespondedAt: null,
+      resolvedAt: null,
+      channelId: null,
+      mergedIntoId: null,
+      awaitingReply: true,
+      customFields: {},
+      category: source.category,
+    };
+    const placeholders = messageIds.map(() => '?').join(', ');
+    db.exec('BEGIN');
+    try {
+      insertTicketRow(db, created);
+      db.prepare(`UPDATE messages SET ticketId = ? WHERE ticketId = ? AND id IN (${placeholders})`).run(created.id, id, ...messageIds);
+      db.prepare(`UPDATE attachments SET ticketId = ? WHERE messageId IN (${placeholders})`).run(created.id, ...messageIds);
+      recomputeDerived(id);
+      recomputeDerived(created.id);
+      // Link the two halves so agents can navigate between them.
+      insertLink(db, { id: newId('lk_'), fromId: id, toId: created.id, type: 'related', createdAt: now });
+      logEvent(id, 'split', currentAgentId(), { targetId: created.id, targetNumber: created.number, count: messageIds.length }, now);
+      logEvent(created.id, 'created', currentAgentId(), {}, now);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    return c.json({ source: getTicket(db, id), created: getTicket(db, created.id) });
   });
 
   // Upload a file (unattached until a message references it), then serve it back.

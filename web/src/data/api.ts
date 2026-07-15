@@ -70,6 +70,9 @@ export class ApiRepository implements Repository {
   mergeTicket(ticketId: string, into: string): Promise<{ source: Ticket; target: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/merge`, jsonInit('POST', { into }));
   }
+  splitTicket(ticketId: string, subject: string, messageIds: string[]): Promise<{ source: Ticket; created: Ticket }> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/split`, jsonInit('POST', { subject, messageIds }));
+  }
   getTicketEvents(ticketId: string): Promise<TicketEvent[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/events`);
   }

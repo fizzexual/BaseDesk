@@ -18,6 +18,7 @@ const KIND_META: Record<TicketEventKind, { label: string; color: string }> = {
   tags: { label: 'Tags', color: 'var(--gray-dot)' },
   merged: { label: 'Merge', color: 'var(--text-3)' },
   link: { label: 'Link', color: 'var(--blue)' },
+  split: { label: 'Split', color: 'var(--amber)' },
 };
 const KINDS = Object.keys(KIND_META) as TicketEventKind[];
 

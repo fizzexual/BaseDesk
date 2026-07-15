@@ -27,6 +27,7 @@ import {
   IconDots,
   IconInbox,
   IconMerge,
+  IconSplit,
   IconPause,
   IconPlus,
   IconSnooze,
@@ -44,6 +45,7 @@ import { ContextPanel } from './ContextPanel';
 import { TriageBar } from './TriageBar';
 import { DraftBanner } from './DraftBanner';
 import { MergeDialog } from './MergeDialog';
+import { SplitDialog } from './SplitDialog';
 
 const ICON_BUTTON =
   'inline-flex h-8 w-8 items-center justify-center rounded-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text';
@@ -239,6 +241,7 @@ export function TicketPage() {
   const channels = useApp((s) => s.channels);
   const exists = ticket !== undefined;
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   // The details panel is a fixed 300px column that won't fit on narrow windows,
   // so it's a toggleable drawer: inline on wide screens, an overlay when narrow.
   const [panelOpen, setPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 1280);
@@ -328,10 +331,11 @@ export function TicketPage() {
             onSelect: () => patch({ bucket: 'inbox' }),
           },
         ];
-  // A merged ticket is a tombstone; nothing left to merge.
+  // A merged ticket is a tombstone; nothing left to merge or split.
   if (ticket.mergedIntoId === null) {
     kebabItems.push(
       { separator: true },
+      { label: 'Split…', icon: <IconSplit size={14} />, onSelect: () => setSplitOpen(true) },
       { label: 'Merge into…', icon: <IconMerge size={14} />, onSelect: () => setMergeOpen(true) },
     );
   }
@@ -460,6 +464,7 @@ export function TicketPage() {
         </>
       )}
       {mergeOpen && <MergeDialog source={ticket} onClose={() => setMergeOpen(false)} />}
+      {splitOpen && <SplitDialog source={ticket} onClose={() => setSplitOpen(false)} />}
     </div>
   );
 }

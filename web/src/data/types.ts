@@ -297,7 +297,7 @@ export interface SavedView {
 }
 export type SavedViewCreate = Omit<SavedView, 'id'>;
 
-export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split';
 /** A structured change on a ticket's activity timeline. actorName null = automation/system. */
 export interface TicketEvent {
   id: string; ticketId: string; kind: TicketEventKind;
