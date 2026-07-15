@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -8,7 +8,7 @@ import type {
 import type { Repository } from './repository';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -19,6 +19,7 @@ export interface AppState {
   sla: SlaTargets;
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  timeRules: TimeRule[];
   slaHours: SlaHours;
   automation: AutomationRule[];
   kb: Record<string, KbArticle>;
@@ -82,6 +83,8 @@ export interface AppState {
   saveAutomation(rules: AutomationRule[]): Promise<void>;
   saveAssignment(settings: AssignmentSettings): Promise<void>;
   saveAutoAck(settings: AutoAck): Promise<void>;
+  saveTimeRules(rules: TimeRule[]): Promise<void>;
+  runTimeRules(): Promise<number>;
   saveIntakeForm(form: IntakeForm): Promise<void>;
   inviteAgent(input: AgentInvite): Promise<string>;             // returns id
   updateAgent(id: string, patch: AgentPatch): Promise<void>;    // optimistic + rollback
@@ -184,6 +187,7 @@ export function createAppStore(repository: Repository) {
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
+    timeRules: DEFAULT_TIME_RULES,
     slaHours: DEFAULT_SLA_HOURS,
     automation: [],
     kb: {},
@@ -221,6 +225,7 @@ export function createAppStore(repository: Repository) {
         sla: data.sla,
         assignment: data.assignment,
         autoAck: data.autoAck,
+        timeRules: data.timeRules,
         slaHours: data.slaHours,
         automation: data.automation,
         kb: Object.fromEntries(data.kb.map((a) => [a.id, a])),
@@ -698,6 +703,25 @@ export function createAppStore(repository: Repository) {
         set({ autoAck: prev });
         throw err;
       }
+    },
+
+    async saveTimeRules(rules) {
+      const prev = get().timeRules;
+      set({ timeRules: rules });
+      try {
+        const saved = await repository.saveTimeRules(rules);
+        set({ timeRules: saved });
+      } catch (err) {
+        set({ timeRules: prev });
+        throw err;
+      }
+    },
+
+    async runTimeRules() {
+      const fired = await repository.runTimeRules();
+      // Tickets may have changed priority/status — pull the fresh list in.
+      if (fired > 0) await get().refreshTickets().catch(() => {});
+      return fired;
     },
 
     async saveIntakeForm(form) {

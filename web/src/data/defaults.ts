@@ -1,4 +1,4 @@
-import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings } from './types';
+import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings, TimeRule } from './types';
 
 /** Client-facing default SMTP settings: no email configured. */
 export const DEFAULT_SMTP: SmtpSettings = {
@@ -47,6 +47,19 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
+
+export const DEFAULT_TIME_RULES: TimeRule[] = [
+  {
+    id: 'time_escalate', name: 'Escalate slow first response', enabled: false,
+    trigger: 'awaiting_first_response', hours: 4,
+    actions: [{ type: 'set_priority', value: 'high' }, { type: 'add_tag', value: 'escalated' }],
+  },
+  {
+    id: 'time_autoclose', name: 'Auto-solve tickets waiting on the customer', enabled: false,
+    trigger: 'awaiting_customer', hours: 72,
+    actions: [{ type: 'set_status', value: 'solved' }, { type: 'add_tag', value: 'auto-solved' }],
+  },
+];
 
 export const DEFAULT_AUTOMATION: AutomationRule[] = [
   {

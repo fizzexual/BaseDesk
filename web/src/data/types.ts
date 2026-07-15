@@ -356,6 +356,17 @@ export interface AutoAck {
   message: string;
 }
 
+/** A time-based rule: run actions once when a ticket sits in a state for `hours`. */
+export type TimeTrigger = 'awaiting_first_response' | 'awaiting_reply' | 'awaiting_customer';
+export interface TimeRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: TimeTrigger;
+  hours: number;
+  actions: AutomationAction[];
+}
+
 /** Aggregate AI token spend across every recorded model call. */
 export interface AiUsage {
   promptTokens: number;

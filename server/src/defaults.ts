@@ -1,4 +1,4 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig, TimeRule } from './types.js';
 
 /**
  * A ready-to-use branching intake form. Admins can edit or disable it; it ships
@@ -88,6 +88,20 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
+
+/** Sample time-based rules (both disabled) so escalations/cleanup demo instantly. */
+export const DEFAULT_TIME_RULES: TimeRule[] = [
+  {
+    id: 'time_escalate', name: 'Escalate slow first response', enabled: false,
+    trigger: 'awaiting_first_response', hours: 4,
+    actions: [{ type: 'set_priority', value: 'high' }, { type: 'add_tag', value: 'escalated' }],
+  },
+  {
+    id: 'time_autoclose', name: 'Auto-solve tickets waiting on the customer', enabled: false,
+    trigger: 'awaiting_customer', hours: 72,
+    actions: [{ type: 'set_status', value: 'solved' }, { type: 'add_tag', value: 'auto-solved' }],
+  },
+];
 
 /** Sample automation rules so the feature demos immediately; users edit or remove them. */
 export const DEFAULT_AUTOMATION: AutomationRule[] = [

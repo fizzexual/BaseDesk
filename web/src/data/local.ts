@@ -2,14 +2,14 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  AssignmentSettings, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -96,6 +96,7 @@ interface LocalData {
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
   autoAck: AutoAck;
+  timeRules: TimeRule[];
   events: TicketEvent[];
 }
 
@@ -237,6 +238,7 @@ function seedData(): LocalData {
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
     autoAck: { ...DEFAULT_AUTO_ACK },
+    timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
     events: [],
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
@@ -259,6 +261,7 @@ export class LocalRepository implements Repository {
   private data: LocalData;
   private followers = new Map<string, TicketFollower[]>(); // demo-only, in-memory
   private tasks = new Map<string, TicketTask[]>(); // demo-only, in-memory
+  private timeRuleFired = new Set<string>(); // `${ruleId}:${ticketId}` — demo-only, not persisted
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -343,6 +346,10 @@ export class LocalRepository implements Repository {
       }
       if (this.data.autoAck === undefined) {
         this.data.autoAck = { ...DEFAULT_AUTO_ACK };
+        this.persist();
+      }
+      if (this.data.timeRules === undefined) {
+        this.data.timeRules = DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) }));
         this.persist();
       }
       if (!Array.isArray(this.data.events)) {
@@ -438,6 +445,7 @@ export class LocalRepository implements Repository {
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
       autoAck: { ...this.data.autoAck },
+      timeRules: this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
       intakeForm: this.data.intakeForm,
       categories: categoriesFromForm(this.data.intakeForm),
     };
@@ -595,6 +603,52 @@ export class LocalRepository implements Repository {
     this.data.autoAck = { enabled: settings.enabled === true, message: String(settings.message) };
     this.persist();
     return { ...this.data.autoAck };
+  }
+
+  async saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {
+    this.data.timeRules = rules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) }));
+    this.persist();
+    return this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) }));
+  }
+
+  async runTimeRules(): Promise<number> {
+    const rules = this.data.timeRules.filter((r) => r.enabled && r.actions.length > 0 && r.hours > 0);
+    if (rules.length === 0) return 0;
+    const nowMs = Date.now();
+    let fired = 0;
+    for (const t of this.data.tickets) {
+      if (t.bucket !== 'inbox' || !['open', 'pending', 'on_hold'].includes(t.status)) continue;
+      const lastReply = this.data.messages
+        .filter((m) => m.ticketId === t.id && m.kind === 'reply' && m.deletedAt == null)
+        .sort((a, b) => a.at.localeCompare(b.at))
+        .at(-1);
+      for (const rule of rules) {
+        const key = `${rule.id}:${t.id}`;
+        if (this.timeRuleFired.has(key)) continue;
+        let match = false;
+        if (rule.trigger === 'awaiting_first_response') {
+          match = t.firstRespondedAt === null && nowMs - Date.parse(t.createdAt) >= rule.hours * 3_600_000;
+        } else if (lastReply !== undefined) {
+          const want = rule.trigger === 'awaiting_reply' ? 'contact' : 'agent';
+          match = lastReply.authorKind === want && nowMs - Date.parse(lastReply.at) >= rule.hours * 3_600_000;
+        }
+        if (!match) continue;
+        for (const a of rule.actions) {
+          if (a.type === 'set_priority') t.priority = a.value as typeof t.priority;
+          else if (a.type === 'set_status') t.status = a.value as typeof t.status;
+          else if (a.type === 'assign') t.assigneeId = a.value === '' ? null : a.value;
+          else if (a.type === 'set_category') t.category = a.value.trim() === '' ? null : a.value;
+          else if (a.type === 'add_tag') { if (!t.tags.includes(a.value)) t.tags.push(a.value); }
+        }
+        if ((t.status === 'solved' || t.status === 'closed') && t.resolvedAt === null) t.resolvedAt = new Date(nowMs).toISOString();
+        t.updatedAt = new Date(nowMs).toISOString();
+        this.timeRuleFired.add(key);
+        fired += 1;
+        break;
+      }
+    }
+    if (fired > 0) this.persist();
+    return fired;
   }
 
   /** Mirrors the server: highest-autonomy enabled agent acts on a new ticket. */

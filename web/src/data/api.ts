@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -163,6 +163,13 @@ export class ApiRepository implements Repository {
   }
   saveAutoAck(settings: AutoAck): Promise<AutoAck> {
     return request('/settings/auto-ack', jsonInit('PUT', settings));
+  }
+  saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {
+    return request('/settings/time-rules', jsonInit('PUT', rules));
+  }
+  async runTimeRules(): Promise<number> {
+    const { fired } = await request<{ fired: number }>('/settings/time-rules/run', { method: 'POST' });
+    return fired;
   }
 
   saveIntakeForm(form: IntakeForm): Promise<IntakeForm> {

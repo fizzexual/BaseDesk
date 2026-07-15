@@ -18,6 +18,7 @@ import type {
 } from '../../data/types';
 import { IconChevronDown, IconFilter, IconPlus, IconTrash, IconX } from '../../icons';
 import { AutoAssignSection, AutoAckSection } from './AutoAssignSettings';
+import { TimeRulesSection } from './TimeRulesSettings';
 
 const CONDITION_TYPES: { value: AutomationConditionType; label: string }[] = [
   { value: 'subject_contains', label: 'Subject contains' },
@@ -82,7 +83,7 @@ function isPriority(v: string): v is TicketPriority {
 const FIELD =
   'h-9 min-w-0 flex-1 rounded-md border border-line bg-bg px-2.5 text-[14px] outline-none focus:border-line-2 placeholder:text-text-3';
 
-function Select<T extends string>({
+export function Select<T extends string>({
   value,
   options,
   onChange,
@@ -209,6 +210,7 @@ export function AutomationSettings() {
     <section>
       <AutoAssignSection />
       <AutoAckSection />
+      <TimeRulesSection />
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold">Automation</h2>
         <Button variant="subtle" size="sm" onClick={addRule}>

@@ -362,6 +362,23 @@ export interface AutoAck {
   message: string;
 }
 
+/**
+ * A time-based rule: when a ticket has sat in a given state for `hours`, run its
+ * actions once. Powers SLA escalations and stale-ticket cleanup.
+ * - awaiting_first_response: opened but no agent has replied yet.
+ * - awaiting_reply: the customer is waiting on us (last reply was theirs).
+ * - awaiting_customer: we're waiting on the customer (last reply was ours).
+ */
+export type TimeTrigger = 'awaiting_first_response' | 'awaiting_reply' | 'awaiting_customer';
+export interface TimeRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: TimeTrigger;
+  hours: number;
+  actions: AutomationAction[];
+}
+
 /** Aggregate AI token spend across every recorded model call. */
 export interface AiUsage {
   promptTokens: number;
@@ -386,6 +403,7 @@ export interface BootstrapData {
   savedViews: SavedView[];
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  timeRules: TimeRule[];
   intakeForm: IntakeForm;
   /** Distinct categories defined across the intake form, for coverage pickers. */
   categories: string[];

@@ -166,6 +166,12 @@ export function openDb(dataDir: string): DatabaseSync {
       createdAt TEXT NOT NULL,
       doneAt TEXT
     );
+    CREATE TABLE IF NOT EXISTS time_rule_fired (
+      ruleId TEXT NOT NULL,
+      ticketId TEXT NOT NULL,
+      at TEXT NOT NULL,
+      PRIMARY KEY (ruleId, ticketId)
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -515,6 +521,14 @@ export function patchTask(db: DatabaseSync, id: string, patch: { title?: string;
 }
 export function removeTask(db: DatabaseSync, id: string): void {
   db.prepare('DELETE FROM ticket_tasks WHERE id = ?').run(id);
+}
+
+/** Time-based rules fire once per ticket — these track which have already run. */
+export function hasTimeRuleFired(db: DatabaseSync, ruleId: string, ticketId: string): boolean {
+  return db.prepare('SELECT 1 FROM time_rule_fired WHERE ruleId = ? AND ticketId = ?').get(ruleId, ticketId) !== undefined;
+}
+export function recordTimeRuleFired(db: DatabaseSync, ruleId: string, ticketId: string, at: string): void {
+  db.prepare('INSERT OR IGNORE INTO time_rule_fired (ruleId, ticketId, at) VALUES (?, ?, ?)').run(ruleId, ticketId, at);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

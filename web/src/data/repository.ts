@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -17,6 +17,7 @@ export interface BootstrapData {
   notifications: Notification[];
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  timeRules: TimeRule[];
   intakeForm: IntakeForm;
   categories: string[];
 }
@@ -86,6 +87,9 @@ export interface Repository {
   exportCsv(type: ImportType): Promise<string>;
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings>;
   saveAutoAck(settings: AutoAck): Promise<AutoAck>;
+  saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]>;
+  /** Run time-based rules now; resolves to how many tickets were acted on. */
+  runTimeRules(): Promise<number>;
   saveIntakeForm(form: IntakeForm): Promise<IntakeForm>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;

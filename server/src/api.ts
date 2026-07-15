@@ -12,6 +12,7 @@ import {
   getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
   followTicket, unfollowTicket, getFollowers,
   getTasks, getTask, insertTask, patchTask, removeTask, nextTaskPosition,
+  hasTimeRuleFired, recordTimeRuleFired,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -19,13 +20,13 @@ import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
-import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -322,6 +323,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   if (getSetting(db, 'automation') === null) setSetting(db, 'automation', JSON.stringify(DEFAULT_AUTOMATION));
   if (getSetting(db, 'sla_hours') === null) setSetting(db, 'sla_hours', JSON.stringify(DEFAULT_SLA_HOURS));
   if (getSetting(db, 'assignment') === null) setSetting(db, 'assignment', JSON.stringify({ enabled: false, strategy: 'round_robin' }));
+  if (getSetting(db, 'time_rules') === null) setSetting(db, 'time_rules', JSON.stringify(DEFAULT_TIME_RULES));
 
   const slaTargets = (): SlaTargets => {
     try {
@@ -350,6 +352,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return { enabled: raw.enabled === true, message: typeof raw.message === 'string' ? raw.message : DEFAULT_AUTO_ACK.message };
     } catch {
       return DEFAULT_AUTO_ACK;
+    }
+  };
+  const timeRules = (): TimeRule[] => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'time_rules') ?? '') as unknown;
+      return Array.isArray(raw) ? (raw as TimeRule[]) : DEFAULT_TIME_RULES;
+    } catch {
+      return DEFAULT_TIME_RULES;
     }
   };
 
@@ -539,6 +549,69 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     deliverReply(ticket, body);
   };
 
+  // ---- Time-based rules: escalations + stale-ticket cleanup -------------------
+  const applyTimeRule = (t: Ticket, rule: TimeRule, nowIso: string): void => {
+    let priority = t.priority;
+    let status = t.status;
+    let assigneeId = t.assigneeId;
+    let category = t.category;
+    const tags = [...t.tags];
+    for (const a of rule.actions) {
+      if (a.type === 'set_priority' && PRIORITIES.includes(a.value as TicketPriority)) priority = a.value as TicketPriority;
+      else if (a.type === 'set_status' && STATUSES.includes(a.value as TicketStatus)) status = a.value as TicketStatus;
+      else if (a.type === 'assign') assigneeId = a.value === '' ? null : a.value;
+      else if (a.type === 'set_category') category = a.value.trim() === '' ? null : a.value;
+      else if (a.type === 'add_tag') { if (!tags.includes(a.value)) tags.push(a.value); }
+    }
+    const resolvedAt = (status === 'solved' || status === 'closed') && t.resolvedAt === null ? nowIso : t.resolvedAt;
+    // Document the automated change as an internal note (team-only).
+    const author =
+      getAgents(db).find((a) => a.status === 'active' && a.role === 'admin')?.id ??
+      getAgents(db).find((a) => a.status === 'active')?.id ??
+      null;
+    if (author !== null) {
+      const note = `⏱️ Automation “${rule.name}” ran — ${rule.trigger.replace(/_/g, ' ')} for ${rule.hours}h+.`;
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(newId('m_'), t.id, 'agent', author, 'note', note, nowIso);
+    }
+    db.prepare('UPDATE tickets SET priority = ?, status = ?, assigneeId = ?, category = ?, tags = ?, updatedAt = ?, resolvedAt = ? WHERE id = ?')
+      .run(priority, status, assigneeId, category, JSON.stringify(tags), nowIso, resolvedAt, t.id);
+  };
+
+  /** Evaluate enabled time-rules against active tickets; fire matching ones once each. */
+  const evaluateTimeRules = (nowMs: number): number => {
+    const rules = timeRules().filter((r) => r.enabled && r.actions.length > 0 && r.hours > 0);
+    if (rules.length === 0) return 0;
+    const nowIso = new Date(nowMs).toISOString();
+    const rows = db
+      .prepare("SELECT * FROM tickets WHERE bucket = 'inbox' AND status IN ('open', 'pending', 'on_hold')")
+      .all() as unknown as TicketRow[];
+    let fired = 0;
+    for (const row of rows) {
+      const t = rowToTicket(row);
+      const createdMs = Date.parse(t.createdAt);
+      const lastReply = db
+        .prepare("SELECT authorKind, at FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC LIMIT 1")
+        .get(t.id) as { authorKind: string; at: string } | undefined;
+      for (const rule of rules) {
+        if (hasTimeRuleFired(db, rule.id, t.id)) continue;
+        let match = false;
+        if (rule.trigger === 'awaiting_first_response') {
+          match = t.firstRespondedAt === null && nowMs - createdMs >= rule.hours * 3_600_000;
+        } else if (lastReply !== undefined) {
+          const want = rule.trigger === 'awaiting_reply' ? 'contact' : 'agent';
+          match = lastReply.authorKind === want && nowMs - Date.parse(lastReply.at) >= rule.hours * 3_600_000;
+        }
+        if (!match) continue;
+        applyTimeRule(t, rule, nowIso);
+        recordTimeRuleFired(db, rule.id, t.id, nowIso);
+        fired += 1;
+        break; // one rule per ticket per pass keeps the snapshot coherent
+      }
+    }
+    return fired;
+  };
+
   /**
    * Runs the enabled AI agents against a freshly-arrived ticket. The
    * highest-autonomy matching agent acts once: a resolve agent that deflects to
@@ -661,6 +734,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       notifications: getNotifications(db, currentAgentId()),
       assignment: assignmentSettings(),
       autoAck: autoAck(),
+      timeRules: timeRules(),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -1675,6 +1749,36 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     setSetting(db, 'auto_ack', JSON.stringify(value));
     return c.json(value);
   });
+
+  app.put('/api/settings/time-rules', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (!Array.isArray(input)) return c.json({ error: 'time rules must be an array' }, 400);
+    const TRIGGERS = ['awaiting_first_response', 'awaiting_reply', 'awaiting_customer'];
+    const ACTIONS = ['set_priority', 'add_tag', 'assign', 'set_status', 'set_category'];
+    for (const r of input as TimeRule[]) {
+      if (
+        typeof r?.id !== 'string' || typeof r?.name !== 'string' || typeof r?.enabled !== 'boolean' ||
+        !TRIGGERS.includes(r?.trigger) || typeof r?.hours !== 'number' || !(r.hours > 0) || !Array.isArray(r?.actions)
+      ) {
+        return c.json({ error: 'invalid time rule' }, 400);
+      }
+      for (const a of r.actions) {
+        if (typeof a?.type !== 'string' || !ACTIONS.includes(a.type) || typeof a?.value !== 'string') {
+          return c.json({ error: 'invalid time-rule action' }, 400);
+        }
+      }
+    }
+    setSetting(db, 'time_rules', JSON.stringify(input));
+    return c.json(input);
+  });
+
+  // Run the time-based rules now (also runs on a background interval).
+  app.post('/api/settings/time-rules/run', (c) => c.json({ fired: evaluateTimeRules(Date.now()) }));
 
   app.post('/api/agents', async (c) => {
     let input: { name?: unknown; email?: unknown; role?: unknown };
@@ -2860,6 +2964,17 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       .all(like, like, like, like) as { id: string }[];
     return c.json({ ticketIds: rows.map((r) => r.id) });
   });
+
+  // Evaluate time-based rules on a background interval. Unref'd so it never keeps
+  // the process (or a test harness) alive; wrapped so a bad rule can't crash it.
+  const timeRuleTimer = setInterval(() => {
+    try {
+      evaluateTimeRules(Date.now());
+    } catch (err) {
+      console.error('[time-rules]', err instanceof Error ? err.message : err);
+    }
+  }, 5 * 60_000);
+  if (typeof timeRuleTimer.unref === 'function') timeRuleTimer.unref();
 
   return { app, db };
 }
