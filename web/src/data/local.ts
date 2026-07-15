@@ -22,7 +22,7 @@ const AUTO_STATUSES: TicketStatus[] = ['open', 'pending', 'on_hold', 'solved', '
 /** Fields automation reads and may mutate on a freshly created ticket. */
 interface AutoMut {
   subject: string; priority: TicketPriority; tags: string[];
-  assigneeId: string | null; status: TicketStatus;
+  assigneeId: string | null; status: TicketStatus; category: string | null;
 }
 interface AutoCtx { body: string; channelType: string; from: string; }
 
@@ -54,6 +54,8 @@ function applyAutomationLocal(rules: AutomationRule[], mut: AutoMut, ctx: AutoCt
         mut.assigneeId = action.value;
       } else if (action.type === 'set_status' && AUTO_STATUSES.includes(action.value as TicketStatus)) {
         mut.status = action.value as TicketStatus;
+      } else if (action.type === 'set_category') {
+        mut.category = action.value.trim() === '' ? null : action.value;
       }
     }
   }
@@ -490,7 +492,7 @@ export class LocalRepository implements Repository {
   async createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority }): Promise<{ ticket: Ticket; message: Message }> {
     const now = new Date().toISOString();
     const number = this.data.tickets.reduce((max, t) => Math.max(max, t.number), 0) + 1;
-    const shaped: AutoMut = { subject: input.subject, priority: input.priority, tags: [], assigneeId: null, status: 'open' };
+    const shaped: AutoMut = { subject: input.subject, priority: input.priority, tags: [], assigneeId: null, status: 'open', category: null };
     applyAutomationLocal(this.data.automation, shaped, { body: input.body, channelType: 'web', from: '' });
     const ticket: Ticket = {
       id: nextId(this.data.tickets, 't_', 3),
@@ -514,7 +516,7 @@ export class LocalRepository implements Repository {
       mergedIntoId: null,
       awaitingReply: true,
       customFields: {},
-      category: null,
+      category: shaped.category,
     };
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),

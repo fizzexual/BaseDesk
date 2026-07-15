@@ -30,6 +30,7 @@ const CONDITION_TYPES: { value: AutomationConditionType; label: string }[] = [
 const ACTION_TYPES: { value: AutomationActionType; label: string }[] = [
   { value: 'set_priority', label: 'Set priority' },
   { value: 'set_status', label: 'Set status' },
+  { value: 'set_category', label: 'Set category' },
   { value: 'add_tag', label: 'Add tag' },
   { value: 'assign', label: 'Assign to' },
 ];
@@ -133,6 +134,7 @@ function defaultActionValue(type: AutomationActionType, prev: string, agentIds: 
   if (type === 'set_priority') return isPriority(prev) ? prev : 'urgent';
   if (type === 'set_status') return STATUS_OPTIONS.some((o) => o.value === prev) ? prev : 'open';
   if (type === 'assign') return agentIds.includes(prev) ? prev : (agentIds[0] ?? '');
+  // set_category / add_tag: free text — drop any leftover priority/agent token.
   return isPriority(prev) || agentIds.includes(prev) ? '' : prev;
 }
 
@@ -403,6 +405,19 @@ export function AutomationSettings() {
                           setActions(rule, next);
                         }}
                         className="flex-1"
+                      />
+                    ) : action.type === 'set_category' ? (
+                      <input
+                        type="text"
+                        aria-label="Category"
+                        placeholder="Category (e.g. Billing)"
+                        value={action.value}
+                        onChange={(e) => {
+                          const next = [...rule.actions];
+                          next[i] = { type: 'set_category', value: e.target.value };
+                          setActions(rule, next);
+                        }}
+                        className={FIELD}
                       />
                     ) : (
                       <input

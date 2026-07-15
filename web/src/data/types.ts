@@ -67,7 +67,7 @@ export interface SlaTarget { firstResponseMins: number; resolutionMins: number; 
 export type SlaTargets = Record<TicketPriority, SlaTarget>;
 
 export type AutomationConditionType = 'subject_contains' | 'body_contains' | 'priority_is' | 'channel_is' | 'from_contains';
-export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign' | 'set_status';
+export type AutomationActionType = 'set_priority' | 'add_tag' | 'assign' | 'set_status' | 'set_category';
 export interface AutomationCondition { type: AutomationConditionType; value: string }
 export interface AutomationAction { type: AutomationActionType; value: string }
 export interface AutomationRule {

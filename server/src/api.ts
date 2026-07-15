@@ -45,7 +45,7 @@ const DEAL_TYPES: DealType[] = ['expansion', 'retention', 'inbound'];
 const DEAL_STAGES: DealStage[] = ['open', 'won', 'lost'];
 const RESOLVED_STATUSES = ['solved', 'closed'];
 
-interface AutoMut { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null; status: TicketStatus }
+interface AutoMut { subject: string; priority: TicketPriority; tags: string[]; assigneeId: string | null; status: TicketStatus; category: string | null }
 interface AutoCtx { subjectLc: string; bodyLc: string; fromLc: string; channelType: string }
 
 function evalCondition(cond: AutomationCondition, mut: AutoMut, ctx: AutoCtx): boolean {
@@ -65,6 +65,7 @@ function applyAutoAction(action: AutomationAction, mut: AutoMut): void {
   else if (action.type === 'add_tag') { if (!mut.tags.includes(action.value)) mut.tags.push(action.value); }
   else if (action.type === 'assign') mut.assigneeId = action.value;
   else if (action.type === 'set_status' && STATUSES.includes(action.value as TicketStatus)) mut.status = action.value as TicketStatus;
+  else if (action.type === 'set_category') mut.category = action.value.trim() === '' ? null : action.value;
 }
 
 /** Runs enabled automation rules over a ticket mutation, in order. */
@@ -715,7 +716,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     // Automation rules may adjust priority/tags/assignee/status at creation time.
     const requester = getContact(db, requesterId);
     const shaped: AutoMut = {
-      subject: subject.trim(), priority: priority as TicketPriority, tags: [], assigneeId: null, status: 'open',
+      subject: subject.trim(), priority: priority as TicketPriority, tags: [], assigneeId: null, status: 'open', category: null,
     };
     runAutomation(automationRules(), shaped, {
       subjectLc: shaped.subject.toLowerCase(), bodyLc: body.toLowerCase(),
@@ -744,7 +745,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       mergedIntoId: null,
       awaitingReply: true,
       customFields: {},
-      category: null,
+      category: shaped.category,
     };
     const message: Message = {
       id: newId('m_'),
@@ -1570,7 +1571,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     if (!Array.isArray(input)) return c.json({ error: 'automation must be an array' }, 400);
     const CONDITIONS = ['subject_contains', 'body_contains', 'priority_is', 'channel_is', 'from_contains'];
-    const ACTIONS = ['set_priority', 'add_tag', 'assign', 'set_status'];
+    const ACTIONS = ['set_priority', 'add_tag', 'assign', 'set_status', 'set_category'];
     for (const r of input as AutomationRule[]) {
       if (
         typeof r?.id !== 'string' || typeof r?.name !== 'string' || typeof r?.enabled !== 'boolean' ||
