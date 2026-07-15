@@ -9,7 +9,7 @@ import type { Agent, DealType, StatsOverview, TicketPriority, TicketStatus } fro
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { Tooltip } from '../../components/Tooltip';
-import { IconChart, IconTag, IconUser } from '../../icons';
+import { IconBook, IconChart, IconTag, IconUser } from '../../icons';
 import { AreaChart } from './charts/AreaChart';
 import { Donut } from './charts/Donut';
 import { HBars } from './charts/HBars';
@@ -144,6 +144,50 @@ function ForecastCard({ stats }: { stats: StatsOverview }) {
       }
     >
       <AreaChart series={[{ name: 'Tickets', color: 'var(--blue)', points: combined }]} dashFrom={historical.length - 1} />
+    </ChartCard>
+  );
+}
+
+function KnowledgeGaps({ stats }: { stats: StatsOverview }) {
+  const kb = useApp((s) => s.kb);
+  const gaps = useMemo(() => {
+    const published = Object.values(kb).filter((a) => a.status === 'published');
+    return stats.topTags
+      .filter((t) => t.count >= 3)
+      .map(({ tag, count }) => {
+        const term = tag.replace(/-/g, ' ').toLowerCase();
+        const covered = published.some((a) => `${a.title} ${a.category ?? ''} ${a.body}`.toLowerCase().includes(term));
+        return { tag, count, covered };
+      })
+      .filter((g) => !g.covered)
+      .slice(0, 8);
+  }, [stats.topTags, kb]);
+
+  return (
+    <ChartCard
+      title="Knowledge gaps"
+      tooltip={{
+        title: 'Knowledge gaps',
+        desc: 'High-volume ticket topics with no matching published article — what to document next to deflect repeat questions.',
+      }}
+    >
+      {gaps.length === 0 ? (
+        <EmptyState icon={<IconBook size={28} />} title="Good coverage" hint="Every busy topic already has an article behind it." />
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {gaps.map((g) => (
+            <li key={g.tag} className="flex items-center gap-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                <span className="font-medium">#{g.tag}</span>
+                <span className="text-text-3"> · {nf.format(g.count)} tickets, no article</span>
+              </span>
+              <Link to="/kb" className="shrink-0 text-[13px] font-medium text-text-2 transition-colors hover:text-accent">
+                Write one →
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </ChartCard>
   );
 }
@@ -460,6 +504,8 @@ export function ReportsPage() {
           <ForecastCard stats={stats} />
 
           <TopicAnalytics stats={stats} />
+
+          <KnowledgeGaps stats={stats} />
 
           <AgentPerformanceTable stats={stats} agents={agents} />
 
