@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -199,6 +199,20 @@ export function openDb(dataDir: string): DatabaseSync {
       decisionNote TEXT,
       createdAt TEXT NOT NULL,
       decidedAt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS side_conversations (
+      id TEXT PRIMARY KEY,
+      ticketId TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      participant TEXT,
+      createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS side_messages (
+      id TEXT PRIMARY KEY,
+      sideId TEXT NOT NULL,
+      authorId TEXT NOT NULL,
+      body TEXT NOT NULL,
+      at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -663,6 +677,37 @@ export function decideApproval(
 ): void {
   db.prepare('UPDATE ticket_approvals SET status = ?, decidedById = ?, decisionNote = ?, decidedAt = ? WHERE id = ?')
     .run(a.status, a.decidedById, a.decisionNote, a.decidedAt, a.id);
+}
+
+/** A ticket's private side conversations, oldest first, each with its message thread and author names resolved. */
+export function getSideConversations(db: DatabaseSync, ticketId: string): SideConversation[] {
+  const convs = db
+    .prepare('SELECT id, ticketId, subject, participant, createdAt FROM side_conversations WHERE ticketId = ? ORDER BY createdAt ASC, rowid ASC')
+    .all(ticketId) as { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[];
+  const msgStmt = db.prepare(
+    `SELECT m.id, m.authorId, m.body, m.at, a.name AS authorName
+       FROM side_messages m LEFT JOIN agents a ON a.id = m.authorId
+      WHERE m.sideId = ? ORDER BY m.at ASC, m.rowid ASC`,
+  );
+  return convs.map((c) => ({ ...c, messages: msgStmt.all(c.id) as unknown as SideMessage[] }));
+}
+
+export function getSideConversation(db: DatabaseSync, id: string): { id: string; ticketId: string } | null {
+  const row = db.prepare('SELECT id, ticketId FROM side_conversations WHERE id = ?').get(id) as { id: string; ticketId: string } | undefined;
+  return row ?? null;
+}
+
+export function insertSideConversation(
+  db: DatabaseSync,
+  s: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string },
+): void {
+  db.prepare('INSERT INTO side_conversations (id, ticketId, subject, participant, createdAt) VALUES (?, ?, ?, ?, ?)')
+    .run(s.id, s.ticketId, s.subject, s.participant, s.createdAt);
+}
+
+export function insertSideMessage(db: DatabaseSync, m: { id: string; sideId: string; authorId: string; body: string; at: string }): void {
+  db.prepare('INSERT INTO side_messages (id, sideId, authorId, body, at) VALUES (?, ?, ?, ?, ?)')
+    .run(m.id, m.sideId, m.authorId, m.body, m.at);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

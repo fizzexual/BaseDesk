@@ -15,6 +15,7 @@ import {
   hasTimeRuleFired, recordTimeRuleFired,
   insertLink, removeLink, getLinkRows, linkExists,
   getApprovals, getApproval, insertApproval, decideApproval,
+  getSideConversations, getSideConversation, insertSideConversation, insertSideMessage,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -1231,6 +1232,48 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     decideApproval(db, { id: approval.id, status: body.decision, decidedById: currentAgentId(), decisionNote: note, decidedAt: now });
     logEvent(id, 'approval', currentAgentId(), { state: body.decision }, now);
     return c.json(getApprovals(db, id));
+  });
+
+  // Side conversations: private sub-threads on a ticket, kept off the customer conversation.
+  app.get('/api/tickets/:id/side-conversations', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getSideConversations(db, id));
+  });
+  app.post('/api/tickets/:id/side-conversations', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let body: { subject?: unknown; participant?: unknown; body?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
+    if (subject === '') return c.json({ error: 'subject is required' }, 400);
+    const participant = typeof body.participant === 'string' && body.participant.trim() !== '' ? body.participant.trim() : null;
+    const now = new Date().toISOString();
+    const sideId = newId('side_');
+    insertSideConversation(db, { id: sideId, ticketId: id, subject, participant, createdAt: now });
+    const firstBody = typeof body.body === 'string' ? body.body.trim() : '';
+    if (firstBody !== '') insertSideMessage(db, { id: newId('sm_'), sideId, authorId: currentAgentId(), body: firstBody, at: now });
+    return c.json(getSideConversations(db, id));
+  });
+  app.post('/api/tickets/:id/side-conversations/:sideId/messages', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    const side = getSideConversation(db, c.req.param('sideId'));
+    if (side === null || side.ticketId !== id) return c.json({ error: 'side conversation not found' }, 404);
+    let body: { body?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const text = typeof body.body === 'string' ? body.body.trim() : '';
+    if (text === '') return c.json({ error: 'message body is required' }, 400);
+    insertSideMessage(db, { id: newId('sm_'), sideId: side.id, authorId: currentAgentId(), body: text, at: new Date().toISOString() });
+    return c.json(getSideConversations(db, id));
   });
 
   // Intake-form answers captured when the ticket was opened (shown as metadata).

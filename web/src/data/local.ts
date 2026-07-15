@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -269,6 +269,8 @@ export class LocalRepository implements Repository {
     id: string; ticketId: string; requestedById: string; approverId: string | null; reason: string;
     status: ApprovalStatus; decidedById: string | null; decisionNote: string | null; createdAt: string; decidedAt: string | null;
   }[] = []; // demo-only, in-memory
+  private sideConvos: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[] = []; // demo-only
+  private sideMsgs: { id: string; sideId: string; authorId: string; body: string; at: string }[] = []; // demo-only
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -934,6 +936,40 @@ export class LocalRepository implements Repository {
       this.pushEvent(ticketId, 'approval', CURRENT_AGENT_ID, { state: decision }, now);
     }
     return this.approvalsFor(ticketId);
+  }
+
+  private sideConvosFor(ticketId: string): SideConversation[] {
+    const name = (id: string) => this.data.agents.find((a) => a.id === id)?.name ?? null;
+    return this.sideConvos
+      .filter((c) => c.ticketId === ticketId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => ({
+        ...c,
+        messages: this.sideMsgs
+          .filter((m) => m.sideId === c.id)
+          .sort((a, b) => a.at.localeCompare(b.at))
+          .map((m) => ({ ...m, authorName: name(m.authorId) })),
+      }));
+  }
+  async getSideConversations(ticketId: string): Promise<SideConversation[]> {
+    return this.sideConvosFor(ticketId);
+  }
+  async createSideConversation(ticketId: string, subject: string, participant: string | null, body: string): Promise<SideConversation[]> {
+    const subj = subject.trim();
+    if (subj === '') throw new Error('subject is required');
+    const now = new Date().toISOString();
+    const sideId = `side_${Date.now().toString(36)}_${this.sideConvos.length}`;
+    this.sideConvos.push({ id: sideId, ticketId, subject: subj, participant: participant && participant.trim() !== '' ? participant.trim() : null, createdAt: now });
+    if (body.trim() !== '') this.sideMsgs.push({ id: `sm_${Date.now().toString(36)}_${this.sideMsgs.length}`, sideId, authorId: CURRENT_AGENT_ID, body: body.trim(), at: now });
+    return this.sideConvosFor(ticketId);
+  }
+  async addSideMessage(ticketId: string, sideId: string, body: string): Promise<SideConversation[]> {
+    const text = body.trim();
+    const side = this.sideConvos.find((c) => c.id === sideId && c.ticketId === ticketId);
+    if (side && text !== '') {
+      this.sideMsgs.push({ id: `sm_${Date.now().toString(36)}_${this.sideMsgs.length}`, sideId, authorId: CURRENT_AGENT_ID, body: text, at: new Date().toISOString() });
+    }
+    return this.sideConvosFor(ticketId);
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

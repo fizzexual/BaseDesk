@@ -364,6 +364,24 @@ export interface TicketLink {
   type: TicketLinkType;
 }
 
+/** One message in a side conversation. authorName resolves at read time. */
+export interface SideMessage {
+  id: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  at: string;
+}
+/** A private sub-thread on a ticket — to consult a colleague or vendor, kept off the customer conversation. */
+export interface SideConversation {
+  id: string;
+  ticketId: string;
+  subject: string;
+  participant: string | null; // who's being looped in (free text: a team, a name, an email)
+  createdAt: string;
+  messages: SideMessage[];
+}
+
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 /** A request for sign-off on a ticket action (e.g. a refund). Names resolve at read time. */
 export interface TicketApproval {

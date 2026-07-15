@@ -360,6 +360,22 @@ export interface TicketLink {
   type: TicketLinkType;
 }
 
+export interface SideMessage {
+  id: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  at: string;
+}
+export interface SideConversation {
+  id: string;
+  ticketId: string;
+  subject: string;
+  participant: string | null;
+  createdAt: string;
+  messages: SideMessage[];
+}
+
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export interface TicketApproval {
   id: string;

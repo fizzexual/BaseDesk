@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -42,6 +42,7 @@ export interface AppState {
   ticketTasks: Record<string, TicketTask[]>; // checklist items, keyed by ticketId
   ticketLinks: Record<string, TicketLink[]>; // related/blocking tickets, keyed by ticketId
   ticketApprovals: Record<string, TicketApproval[]>; // approval requests, keyed by ticketId
+  sideConversations: Record<string, SideConversation[]>; // private sub-threads, keyed by ticketId
   ticketIntake: Record<string, IntakeAnswer[]>; // intake-form answers, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
@@ -63,6 +64,8 @@ export interface AppState {
   removeLink(ticketId: string, linkId: string): Promise<void>;
   requestApproval(ticketId: string, reason: string, approverId: string | null): Promise<void>;
   decideApproval(ticketId: string, approvalId: string, decision: 'approved' | 'rejected', note: string | null): Promise<void>;
+  createSideConversation(ticketId: string, subject: string, participant: string | null, body: string): Promise<void>;
+  addSideMessage(ticketId: string, sideId: string, body: string): Promise<void>;
   /** Live sync: merge the latest tickets from the server into the store. */
   refreshTickets(): Promise<void>;
   /** Live sync: re-fetch an open ticket's messages + read receipts so new replies appear. */
@@ -221,6 +224,7 @@ export function createAppStore(repository: Repository) {
     ticketTasks: {},
     ticketLinks: {},
     ticketApprovals: {},
+    sideConversations: {},
     ticketIntake: {},
     composerPrefill: null,
     currentAgentId: '',
@@ -307,13 +311,14 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const [seen, intake, followers, tasks, links, approvals] = await Promise.all([
+      const [seen, intake, followers, tasks, links, approvals, sideConvos] = await Promise.all([
         repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
         repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
         repository.getFollowers(ticketId).catch(() => [] as TicketFollower[]),
         repository.getTasks(ticketId).catch(() => [] as TicketTask[]),
         repository.getLinks(ticketId).catch(() => [] as TicketLink[]),
         repository.getApprovals(ticketId).catch(() => [] as TicketApproval[]),
+        repository.getSideConversations(ticketId).catch(() => [] as SideConversation[]),
       ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
@@ -324,6 +329,7 @@ export function createAppStore(repository: Repository) {
         ticketTasks: { ...s.ticketTasks, [ticketId]: tasks },
         ticketLinks: { ...s.ticketLinks, [ticketId]: links },
         ticketApprovals: { ...s.ticketApprovals, [ticketId]: approvals },
+        sideConversations: { ...s.sideConversations, [ticketId]: sideConvos },
       }));
     },
 
@@ -378,6 +384,16 @@ export function createAppStore(repository: Repository) {
       const approvals = await repository.decideApproval(ticketId, approvalId, decision, note);
       set((s) => ({ ticketApprovals: { ...s.ticketApprovals, [ticketId]: approvals } }));
       if (get().ticketEvents[ticketId] !== undefined) void get().loadEvents(ticketId).catch(() => {});
+    },
+
+    async createSideConversation(ticketId, subject, participant, body) {
+      const list = await repository.createSideConversation(ticketId, subject, participant, body);
+      set((s) => ({ sideConversations: { ...s.sideConversations, [ticketId]: list } }));
+    },
+
+    async addSideMessage(ticketId, sideId, body) {
+      const list = await repository.addSideMessage(ticketId, sideId, body);
+      set((s) => ({ sideConversations: { ...s.sideConversations, [ticketId]: list } }));
     },
 
     async refreshTickets() {
