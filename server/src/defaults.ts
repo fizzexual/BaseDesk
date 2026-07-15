@@ -1,4 +1,4 @@
-import type { AiProviderConfig, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, SlaHours, SlaTargets, SmtpConfig } from './types.js';
 
 /**
  * A ready-to-use branching intake form. Admins can edit or disable it; it ships
@@ -80,6 +80,13 @@ export const DEFAULT_SLA_HOURS: SlaHours = {
   days: [1, 2, 3, 4, 5],
   start: '09:00',
   end: '17:00',
+};
+
+/** Auto-acknowledgement is off by default; agents opt in and tune the wording. */
+export const DEFAULT_AUTO_ACK: AutoAck = {
+  enabled: false,
+  message:
+    "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
 
 /** Sample automation rules so the feature demos immediately; users edit or remove them. */

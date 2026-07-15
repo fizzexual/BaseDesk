@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -16,6 +16,7 @@ export interface BootstrapData {
   savedViews: SavedView[];
   notifications: Notification[];
   assignment: AssignmentSettings;
+  autoAck: AutoAck;
   intakeForm: IntakeForm;
   categories: string[];
 }
@@ -84,6 +85,7 @@ export interface Repository {
   /** Export contacts or tickets as CSV text. */
   exportCsv(type: ImportType): Promise<string>;
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings>;
+  saveAutoAck(settings: AutoAck): Promise<AutoAck>;
   saveIntakeForm(form: IntakeForm): Promise<IntakeForm>;
   inviteAgent(input: AgentInvite): Promise<Agent>;
   updateAgent(id: string, patch: AgentPatch): Promise<Agent>;

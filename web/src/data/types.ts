@@ -349,6 +349,13 @@ export interface AssignmentSettings {
   strategy: 'round_robin' | 'least_busy';
 }
 
+/** An automatic first reply sent the moment a ticket is opened. */
+export interface AutoAck {
+  enabled: boolean;
+  /** Body of the auto-reply; supports {{number}} and {{name}} placeholders. */
+  message: string;
+}
+
 /** Aggregate AI token spend across every recorded model call. */
 export interface AiUsage {
   promptTokens: number;

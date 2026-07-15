@@ -2,14 +2,14 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
+  AssignmentSettings, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview,
   SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -95,6 +95,7 @@ interface LocalData {
   notifications: Notification[];
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
+  autoAck: AutoAck;
   events: TicketEvent[];
 }
 
@@ -235,6 +236,7 @@ function seedData(): LocalData {
     intakeForm: DEFAULT_INTAKE_FORM,
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
+    autoAck: { ...DEFAULT_AUTO_ACK },
     events: [],
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
@@ -339,6 +341,10 @@ export class LocalRepository implements Repository {
         this.data.assignmentRr = 0;
         this.persist();
       }
+      if (this.data.autoAck === undefined) {
+        this.data.autoAck = { ...DEFAULT_AUTO_ACK };
+        this.persist();
+      }
       if (!Array.isArray(this.data.events)) {
         this.data.events = [];
         this.persist();
@@ -431,6 +437,7 @@ export class LocalRepository implements Repository {
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
+      autoAck: { ...this.data.autoAck },
       intakeForm: this.data.intakeForm,
       categories: categoriesFromForm(this.data.intakeForm),
     };
@@ -531,6 +538,19 @@ export class LocalRepository implements Repository {
     this.data.messages.push(message);
     this.runAgentsOnTicket(ticket, input.body);
     this.autoAssign(ticket);
+    // Auto-acknowledgement: an instant first reply if enabled (doesn't stamp SLA).
+    if (this.data.autoAck.enabled && this.data.autoAck.message.trim() !== '') {
+      const author = ticket.assigneeId ?? this.data.agents.find((a) => a.status === 'active')?.id ?? null;
+      if (author !== null) {
+        const ackNow = new Date().toISOString();
+        const first = (this.data.contacts.find((c) => c.id === input.requesterId)?.name ?? '').trim().split(/\s+/)[0] || 'there';
+        const ackBody = this.data.autoAck.message.replaceAll('{{number}}', String(ticket.number)).replaceAll('{{name}}', first);
+        this.data.messages.push({ id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'agent', authorId: author, kind: 'reply', body: ackBody, at: ackNow });
+        ticket.lastMessageAt = ackNow;
+        ticket.lastMessagePreview = preview(ackBody);
+        ticket.updatedAt = ackNow;
+      }
+    }
     this.persist();
     return { ticket: this.stampAwaiting({ ...ticket, tags: [...ticket.tags] }), message: { ...message } };
   }
@@ -569,6 +589,12 @@ export class LocalRepository implements Repository {
     this.data.assignment = { enabled: settings.enabled === true, strategy: settings.strategy === 'least_busy' ? 'least_busy' : 'round_robin' };
     this.persist();
     return { ...this.data.assignment };
+  }
+
+  async saveAutoAck(settings: AutoAck): Promise<AutoAck> {
+    this.data.autoAck = { enabled: settings.enabled === true, message: String(settings.message) };
+    this.persist();
+    return { ...this.data.autoAck };
   }
 
   /** Mirrors the server: highest-autonomy enabled agent acts on a new ticket. */

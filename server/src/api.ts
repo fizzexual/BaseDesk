@@ -19,13 +19,13 @@ import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
-import { DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, Attachment, AutomationAction, AutomationCondition, AutomationRule,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -344,6 +344,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return DEFAULT_SLA_HOURS;
     }
   };
+  const autoAck = (): AutoAck => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'auto_ack') ?? '') as { enabled?: unknown; message?: unknown };
+      return { enabled: raw.enabled === true, message: typeof raw.message === 'string' ? raw.message : DEFAULT_AUTO_ACK.message };
+    } catch {
+      return DEFAULT_AUTO_ACK;
+    }
+  };
 
   const assignmentSettings = (): AssignmentSettings => {
     try {
@@ -507,6 +515,30 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     sendReplyToChannel(ticket, body);
   };
 
+  /** If enabled, fire an automatic first reply the instant a ticket is opened. */
+  const sendAutoAck = (ticketId: string, contactName: string): void => {
+    const cfg = autoAck();
+    if (!cfg.enabled || cfg.message.trim() === '') return;
+    const ticket = getTicket(db, ticketId);
+    if (ticket === null) return;
+    const author =
+      ticket.assigneeId ??
+      getAgents(db).find((a) => a.status === 'active' && a.role === 'admin')?.id ??
+      getAgents(db).find((a) => a.status === 'active')?.id ??
+      null;
+    if (author === null) return;
+    const now = new Date().toISOString();
+    const first = contactName.trim().split(/\s+/)[0] || 'there';
+    const body = cfg.message.replaceAll('{{number}}', String(ticket.number)).replaceAll('{{name}}', first);
+    db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(newId('m_'), ticketId, 'agent', author, 'reply', body, now);
+    // Newest message, but we don't stamp firstRespondedAt — SLA still measures the
+    // human first response.
+    db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+      .run(now, now, preview(body), ticketId);
+    deliverReply(ticket, body);
+  };
+
   /**
    * Runs the enabled AI agents against a freshly-arrived ticket. The
    * highest-autonomy matching agent acts once: a resolve agent that deflects to
@@ -628,6 +660,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       savedViews: getSavedViews(db),
       notifications: getNotifications(db, currentAgentId()),
       assignment: assignmentSettings(),
+      autoAck: autoAck(),
       slaHours: slaHours() as BootstrapData['slaHours'],
       aiProvider: toPublicProvider(getAiProviderConfig(db)),
       smtp: toPublicSmtp(getSmtpConfig(db)),
@@ -771,6 +804,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     // AI agents evaluate the new ticket (may auto-resolve it).
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, ticket.assigneeId, ticket.category);
+    sendAutoAck(ticket.id, requester?.name ?? '');
     return c.json({ ticket: getTicket(db, ticket.id), message });
   });
 
@@ -1626,6 +1660,22 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(input);
   });
 
+  app.put('/api/settings/auto-ack', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const a = input as Record<string, unknown>;
+    if (typeof a?.enabled !== 'boolean' || typeof a?.message !== 'string') {
+      return c.json({ error: 'invalid auto-acknowledgement settings' }, 400);
+    }
+    const value: AutoAck = { enabled: a.enabled, message: a.message };
+    setSetting(db, 'auto_ack', JSON.stringify(value));
+    return c.json(value);
+  });
+
   app.post('/api/agents', async (c) => {
     let input: { name?: unknown; email?: unknown; role?: unknown };
     try {
@@ -2317,6 +2367,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, null, ticket.category);
+    sendAutoAck(ticket.id, contact.name);
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
@@ -2598,6 +2649,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, null, ticket.category);
+    sendAutoAck(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
     return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
   });
 

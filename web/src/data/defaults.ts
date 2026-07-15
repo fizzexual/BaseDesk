@@ -1,4 +1,4 @@
-import type { AiProvider, AutomationRule, SlaHours, SlaTargets, SmtpSettings } from './types';
+import type { AiProvider, AutoAck, AutomationRule, SlaHours, SlaTargets, SmtpSettings } from './types';
 
 /** Client-facing default SMTP settings: no email configured. */
 export const DEFAULT_SMTP: SmtpSettings = {
@@ -40,6 +40,12 @@ export const DEFAULT_SLA_HOURS: SlaHours = {
   days: [1, 2, 3, 4, 5],
   start: '09:00',
   end: '17:00',
+};
+
+export const DEFAULT_AUTO_ACK: AutoAck = {
+  enabled: false,
+  message:
+    "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
 
 export const DEFAULT_AUTOMATION: AutomationRule[] = [

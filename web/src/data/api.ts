@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult,
   CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -160,6 +160,9 @@ export class ApiRepository implements Repository {
 
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings> {
     return request('/settings/assignment', jsonInit('PUT', settings));
+  }
+  saveAutoAck(settings: AutoAck): Promise<AutoAck> {
+    return request('/settings/auto-ack', jsonInit('PUT', settings));
   }
 
   saveIntakeForm(form: IntakeForm): Promise<IntakeForm> {
