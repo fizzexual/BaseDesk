@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, CustomReport, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -100,6 +100,7 @@ interface LocalData {
   timeRules: TimeRule[];
   events: TicketEvent[];
   templates: TicketTemplate[];
+  customReports: CustomReport[];
 }
 
 function slugify(title: string): string {
@@ -261,6 +262,7 @@ function seedData(): LocalData {
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
     events: [],
     templates: DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] })),
+    customReports: [],
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -393,6 +395,10 @@ export class LocalRepository implements Repository {
         this.data.templates = DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] }));
         this.persist();
       }
+      if (!Array.isArray(this.data.customReports)) {
+        this.data.customReports = [];
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -453,6 +459,7 @@ export class LocalRepository implements Repository {
       agents: this.data.agents.map((a) => ({ ...a })),
       canned: this.data.canned.map((c) => ({ ...c })),
       templates: this.data.templates.map((t) => ({ ...t, tags: [...t.tags] })),
+      customReports: this.data.customReports.map((r) => ({ ...r })),
       deals: [...this.data.deals]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((d) => ({ ...d })),
@@ -1233,6 +1240,24 @@ export class LocalRepository implements Repository {
 
   async deleteTemplate(id: string): Promise<void> {
     this.data.templates = this.data.templates.filter((t) => t.id !== id);
+    this.persist();
+  }
+
+  async saveReport(r: CustomReport): Promise<CustomReport> {
+    const shaped = { name: r.name.trim(), metric: r.metric, dimension: r.dimension, range: r.range };
+    const existing = r.id ? this.data.customReports.find((x) => x.id === r.id) : undefined;
+    if (existing) {
+      Object.assign(existing, shaped);
+      this.persist();
+      return { ...existing };
+    }
+    const created: CustomReport = { id: r.id || nextId(this.data.customReports, 'rep_', 1), ...shaped };
+    this.data.customReports.push(created);
+    this.persist();
+    return { ...created };
+  }
+  async deleteReport(id: string): Promise<void> {
+    this.data.customReports = this.data.customReports.filter((r) => r.id !== id);
     this.persist();
   }
 

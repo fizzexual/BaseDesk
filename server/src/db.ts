@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, HandoverNote, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -121,6 +121,13 @@ export function openDb(dataDir: string): DatabaseSync {
       priority TEXT NOT NULL,
       category TEXT,
       tags TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE TABLE IF NOT EXISTS custom_reports (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      metric TEXT NOT NULL,
+      dimension TEXT NOT NULL,
+      range TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
@@ -408,6 +415,13 @@ export function getCannedReplies(db: DatabaseSync): CannedReply[] {
     body: r.body,
     actions: parseMacroActions(r.actions),
   }));
+}
+
+/** Read every saved custom report. */
+export function getCustomReports(db: DatabaseSync): CustomReport[] {
+  return db
+    .prepare('SELECT id, name, metric, dimension, range FROM custom_reports ORDER BY rowid')
+    .all() as unknown as CustomReport[];
 }
 
 /** Read every ticket template, decoding the JSON `tags` column. */

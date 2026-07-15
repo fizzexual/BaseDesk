@@ -249,6 +249,17 @@ export interface TicketTemplate {
   tags: string[];
 }
 
+export type ReportMetric = 'volume' | 'solved' | 'resolution' | 'csat';
+export type ReportDimension = 'day' | 'agent' | 'priority' | 'status' | 'category' | 'tag';
+export type ReportRange = 'last_7' | 'last_14' | 'last_30' | 'all';
+export interface CustomReport {
+  id: string;
+  name: string;
+  metric: ReportMetric;
+  dimension: ReportDimension;
+  range: ReportRange;
+}
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 

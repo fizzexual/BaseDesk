@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { repo } from '../../data';
 import { useApp } from '../../data/store';
 import { slaAttainment } from '../../data/sla';
@@ -311,6 +312,13 @@ export function ReportsPage() {
       <header className="flex items-baseline gap-2.5">
         <h1 className="text-[15px] font-semibold text-text">Reports</h1>
         <span className="text-[13px] text-text-3">Last 14 days</span>
+        <Link
+          to="/reports/builder"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+        >
+          <IconChart size={14} />
+          Report builder
+        </Link>
       </header>
 
       {failed ? (

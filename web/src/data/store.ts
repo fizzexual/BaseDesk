@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
-  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, ChannelConn, ChannelCreate,
+  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
@@ -14,7 +14,7 @@ import { applyTheme, readThemePref } from '../app/theme';
 export interface AppState {
   ready: boolean;
   tickets: Record<string, Ticket>; contacts: Record<string, Contact>;
-  agents: Record<string, Agent>; canned: CannedReply[]; templates: TicketTemplate[];
+  agents: Record<string, Agent>; canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[];
   deals: Record<string, Deal>;
   sla: SlaTargets;
   assignment: AssignmentSettings;
@@ -86,6 +86,7 @@ export interface AppState {
   createContact(input: { name: string; email: string; company?: string }): Promise<string>;
   saveCanned(c: CannedReply): Promise<void>; deleteCanned(id: string): Promise<void>;
   saveTemplate(t: TicketTemplate): Promise<void>; deleteTemplate(id: string): Promise<void>;
+  saveReport(r: CustomReport): Promise<CustomReport>; deleteReport(id: string): Promise<void>;
   createDeal(input: DealCreate): Promise<string>;               // returns id
   updateDeal(id: string, patch: DealPatch): Promise<void>;      // optimistic + rollback
   deleteDeal(id: string): Promise<void>;                        // optimistic + rollback
@@ -199,6 +200,7 @@ export function createAppStore(repository: Repository) {
     agents: {},
     canned: [],
     templates: [],
+    customReports: [],
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
@@ -242,6 +244,7 @@ export function createAppStore(repository: Repository) {
         agents: Object.fromEntries(data.agents.map((a) => [a.id, a])),
         canned: data.canned,
         templates: data.templates,
+        customReports: data.customReports,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
         assignment: data.assignment,
@@ -621,6 +624,20 @@ export function createAppStore(repository: Repository) {
     async deleteTemplate(id) {
       await repository.deleteTemplate(id);
       set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
+    },
+
+    async saveReport(r) {
+      const saved = await repository.saveReport(r);
+      set((s) => ({
+        customReports: s.customReports.some((x) => x.id === saved.id)
+          ? s.customReports.map((x) => (x.id === saved.id ? saved : x))
+          : [...s.customReports, saved],
+      }));
+      return saved;
+    },
+    async deleteReport(id) {
+      await repository.deleteReport(id);
+      set((s) => ({ customReports: s.customReports.filter((r) => r.id !== id) }));
     },
 
     async createDeal(input) {

@@ -257,6 +257,18 @@ export interface TicketTemplate {
   tags: string[];
 }
 
+export type ReportMetric = 'volume' | 'solved' | 'resolution' | 'csat';
+export type ReportDimension = 'day' | 'agent' | 'priority' | 'status' | 'category' | 'tag';
+export type ReportRange = 'last_7' | 'last_14' | 'last_30' | 'all';
+/** A saved custom report: a metric broken down by a dimension over a time range. */
+export interface CustomReport {
+  id: string;
+  name: string;
+  metric: ReportMetric;
+  dimension: ReportDimension;
+  range: ReportRange;
+}
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 
@@ -490,7 +502,7 @@ export interface ModelCache { baseUrl: string; models: string[]; fetchedAt: stri
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; templates: TicketTemplate[]; currentAgentId: string; deals: Deal[];
+  canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: PublicChannel[];
   availableModels: ModelCache | null;

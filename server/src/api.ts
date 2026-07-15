@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
-  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getChannel, getChannels, getContact,
+  getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getCustomReports, getChannel, getChannels, getContact,
   awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
@@ -31,7 +31,7 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, TicketTemplate, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, CustomReport, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -756,7 +756,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
-      tickets, contacts, agents, canned, templates: getTicketTemplates(db), deals,
+      tickets, contacts, agents, canned, templates: getTicketTemplates(db), customReports: getCustomReports(db), deals,
       currentAgentId: currentAgentId(),
       sla: slaTargets(),
       automation: automationRules(),
@@ -1672,6 +1672,57 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
 
   app.delete('/api/templates/:id', (c) => {
     db.prepare('DELETE FROM ticket_templates WHERE id = ?').run(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  // --- Custom reports: saved metric-by-dimension analytics configs ---
+  const REPORT_METRICS = ['volume', 'solved', 'resolution', 'csat'];
+  const REPORT_DIMENSIONS = ['day', 'agent', 'priority', 'status', 'category', 'tag'];
+  const REPORT_RANGES = ['last_7', 'last_14', 'last_30', 'all'];
+  const parseReportInput = (input: Record<string, unknown>): Omit<CustomReport, 'id'> | null => {
+    if (typeof input.name !== 'string' || input.name.trim() === '') return null;
+    if (typeof input.metric !== 'string' || !REPORT_METRICS.includes(input.metric)) return null;
+    if (typeof input.dimension !== 'string' || !REPORT_DIMENSIONS.includes(input.dimension)) return null;
+    if (typeof input.range !== 'string' || !REPORT_RANGES.includes(input.range)) return null;
+    return {
+      name: input.name.trim(),
+      metric: input.metric as CustomReport['metric'],
+      dimension: input.dimension as CustomReport['dimension'],
+      range: input.range as CustomReport['range'],
+    };
+  };
+  app.post('/api/reports', async (c) => {
+    let input: Record<string, unknown>;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const shaped = parseReportInput(input);
+    if (shaped === null) return c.json({ error: 'name, metric, dimension and range are required' }, 400);
+    const report: CustomReport = { id: newId('rep_'), ...shaped };
+    db.prepare('INSERT INTO custom_reports (id, name, metric, dimension, range) VALUES (?, ?, ?, ?, ?)')
+      .run(report.id, report.name, report.metric, report.dimension, report.range);
+    return c.json(report);
+  });
+  app.put('/api/reports/:id', async (c) => {
+    const id = c.req.param('id');
+    const existing = db.prepare('SELECT id FROM custom_reports WHERE id = ?').get(id) as { id: string } | undefined;
+    if (existing === undefined) return c.json({ error: `report not found: ${id}` }, 404);
+    let input: Record<string, unknown>;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const shaped = parseReportInput(input);
+    if (shaped === null) return c.json({ error: 'name, metric, dimension and range are required' }, 400);
+    db.prepare('UPDATE custom_reports SET name = ?, metric = ?, dimension = ?, range = ? WHERE id = ?')
+      .run(shaped.name, shaped.metric, shaped.dimension, shaped.range, id);
+    return c.json({ id, ...shaped } satisfies CustomReport);
+  });
+  app.delete('/api/reports/:id', (c) => {
+    db.prepare('DELETE FROM custom_reports WHERE id = ?').run(c.req.param('id'));
     return c.json({ ok: true });
   });
 

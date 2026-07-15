@@ -11,7 +11,18 @@ export interface HBarRow {
 
 const nf = new Intl.NumberFormat('en-US');
 
-export function HBars({ rows, labelWidth = 'w-20' }: { rows: HBarRow[]; labelWidth?: string }) {
+export function HBars({
+  rows,
+  labelWidth = 'w-20',
+  formatValue = (n: number) => nf.format(n),
+  valueWidth = 'w-10',
+}: {
+  rows: HBarRow[];
+  labelWidth?: string;
+  /** Formats the trailing value (e.g. "4.2h" for durations). Defaults to plain integers. */
+  formatValue?: (n: number) => string;
+  valueWidth?: string;
+}) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
@@ -24,8 +35,8 @@ export function HBars({ rows, labelWidth = 'w-20' }: { rows: HBarRow[]; labelWid
               style={{ width: `${(r.count / max) * 100}%`, background: r.color }}
             />
           </div>
-          <div className="w-10 shrink-0 text-right text-[13px] font-medium tabular-nums text-text">
-            {nf.format(r.count)}
+          <div className={`shrink-0 text-right text-[13px] font-medium tabular-nums text-text ${valueWidth}`}>
+            {formatValue(r.count)}
           </div>
         </div>
       ))}
