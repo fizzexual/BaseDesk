@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate,
+  CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -99,6 +99,15 @@ export class ApiRepository implements Repository {
   }
   deleteTask(ticketId: string, taskId: string): Promise<TicketTask[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
+  }
+  getLinks(ticketId: string): Promise<TicketLink[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/links`);
+  }
+  addLink(ticketId: string, linkedTicketId: string, type: TicketLinkType): Promise<TicketLink[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/links`, jsonInit('POST', { linkedTicketId, type }));
+  }
+  removeLink(ticketId: string, linkId: string): Promise<TicketLink[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/links/${encodeURIComponent(linkId)}`, { method: 'DELETE' });
   }
   uploadAttachment(file: File): Promise<Attachment> {
     const form = new FormData();

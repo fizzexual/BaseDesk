@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate,
-  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
+  ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
@@ -40,6 +40,7 @@ export interface AppState {
   ticketSeen: Record<string, TicketSeen[]>; // read receipts, keyed by ticketId
   ticketFollowers: Record<string, TicketFollower[]>; // watchers, keyed by ticketId
   ticketTasks: Record<string, TicketTask[]>; // checklist items, keyed by ticketId
+  ticketLinks: Record<string, TicketLink[]>; // related/blocking tickets, keyed by ticketId
   ticketIntake: Record<string, IntakeAnswer[]>; // intake-form answers, keyed by ticketId
   composerPrefill: string | null; // text to drop into the ticket composer (e.g. from an AI draft)
   currentAgentId: string;
@@ -56,6 +57,9 @@ export interface AppState {
   addTask(ticketId: string, title: string): Promise<void>;
   patchTask(ticketId: string, taskId: string, patch: { title?: string; done?: boolean }): Promise<void>;
   deleteTask(ticketId: string, taskId: string): Promise<void>;
+  /** Typed links to other tickets — each mutation refreshes the ticket's link list. */
+  addLink(ticketId: string, linkedTicketId: string, type: TicketLinkType): Promise<void>;
+  removeLink(ticketId: string, linkId: string): Promise<void>;
   /** Live sync: merge the latest tickets from the server into the store. */
   refreshTickets(): Promise<void>;
   /** Live sync: re-fetch an open ticket's messages + read receipts so new replies appear. */
@@ -208,6 +212,7 @@ export function createAppStore(repository: Repository) {
     ticketSeen: {},
     ticketFollowers: {},
     ticketTasks: {},
+    ticketLinks: {},
     ticketIntake: {},
     composerPrefill: null,
     currentAgentId: '',
@@ -293,11 +298,12 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const [seen, intake, followers, tasks] = await Promise.all([
+      const [seen, intake, followers, tasks, links] = await Promise.all([
         repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
         repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
         repository.getFollowers(ticketId).catch(() => [] as TicketFollower[]),
         repository.getTasks(ticketId).catch(() => [] as TicketTask[]),
+        repository.getLinks(ticketId).catch(() => [] as TicketLink[]),
       ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
@@ -306,6 +312,7 @@ export function createAppStore(repository: Repository) {
         ticketIntake: { ...s.ticketIntake, [ticketId]: intake },
         ticketFollowers: { ...s.ticketFollowers, [ticketId]: followers },
         ticketTasks: { ...s.ticketTasks, [ticketId]: tasks },
+        ticketLinks: { ...s.ticketLinks, [ticketId]: links },
       }));
     },
 
@@ -337,6 +344,16 @@ export function createAppStore(repository: Repository) {
     async deleteTask(ticketId, taskId) {
       const tasks = await repository.deleteTask(ticketId, taskId);
       set((s) => ({ ticketTasks: { ...s.ticketTasks, [ticketId]: tasks } }));
+    },
+
+    async addLink(ticketId, linkedTicketId, type) {
+      const links = await repository.addLink(ticketId, linkedTicketId, type);
+      set((s) => ({ ticketLinks: { ...s.ticketLinks, [ticketId]: links } }));
+    },
+
+    async removeLink(ticketId, linkId) {
+      const links = await repository.removeLink(ticketId, linkId);
+      set((s) => ({ ticketLinks: { ...s.ticketLinks, [ticketId]: links } }));
     },
 
     async refreshTickets() {

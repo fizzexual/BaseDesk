@@ -335,6 +335,17 @@ export interface TicketTask {
   doneAt: string | null;
 }
 
+/** A typed link to another ticket, phrased from the current ticket's perspective. */
+export type TicketLinkType = 'related' | 'blocks' | 'blocked_by' | 'duplicate_of' | 'duplicated_by';
+export interface TicketLink {
+  linkId: string; // the underlying row id (used to remove the link)
+  ticketId: string; // the OTHER ticket
+  number: number;
+  subject: string;
+  status: TicketStatus;
+  type: TicketLinkType;
+}
+
 /**
  * An @mention alert for one agent. Stored with raw ids; actorName and
  * ticketSubject are resolved at read time so renames stay accurate.

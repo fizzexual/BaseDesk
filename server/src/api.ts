@@ -13,6 +13,7 @@ import {
   followTicket, unfollowTicket, getFollowers,
   getTasks, getTask, insertTask, patchTask, removeTask, nextTaskPosition,
   hasTimeRuleFired, recordTimeRuleFired,
+  insertLink, removeLink, getLinkRows, linkExists,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -26,7 +27,7 @@ import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThrea
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule,
+  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -1094,6 +1095,61 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (task === null || task.ticketId !== id) return c.json({ error: 'task not found' }, 404);
     removeTask(db, taskId);
     return c.json(getTasks(db, id));
+  });
+
+  // Typed links between tickets (related / blocks / blocked by / duplicate of).
+  const linksJson = (ticketId: string): TicketLink[] =>
+    getLinkRows(db, ticketId)
+      .map((r): TicketLink | null => {
+        const outgoing = r.fromId === ticketId;
+        const otherId = outgoing ? r.toId : r.fromId;
+        const other = getTicket(db, otherId);
+        if (other === null) return null;
+        let type: TicketLinkType;
+        if (r.type === 'related') type = 'related';
+        else if (r.type === 'blocks') type = outgoing ? 'blocks' : 'blocked_by';
+        else type = outgoing ? 'duplicate_of' : 'duplicated_by';
+        return { linkId: r.id, ticketId: otherId, number: other.number, subject: other.subject, status: other.status, type };
+      })
+      .filter((l): l is TicketLink => l !== null);
+
+  app.get('/api/tickets/:id/links', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(linksJson(id));
+  });
+  app.post('/api/tickets/:id/links', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let body: { linkedTicketId?: unknown; type?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const linkedId = typeof body.linkedTicketId === 'string' ? body.linkedTicketId : '';
+    const type = body.type;
+    if (linkedId === '' || getTicket(db, linkedId) === null) return c.json({ error: 'unknown linked ticket' }, 400);
+    if (linkedId === id) return c.json({ error: 'a ticket cannot link to itself' }, 400);
+    if (type !== 'related' && type !== 'blocks' && type !== 'blocked_by' && type !== 'duplicate_of') {
+      return c.json({ error: 'invalid link type' }, 400);
+    }
+    if (linkExists(db, id, linkedId)) return c.json({ error: 'these tickets are already linked' }, 409);
+    // Normalize the perspective type to a directional stored row.
+    let fromId = id;
+    let toId = linkedId;
+    let stored = 'related';
+    if (type === 'blocks') stored = 'blocks';
+    else if (type === 'blocked_by') { stored = 'blocks'; fromId = linkedId; toId = id; }
+    else if (type === 'duplicate_of') stored = 'duplicate';
+    insertLink(db, { id: newId('lk_'), fromId, toId, type: stored, createdAt: new Date().toISOString() });
+    return c.json(linksJson(id));
+  });
+  app.delete('/api/tickets/:id/links/:linkId', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    removeLink(db, c.req.param('linkId'));
+    return c.json(linksJson(id));
   });
 
   // Intake-form answers captured when the ticket was opened (shown as metadata).

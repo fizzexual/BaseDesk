@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketPatch, TicketPriority, TicketStatus,
+  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -262,6 +262,7 @@ export class LocalRepository implements Repository {
   private followers = new Map<string, TicketFollower[]>(); // demo-only, in-memory
   private tasks = new Map<string, TicketTask[]>(); // demo-only, in-memory
   private timeRuleFired = new Set<string>(); // `${ruleId}:${ticketId}` — demo-only, not persisted
+  private links: { id: string; fromId: string; toId: string; type: string }[] = []; // demo-only, in-memory
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -817,6 +818,44 @@ export class LocalRepository implements Repository {
   async deleteTask(ticketId: string, taskId: string): Promise<TicketTask[]> {
     this.tasks.set(ticketId, (this.tasks.get(ticketId) ?? []).filter((x) => x.id !== taskId));
     return this.getTasks(ticketId);
+  }
+
+  private linksFor(ticketId: string): TicketLink[] {
+    return this.links
+      .filter((r) => r.fromId === ticketId || r.toId === ticketId)
+      .map((r): TicketLink | null => {
+        const outgoing = r.fromId === ticketId;
+        const otherId = outgoing ? r.toId : r.fromId;
+        const other = this.data.tickets.find((t) => t.id === otherId);
+        if (!other) return null;
+        let type: TicketLinkType;
+        if (r.type === 'related') type = 'related';
+        else if (r.type === 'blocks') type = outgoing ? 'blocks' : 'blocked_by';
+        else type = outgoing ? 'duplicate_of' : 'duplicated_by';
+        return { linkId: r.id, ticketId: otherId, number: other.number, subject: other.subject, status: other.status, type };
+      })
+      .filter((l): l is TicketLink => l !== null);
+  }
+  async getLinks(ticketId: string): Promise<TicketLink[]> {
+    return this.linksFor(ticketId);
+  }
+  async addLink(ticketId: string, linkedTicketId: string, type: TicketLinkType): Promise<TicketLink[]> {
+    const other = this.data.tickets.find((t) => t.id === linkedTicketId);
+    const dup = this.links.some((r) => (r.fromId === ticketId && r.toId === linkedTicketId) || (r.fromId === linkedTicketId && r.toId === ticketId));
+    if (other && linkedTicketId !== ticketId && !dup) {
+      let fromId = ticketId;
+      let toId = linkedTicketId;
+      let stored = 'related';
+      if (type === 'blocks') stored = 'blocks';
+      else if (type === 'blocked_by') { stored = 'blocks'; fromId = linkedTicketId; toId = ticketId; }
+      else if (type === 'duplicate_of') stored = 'duplicate';
+      this.links.push({ id: `lk_${Date.now().toString(36)}_${this.links.length}`, fromId, toId, type: stored });
+    }
+    return this.linksFor(ticketId);
+  }
+  async removeLink(ticketId: string, linkId: string): Promise<TicketLink[]> {
+    this.links = this.links.filter((r) => r.id !== linkId);
+    return this.linksFor(ticketId);
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

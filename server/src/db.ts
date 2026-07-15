@@ -172,6 +172,13 @@ export function openDb(dataDir: string): DatabaseSync {
       at TEXT NOT NULL,
       PRIMARY KEY (ruleId, ticketId)
     );
+    CREATE TABLE IF NOT EXISTS ticket_links (
+      id TEXT PRIMARY KEY,
+      fromId TEXT NOT NULL,
+      toId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -529,6 +536,27 @@ export function hasTimeRuleFired(db: DatabaseSync, ruleId: string, ticketId: str
 }
 export function recordTimeRuleFired(db: DatabaseSync, ruleId: string, ticketId: string, at: string): void {
   db.prepare('INSERT OR IGNORE INTO time_rule_fired (ruleId, ticketId, at) VALUES (?, ?, ?)').run(ruleId, ticketId, at);
+}
+
+/** Typed links between tickets. Stored directionally (from → to) with a base type. */
+export function insertLink(db: DatabaseSync, row: { id: string; fromId: string; toId: string; type: string; createdAt: string }): void {
+  db.prepare('INSERT INTO ticket_links (id, fromId, toId, type, createdAt) VALUES (?, ?, ?, ?, ?)')
+    .run(row.id, row.fromId, row.toId, row.type, row.createdAt);
+}
+export function removeLink(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM ticket_links WHERE id = ?').run(id);
+}
+/** Every stored link touching this ticket, from either side. */
+export function getLinkRows(db: DatabaseSync, ticketId: string): { id: string; fromId: string; toId: string; type: string }[] {
+  return db
+    .prepare('SELECT id, fromId, toId, type FROM ticket_links WHERE fromId = ? OR toId = ? ORDER BY createdAt')
+    .all(ticketId, ticketId) as unknown as { id: string; fromId: string; toId: string; type: string }[];
+}
+export function linkExists(db: DatabaseSync, aId: string, bId: string): boolean {
+  return (
+    db.prepare('SELECT 1 FROM ticket_links WHERE (fromId = ? AND toId = ?) OR (fromId = ? AND toId = ?)').get(aId, bId, bId, aId) !==
+    undefined
+  );
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */
