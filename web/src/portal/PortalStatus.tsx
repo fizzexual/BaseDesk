@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import type { StatusIncident, StatusPageData } from '../data/types';
 import { TimeAgo } from '../components/TimeAgo';
+import { usePortal } from './store';
 import { IconLogo } from '../icons';
 import { COMPONENT_META, IMPACT_META, INCIDENT_STATUS_META, overallStatus } from '../features/status/statusMeta';
 
@@ -43,6 +44,7 @@ function IncidentView({ incident }: { incident: StatusIncident }) {
 export function PortalStatus() {
   const [data, setData] = useState<StatusPageData | null>(null);
   const [failed, setFailed] = useState(false);
+  const productName = usePortal((s) => s.branding.productName);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +70,7 @@ export function PortalStatus() {
           <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
             <IconLogo size={18} />
           </span>
-          <span className="text-[15px] font-semibold tracking-tight">Support Center</span>
+          <span className="text-[15px] font-semibold tracking-tight">{productName}</span>
           <span className="text-[13px] text-text-3">· Status</span>
           <Link to="/portal" className="ml-auto text-[13px] font-medium text-text-2 transition-colors hover:text-text">
             Back to support →

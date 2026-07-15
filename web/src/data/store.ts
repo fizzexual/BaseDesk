@@ -1,20 +1,21 @@
 import { create } from 'zustand';
 import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
-  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, ChannelConn, ChannelCreate,
+  AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
+import { applyAccent } from './branding';
 import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
   ready: boolean;
   tickets: Record<string, Ticket>; contacts: Record<string, Contact>;
-  agents: Record<string, Agent>; canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; announcements: Announcement[];
+  agents: Record<string, Agent>; canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; announcements: Announcement[]; branding: Branding;
   deals: Record<string, Deal>;
   sla: SlaTargets;
   assignment: AssignmentSettings;
@@ -88,6 +89,7 @@ export interface AppState {
   saveTemplate(t: TicketTemplate): Promise<void>; deleteTemplate(id: string): Promise<void>;
   saveReport(r: CustomReport): Promise<CustomReport>; deleteReport(id: string): Promise<void>;
   saveAnnouncement(a: Announcement): Promise<void>; deleteAnnouncement(id: string): Promise<void>;
+  saveBranding(b: Branding): Promise<void>;
   createDeal(input: DealCreate): Promise<string>;               // returns id
   updateDeal(id: string, patch: DealPatch): Promise<void>;      // optimistic + rollback
   deleteDeal(id: string): Promise<void>;                        // optimistic + rollback
@@ -203,6 +205,7 @@ export function createAppStore(repository: Repository) {
     templates: [],
     customReports: [],
     announcements: [],
+    branding: { productName: 'BaseDesk', accentColor: '' },
     deals: {},
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
@@ -248,6 +251,7 @@ export function createAppStore(repository: Repository) {
         templates: data.templates,
         customReports: data.customReports,
         announcements: data.announcements,
+        branding: data.branding,
         deals: Object.fromEntries(data.deals.map((d) => [d.id, d])),
         sla: data.sla,
         assignment: data.assignment,
@@ -271,6 +275,7 @@ export function createAppStore(repository: Repository) {
         smtp: data.smtp,
         currentAgentId: data.currentAgentId,
       });
+      applyAccent(data.branding.accentColor); // white-label accent, before first paint of content
     },
 
     ticketsForView(view) {
@@ -647,6 +652,11 @@ export function createAppStore(repository: Repository) {
     },
     async deleteAnnouncement(id) {
       set({ announcements: await repository.deleteAnnouncement(id) });
+    },
+    async saveBranding(b) {
+      const saved = await repository.saveBranding(b);
+      set({ branding: saved });
+      applyAccent(saved.accentColor);
     },
 
     async createDeal(input) {

@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  Announcement, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -102,6 +102,7 @@ interface LocalData {
   templates: TicketTemplate[];
   customReports: CustomReport[];
   announcements: Announcement[];
+  branding: Branding;
 }
 
 function slugify(title: string): string {
@@ -265,6 +266,7 @@ function seedData(): LocalData {
     templates: DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] })),
     customReports: [],
     announcements: [],
+    branding: { productName: 'BaseDesk', accentColor: '' },
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -412,6 +414,10 @@ export class LocalRepository implements Repository {
         this.data.announcements = [];
         this.persist();
       }
+      if (this.data.branding === undefined) {
+        this.data.branding = { productName: 'BaseDesk', accentColor: '' };
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -474,6 +480,7 @@ export class LocalRepository implements Repository {
       templates: this.data.templates.map((t) => ({ ...t, tags: [...t.tags] })),
       customReports: this.data.customReports.map((r) => ({ ...r })),
       announcements: this.data.announcements.map((a) => ({ ...a })),
+      branding: { ...this.data.branding },
       deals: [...this.data.deals]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((d) => ({ ...d })),
@@ -1351,6 +1358,15 @@ export class LocalRepository implements Repository {
     this.data.announcements = this.data.announcements.filter((a) => a.id !== id);
     this.persist();
     return this.data.announcements.map((x) => ({ ...x }));
+  }
+  async saveBranding(b: Branding): Promise<Branding> {
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+    this.data.branding = {
+      productName: b.productName.trim() !== '' ? b.productName.trim().slice(0, 40) : 'BaseDesk',
+      accentColor: HEX.test(b.accentColor) ? b.accentColor : '',
+    };
+    this.persist();
+    return { ...this.data.branding };
   }
 
   async listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]> {

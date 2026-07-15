@@ -281,6 +281,9 @@ export interface StatusPageData { components: StatusComponent[]; incidents: Stat
 export type AnnouncementLevel = 'info' | 'warning' | 'critical';
 export interface Announcement { id: string; body: string; level: AnnouncementLevel; active: boolean; createdAt: string; }
 
+// --- White-label branding ---
+export interface Branding { productName: string; accentColor: string; }
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 

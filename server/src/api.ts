@@ -28,14 +28,14 @@ import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
-import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -360,6 +360,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return { enabled: raw.enabled === true, message: typeof raw.message === 'string' ? raw.message : DEFAULT_AUTO_ACK.message };
     } catch {
       return DEFAULT_AUTO_ACK;
+    }
+  };
+  const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+  const branding = (): Branding => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'branding') ?? '') as { productName?: unknown; accentColor?: unknown };
+      return {
+        productName: typeof raw.productName === 'string' && raw.productName.trim() !== '' ? raw.productName.trim() : DEFAULT_BRANDING.productName,
+        accentColor: typeof raw.accentColor === 'string' && HEX_RE.test(raw.accentColor) ? raw.accentColor : '',
+      };
+    } catch {
+      return { ...DEFAULT_BRANDING };
     }
   };
   const onCall = (): OnCallConfig => {
@@ -760,7 +772,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
-      tickets, contacts, agents, canned, templates: getTicketTemplates(db), customReports: getCustomReports(db), announcements: getAnnouncements(db), deals,
+      tickets, contacts, agents, canned, templates: getTicketTemplates(db), customReports: getCustomReports(db), announcements: getAnnouncements(db), branding: branding(), deals,
       currentAgentId: currentAgentId(),
       sla: slaTargets(),
       automation: automationRules(),
@@ -1854,6 +1866,22 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.delete('/api/announcements/:id', (c) => {
     deleteAnnouncement(db, c.req.param('id'));
     return c.json(getAnnouncements(db));
+  });
+
+  // --- White-label branding: PUBLIC read, admin-managed ---
+  app.get('/api/portal/branding', (c) => c.json(branding()));
+  app.put('/api/settings/branding', async (c) => {
+    let input: { productName?: unknown; accentColor?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const productName = typeof input.productName === 'string' && input.productName.trim() !== '' ? input.productName.trim().slice(0, 40) : DEFAULT_BRANDING.productName;
+    const accentColor = typeof input.accentColor === 'string' && HEX_RE.test(input.accentColor) ? input.accentColor : '';
+    const value: Branding = { productName, accentColor };
+    setSetting(db, 'branding', JSON.stringify(value));
+    return c.json(value);
   });
 
   app.get('/api/notifications', (c) => c.json(getNotifications(db, currentAgentId())));

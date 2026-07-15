@@ -1,11 +1,13 @@
 import { create } from 'zustand';
-import type { Contact, IntakeAnswer, Ticket, TicketPriority } from '../data/types';
+import type { Branding, Contact, IntakeAnswer, Ticket, TicketPriority } from '../data/types';
 import { getToken, portalApi, setToken } from './api';
+import { applyAccent } from '../data/branding';
 
 export interface PortalState {
   ready: boolean; // finished the initial session check
   contact: Contact | null;
   tickets: Ticket[];
+  branding: Branding;
   init(): Promise<void>;
   register(input: { name: string; email: string; password: string }): Promise<void>;
   login(input: { email: string; password: string }): Promise<void>;
@@ -27,8 +29,17 @@ export const usePortal = create<PortalState>()((set) => ({
   ready: false,
   contact: null,
   tickets: [],
+  branding: { productName: 'BaseDesk', accentColor: '' },
 
   async init() {
+    // Branding is public — apply it whether or not the visitor is signed in.
+    try {
+      const branding = await portalApi.branding();
+      applyAccent(branding.accentColor);
+      set({ branding });
+    } catch {
+      /* keep the default branding */
+    }
     if (getToken() === null) {
       set({ ready: true });
       return;

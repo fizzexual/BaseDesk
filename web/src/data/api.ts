@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  Announcement, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -203,6 +203,9 @@ export class ApiRepository implements Repository {
   }
   deleteAnnouncement(id: string): Promise<Announcement[]> {
     return request(`/announcements/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  saveBranding(b: Branding): Promise<Branding> {
+    return request('/settings/branding', jsonInit('PUT', { productName: b.productName, accentColor: b.accentColor }));
   }
 
   getStats(): Promise<StatsOverview> {

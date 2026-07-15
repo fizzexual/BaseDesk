@@ -39,6 +39,7 @@ function NavPill({ item }: { item: NavItem }) {
 export function PortalLayout() {
   const contact = usePortal((s) => s.contact);
   const logout = usePortal((s) => s.logout);
+  const productName = usePortal((s) => s.branding.productName);
   const navigate = useNavigate();
 
   function onLogout() {
@@ -54,7 +55,7 @@ export function PortalLayout() {
             <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
               <IconLogo size={18} />
             </span>
-            <span className="text-[15px] font-semibold tracking-tight">Support Center</span>
+            <span className="text-[15px] font-semibold tracking-tight">{productName}</span>
           </NavLink>
 
           <nav className="ml-2 hidden items-center gap-0.5 sm:flex">

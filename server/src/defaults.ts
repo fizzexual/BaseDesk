@@ -1,4 +1,7 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
+import type { AiProviderConfig, AutoAck, AutomationRule, Branding, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
+
+/** Default branding: the product name shown to customers, no custom accent (uses the theme). */
+export const DEFAULT_BRANDING: Branding = { productName: 'BaseDesk', accentColor: '' };
 
 /** Starter status-page components (all healthy) so the public status page isn't blank. */
 export const DEFAULT_STATUS_COMPONENTS: StatusComponent[] = [

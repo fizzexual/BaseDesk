@@ -47,7 +47,7 @@ export function PortalAuth() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <IconLogo size={32} />
-          <h1 className="mt-3 text-[20px] font-semibold">Support Center</h1>
+          <h1 className="mt-3 text-[20px] font-semibold">{usePortal((s) => s.branding.productName)}</h1>
           <p className="mt-1 text-[13px] text-text-3">
             {mode === 'login' ? 'Sign in to see your tickets' : 'Create an account to get help'}
           </p>
