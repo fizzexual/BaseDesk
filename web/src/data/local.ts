@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  SummaryResult, Ticket, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -265,6 +265,10 @@ export class LocalRepository implements Repository {
   private tasks = new Map<string, TicketTask[]>(); // demo-only, in-memory
   private timeRuleFired = new Set<string>(); // `${ruleId}:${ticketId}` — demo-only, not persisted
   private links: { id: string; fromId: string; toId: string; type: string }[] = []; // demo-only, in-memory
+  private approvals: {
+    id: string; ticketId: string; requestedById: string; approverId: string | null; reason: string;
+    status: ApprovalStatus; decidedById: string | null; decisionNote: string | null; createdAt: string; decidedAt: string | null;
+  }[] = []; // demo-only, in-memory
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -895,6 +899,41 @@ export class LocalRepository implements Repository {
   async removeLink(ticketId: string, linkId: string): Promise<TicketLink[]> {
     this.links = this.links.filter((r) => r.id !== linkId);
     return this.linksFor(ticketId);
+  }
+
+  private approvalsFor(ticketId: string): TicketApproval[] {
+    const name = (id: string | null) => (id !== null ? this.data.agents.find((a) => a.id === id)?.name ?? null : null);
+    return this.approvals
+      .filter((a) => a.ticketId === ticketId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+      .map((a) => ({ ...a, requestedByName: name(a.requestedById), approverName: name(a.approverId), decidedByName: name(a.decidedById) }));
+  }
+  async getApprovals(ticketId: string): Promise<TicketApproval[]> {
+    return this.approvalsFor(ticketId);
+  }
+  async requestApproval(ticketId: string, reason: string, approverId: string | null): Promise<TicketApproval[]> {
+    const r = reason.trim();
+    if (r === '') throw new Error('reason is required');
+    const now = new Date().toISOString();
+    this.approvals.push({
+      id: `appr_${Date.now().toString(36)}_${this.approvals.length}`,
+      ticketId, requestedById: CURRENT_AGENT_ID, approverId: approverId || null, reason: r,
+      status: 'pending', decidedById: null, decisionNote: null, createdAt: now, decidedAt: null,
+    });
+    this.pushEvent(ticketId, 'approval', CURRENT_AGENT_ID, { state: 'requested', reason: r }, now);
+    return this.approvalsFor(ticketId);
+  }
+  async decideApproval(ticketId: string, approvalId: string, decision: 'approved' | 'rejected', note: string | null): Promise<TicketApproval[]> {
+    const a = this.approvals.find((x) => x.id === approvalId && x.ticketId === ticketId);
+    if (a && a.status === 'pending') {
+      const now = new Date().toISOString();
+      a.status = decision;
+      a.decidedById = CURRENT_AGENT_ID;
+      a.decisionNote = note && note.trim() !== '' ? note.trim() : null;
+      a.decidedAt = now;
+      this.pushEvent(ticketId, 'approval', CURRENT_AGENT_ID, { state: decision }, now);
+    }
+    return this.approvalsFor(ticketId);
   }
 
   async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {

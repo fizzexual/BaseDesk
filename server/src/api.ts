@@ -14,6 +14,7 @@ import {
   getTasks, getTask, insertTask, patchTask, removeTask, nextTaskPosition,
   hasTimeRuleFired, recordTimeRuleFired,
   insertLink, removeLink, getLinkRows, linkExists,
+  getApprovals, getApproval, insertApproval, decideApproval,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -1186,6 +1187,50 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
     removeLink(db, c.req.param('linkId'));
     return c.json(linksJson(id));
+  });
+
+  // Approvals: request sign-off on a ticket action, then approve or reject it.
+  app.get('/api/tickets/:id/approvals', (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    return c.json(getApprovals(db, id));
+  });
+  app.post('/api/tickets/:id/approvals', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let body: { reason?: unknown; approverId?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (reason === '') return c.json({ error: 'reason is required' }, 400);
+    const approverId = typeof body.approverId === 'string' && body.approverId !== '' ? body.approverId : null;
+    if (approverId !== null && getAgent(db, approverId) === null) return c.json({ error: 'unknown approver' }, 400);
+    const now = new Date().toISOString();
+    insertApproval(db, { id: newId('appr_'), ticketId: id, requestedById: currentAgentId(), approverId, reason, createdAt: now });
+    logEvent(id, 'approval', currentAgentId(), { state: 'requested', reason }, now);
+    return c.json(getApprovals(db, id));
+  });
+  app.post('/api/tickets/:id/approvals/:approvalId/decide', async (c) => {
+    const id = c.req.param('id');
+    if (getTicket(db, id) === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    const approval = getApproval(db, c.req.param('approvalId'));
+    if (approval === null || approval.ticketId !== id) return c.json({ error: 'approval not found' }, 404);
+    if (approval.status !== 'pending') return c.json({ error: 'this request has already been decided' }, 409);
+    let body: { decision?: unknown; note?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (body.decision !== 'approved' && body.decision !== 'rejected') return c.json({ error: 'decision must be approved or rejected' }, 400);
+    const note = typeof body.note === 'string' && body.note.trim() !== '' ? body.note.trim() : null;
+    const now = new Date().toISOString();
+    decideApproval(db, { id: approval.id, status: body.decision, decidedById: currentAgentId(), decisionNote: note, decidedAt: now });
+    logEvent(id, 'approval', currentAgentId(), { state: body.decision }, now);
+    return c.json(getApprovals(db, id));
   });
 
   // Intake-form answers captured when the ticket was opened (shown as metadata).

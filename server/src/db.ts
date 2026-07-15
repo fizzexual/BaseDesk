@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -187,6 +187,18 @@ export function openDb(dataDir: string): DatabaseSync {
       toId TEXT NOT NULL,
       type TEXT NOT NULL,
       createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ticket_approvals (
+      id TEXT PRIMARY KEY,
+      ticketId TEXT NOT NULL,
+      requestedById TEXT NOT NULL,
+      approverId TEXT,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      decidedById TEXT,
+      decisionNote TEXT,
+      createdAt TEXT NOT NULL,
+      decidedAt TEXT
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -610,6 +622,47 @@ export function linkExists(db: DatabaseSync, aId: string, bId: string): boolean 
     db.prepare('SELECT 1 FROM ticket_links WHERE (fromId = ? AND toId = ?) OR (fromId = ? AND toId = ?)').get(aId, bId, bId, aId) !==
     undefined
   );
+}
+
+/** A ticket's approval requests, newest first, with requester/approver/decider names resolved live. */
+export function getApprovals(db: DatabaseSync, ticketId: string): TicketApproval[] {
+  const rows = db
+    .prepare(
+      `SELECT a.id, a.ticketId, a.requestedById, a.approverId, a.reason, a.status, a.decidedById, a.decisionNote, a.createdAt, a.decidedAt,
+              req.name AS requestedByName, app.name AS approverName, dec.name AS decidedByName
+         FROM ticket_approvals a
+         LEFT JOIN agents req ON req.id = a.requestedById
+         LEFT JOIN agents app ON app.id = a.approverId
+         LEFT JOIN agents dec ON dec.id = a.decidedById
+        WHERE a.ticketId = ?
+        ORDER BY a.createdAt DESC, a.rowid DESC`,
+    )
+    .all(ticketId) as (Omit<TicketApproval, 'status'> & { status: string })[];
+  return rows.map((r) => ({ ...r, status: r.status as ApprovalStatus }));
+}
+
+export function getApproval(db: DatabaseSync, id: string): { id: string; ticketId: string; status: ApprovalStatus } | null {
+  const row = db.prepare('SELECT id, ticketId, status FROM ticket_approvals WHERE id = ?').get(id) as
+    | { id: string; ticketId: string; status: string }
+    | undefined;
+  return row === undefined ? null : { ...row, status: row.status as ApprovalStatus };
+}
+
+export function insertApproval(
+  db: DatabaseSync,
+  a: { id: string; ticketId: string; requestedById: string; approverId: string | null; reason: string; createdAt: string },
+): void {
+  db.prepare(
+    "INSERT INTO ticket_approvals (id, ticketId, requestedById, approverId, reason, status, decidedById, decisionNote, createdAt, decidedAt) VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, ?, NULL)",
+  ).run(a.id, a.ticketId, a.requestedById, a.approverId, a.reason, a.createdAt);
+}
+
+export function decideApproval(
+  db: DatabaseSync,
+  a: { id: string; status: ApprovalStatus; decidedById: string; decisionNote: string | null; decidedAt: string },
+): void {
+  db.prepare('UPDATE ticket_approvals SET status = ?, decidedById = ?, decisionNote = ?, decidedAt = ? WHERE id = ?')
+    .run(a.status, a.decidedById, a.decisionNote, a.decidedAt, a.id);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

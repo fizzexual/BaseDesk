@@ -1,7 +1,7 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
@@ -48,6 +48,9 @@ export interface Repository {
   getLinks(ticketId: string): Promise<TicketLink[]>;
   addLink(ticketId: string, linkedTicketId: string, type: TicketLinkType): Promise<TicketLink[]>;
   removeLink(ticketId: string, linkId: string): Promise<TicketLink[]>;
+  getApprovals(ticketId: string): Promise<TicketApproval[]>;
+  requestApproval(ticketId: string, reason: string, approverId: string | null): Promise<TicketApproval[]>;
+  decideApproval(ticketId: string, approvalId: string, decision: 'approved' | 'rejected', note: string | null): Promise<TicketApproval[]>;
   createTicket(input: { subject: string; body: string; requesterId: string; priority: TicketPriority; category?: string | null; tags?: string[] }): Promise<{ ticket: Ticket; message: Message }>;
   updateTicket(id: string, patch: TicketPatch): Promise<Ticket>;
   bulkPatchTickets(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<Ticket[]>;

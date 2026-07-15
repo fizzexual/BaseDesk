@@ -306,7 +306,7 @@ export interface SavedView {
   priority: TicketPriority | null; assigneeId: string | null; tag: string | null;
 }
 
-export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split' | 'approval';
 /**
  * A structured change to a ticket, for its activity timeline. actorName is
  * resolved at read time (null = a system/automation action). `detail` holds the
@@ -362,6 +362,24 @@ export interface TicketLink {
   subject: string;
   status: TicketStatus;
   type: TicketLinkType;
+}
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+/** A request for sign-off on a ticket action (e.g. a refund). Names resolve at read time. */
+export interface TicketApproval {
+  id: string;
+  ticketId: string;
+  requestedById: string;
+  requestedByName: string | null;
+  approverId: string | null; // null = anyone on the team can decide
+  approverName: string | null;
+  reason: string;
+  status: ApprovalStatus;
+  decidedById: string | null;
+  decidedByName: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  decidedAt: string | null;
 }
 
 /**

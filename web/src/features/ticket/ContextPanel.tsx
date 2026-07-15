@@ -6,6 +6,7 @@ import { ConversationParticipants } from './ConversationParticipants';
 import { TicketChecklist } from './TicketChecklist';
 import { TicketFollowers } from './TicketFollowers';
 import { TicketLinks } from './TicketLinks';
+import { TicketApprovals } from './TicketApprovals';
 import { formatMoney } from '../../data/money';
 import type { Contact, Deal, DealStage, Ticket } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
@@ -206,6 +207,7 @@ function RevenueAwarePanel({
       <TicketChecklist ticket={ticket} />
       <TicketFollowers ticket={ticket} />
       <TicketLinks ticket={ticket} />
+      <TicketApprovals ticket={ticket} />
       {typeof ticket.satisfactionScore === 'number' && (
         <section className="border-t border-line p-4">
           <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-text-3">

@@ -43,6 +43,14 @@ export function describeTicketEvent(e: TicketEvent, agents: Record<string, Agent
         ? `split ${n} message${n === 1 ? '' : 's'} into #${String(d.targetNumber)}`
         : `split off #${String(d.targetNumber)}`;
     }
+    case 'approval': {
+      const state = String(d.state);
+      if (state === 'approved') return 'approved a request';
+      if (state === 'rejected') return 'rejected a request';
+      const reason = typeof d.reason === 'string' ? d.reason : '';
+      const short = reason.length > 48 ? `${reason.slice(0, 48)}…` : reason;
+      return reason !== '' ? `requested approval: “${short}”` : 'requested approval';
+    }
     default:
       return 'updated the ticket';
   }

@@ -308,7 +308,7 @@ export interface SavedView {
 }
 export type SavedViewCreate = Omit<SavedView, 'id'>;
 
-export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split';
+export type TicketEventKind = 'created' | 'status' | 'priority' | 'assignee' | 'tags' | 'merged' | 'link' | 'split' | 'approval';
 /** A structured change on a ticket's activity timeline. actorName null = automation/system. */
 export interface TicketEvent {
   id: string; ticketId: string; kind: TicketEventKind;
@@ -358,6 +358,23 @@ export interface TicketLink {
   subject: string;
   status: TicketStatus;
   type: TicketLinkType;
+}
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export interface TicketApproval {
+  id: string;
+  ticketId: string;
+  requestedById: string;
+  requestedByName: string | null;
+  approverId: string | null;
+  approverName: string | null;
+  reason: string;
+  status: ApprovalStatus;
+  decidedById: string | null;
+  decidedByName: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  decidedAt: string | null;
 }
 
 /** An @mention alert for the current agent. */
