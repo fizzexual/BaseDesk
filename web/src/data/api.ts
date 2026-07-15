@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -210,6 +210,15 @@ export class ApiRepository implements Repository {
   }
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig> {
     return request('/settings/on-call', jsonInit('PUT', config));
+  }
+  getHandover(): Promise<HandoverNote[]> {
+    return request('/handover');
+  }
+  addHandover(body: string): Promise<HandoverNote[]> {
+    return request('/handover', jsonInit('POST', { body }));
+  }
+  deleteHandover(id: string): Promise<HandoverNote[]> {
+    return request(`/handover/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
   saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {
     return request('/settings/time-rules', jsonInit('PUT', rules));

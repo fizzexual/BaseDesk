@@ -16,6 +16,7 @@ import {
   insertLink, removeLink, getLinkRows, linkExists,
   getApprovals, getApproval, insertApproval, decideApproval,
   getSideConversations, getSideConversation, insertSideConversation, insertSideMessage,
+  getHandoverNotes, insertHandoverNote, deleteHandoverNote,
 } from './db.js';
 import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
@@ -1057,6 +1058,25 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const raw = Number(c.req.query('limit'));
     const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 2000) : 500;
     return c.json(getAllEvents(db, { limit }));
+  });
+
+  // Shift handover notes — a team feed for passing context to the next shift.
+  app.get('/api/handover', (c) => c.json(getHandoverNotes(db)));
+  app.post('/api/handover', async (c) => {
+    let input: { body?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+    if (body === '') return c.json({ error: 'note body is required' }, 400);
+    insertHandoverNote(db, { id: newId('ho_'), authorId: currentAgentId(), body, createdAt: new Date().toISOString() });
+    return c.json(getHandoverNotes(db));
+  });
+  app.delete('/api/handover/:id', (c) => {
+    deleteHandoverNote(db, c.req.param('id'));
+    return c.json(getHandoverNotes(db));
   });
 
   // Read receipts: when each participant last viewed this ticket's thread.

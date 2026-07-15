@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, Deal, HandoverNote, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -213,6 +213,12 @@ export function openDb(dataDir: string): DatabaseSync {
       authorId TEXT NOT NULL,
       body TEXT NOT NULL,
       at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS handover_notes (
+      id TEXT PRIMARY KEY,
+      authorId TEXT NOT NULL,
+      body TEXT NOT NULL,
+      createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -708,6 +714,27 @@ export function insertSideConversation(
 export function insertSideMessage(db: DatabaseSync, m: { id: string; sideId: string; authorId: string; body: string; at: string }): void {
   db.prepare('INSERT INTO side_messages (id, sideId, authorId, body, at) VALUES (?, ?, ?, ?, ?)')
     .run(m.id, m.sideId, m.authorId, m.body, m.at);
+}
+
+/** Shift-handover notes, newest first, with author names resolved live (capped to a recent window). */
+export function getHandoverNotes(db: DatabaseSync, limit = 100): HandoverNote[] {
+  const n = Math.min(Math.max(Math.trunc(limit), 1), 500);
+  return db
+    .prepare(
+      `SELECT h.id, h.authorId, h.body, h.createdAt, a.name AS authorName
+         FROM handover_notes h LEFT JOIN agents a ON a.id = h.authorId
+        ORDER BY h.createdAt DESC, h.rowid DESC LIMIT ?`,
+    )
+    .all(n) as unknown as HandoverNote[];
+}
+
+export function insertHandoverNote(db: DatabaseSync, note: { id: string; authorId: string; body: string; createdAt: string }): void {
+  db.prepare('INSERT INTO handover_notes (id, authorId, body, createdAt) VALUES (?, ?, ?, ?)')
+    .run(note.id, note.authorId, note.body, note.createdAt);
+}
+
+export function deleteHandoverNote(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM handover_notes WHERE id = ?').run(id);
 }
 
 /** Mark one notification read (scoped to the agent), or all of the agent's if id is omitted. */

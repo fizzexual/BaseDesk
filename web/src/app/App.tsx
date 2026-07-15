@@ -11,6 +11,7 @@ import { ContactsPage } from '../features/contacts/ContactsPage';
 import { ContactPage } from '../features/contacts/ContactPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 import { AuditPage } from '../features/audit/AuditPage';
+import { HandoverPage } from '../features/handover/HandoverPage';
 import { RevenuePage } from '../features/revenue/RevenuePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { AiPage } from '../features/ai/AiPage';
@@ -63,6 +64,7 @@ function AgentApp() {
           <Route path="/contacts/:id" element={<ContactPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/audit" element={<AuditPage />} />
+          <Route path="/handover" element={<HandoverPage />} />
           <Route path="/revenue" element={<RevenuePage />} />
           <Route path="/revenue/:tab" element={<RevenuePage />} />
           <Route path="/ai" element={<AiPage />} />

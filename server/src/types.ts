@@ -436,6 +436,15 @@ export interface OnCallConfig {
   rotation: string[]; // agent ids, in rotation order
 }
 
+/** A note left for the next shift. authorName resolves at read time. */
+export interface HandoverNote {
+  id: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  createdAt: string;
+}
+
 /**
  * A time-based rule: when a ticket has sat in a given state for `hours`, run its
  * actions once. Powers SLA escalations and stale-ticket cleanup.

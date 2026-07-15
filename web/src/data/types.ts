@@ -425,6 +425,14 @@ export interface OnCallConfig {
   rotation: string[];
 }
 
+export interface HandoverNote {
+  id: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  createdAt: string;
+}
+
 /** A time-based rule: run actions once when a ticket sits in a state for `hours`. */
 export type TimeTrigger = 'awaiting_first_response' | 'awaiting_reply' | 'awaiting_customer';
 export interface TimeRule {

@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ApprovalStatus, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -273,6 +273,7 @@ export class LocalRepository implements Repository {
   }[] = []; // demo-only, in-memory
   private sideConvos: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[] = []; // demo-only
   private sideMsgs: { id: string; sideId: string; authorId: string; body: string; at: string }[] = []; // demo-only
+  private handover: { id: string; authorId: string; body: string; createdAt: string }[] = []; // demo-only
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -654,6 +655,26 @@ export class LocalRepository implements Repository {
     };
     this.persist();
     return { ...this.data.onCall, rotation: [...this.data.onCall.rotation] };
+  }
+
+  private handoverList(): HandoverNote[] {
+    const name = (id: string) => this.data.agents.find((a) => a.id === id)?.name ?? null;
+    return [...this.handover]
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+      .slice(0, 100)
+      .map((h) => ({ ...h, authorName: name(h.authorId) }));
+  }
+  async getHandover(): Promise<HandoverNote[]> {
+    return this.handoverList();
+  }
+  async addHandover(body: string): Promise<HandoverNote[]> {
+    const b = body.trim();
+    if (b !== '') this.handover.push({ id: `ho_${Date.now().toString(36)}_${this.handover.length}`, authorId: CURRENT_AGENT_ID, body: b, createdAt: new Date().toISOString() });
+    return this.handoverList();
+  }
+  async deleteHandover(id: string): Promise<HandoverNote[]> {
+    this.handover = this.handover.filter((h) => h.id !== id);
+    return this.handoverList();
   }
 
   async saveTimeRules(rules: TimeRule[]): Promise<TimeRule[]> {

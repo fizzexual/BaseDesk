@@ -7,6 +7,7 @@ import {
   IconBook,
   IconChannels,
   IconChart,
+  IconClipboard,
   IconContacts,
   IconHistory,
   IconInbox,
@@ -29,6 +30,7 @@ const NAV = [
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
   { to: '/audit', label: 'Audit log', icon: IconHistory, matches: ['/audit'] },
+  { to: '/handover', label: 'Handover', icon: IconClipboard, matches: ['/handover'] },
   { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
 ];
 

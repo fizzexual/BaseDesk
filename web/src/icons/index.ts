@@ -29,6 +29,7 @@ export { IconCheck } from './IconCheck';
 export { IconCheckCircle } from './IconCheckCircle';
 export { IconClock } from './IconClock';
 export { IconHistory } from './IconHistory';
+export { IconClipboard } from './IconClipboard';
 export { IconPause } from './IconPause';
 export { IconCircle } from './IconCircle';
 export { IconSparkle } from './IconSparkle';
