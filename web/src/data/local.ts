@@ -3,7 +3,7 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  Announcement, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
@@ -101,6 +101,7 @@ interface LocalData {
   events: TicketEvent[];
   templates: TicketTemplate[];
   customReports: CustomReport[];
+  announcements: Announcement[];
 }
 
 function slugify(title: string): string {
@@ -263,6 +264,7 @@ function seedData(): LocalData {
     events: [],
     templates: DEFAULT_TICKET_TEMPLATES.map((t) => ({ ...t, tags: [...t.tags] })),
     customReports: [],
+    announcements: [],
     // Seed notifications ship without the joined display fields; resolve them here.
     notifications: (seed.notifications ?? []).map((n) => ({
       ...n,
@@ -406,6 +408,10 @@ export class LocalRepository implements Repository {
         this.data.customReports = [];
         this.persist();
       }
+      if (!Array.isArray(this.data.announcements)) {
+        this.data.announcements = [];
+        this.persist();
+      }
       // Older demo data predates macro actions; default them to a plain reply.
       for (const c of this.data.canned) {
         if (c.actions === undefined) c.actions = null;
@@ -467,6 +473,7 @@ export class LocalRepository implements Repository {
       canned: this.data.canned.map((c) => ({ ...c })),
       templates: this.data.templates.map((t) => ({ ...t, tags: [...t.tags] })),
       customReports: this.data.customReports.map((r) => ({ ...r })),
+      announcements: this.data.announcements.map((a) => ({ ...a })),
       deals: [...this.data.deals]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .map((d) => ({ ...d })),
@@ -1324,6 +1331,26 @@ export class LocalRepository implements Repository {
   async removeIncident(id: string): Promise<StatusIncident[]> {
     this.statusIncidents = this.statusIncidents.filter((i) => i.id !== id);
     return this.cloneIncidents();
+  }
+
+  async saveAnnouncement(a: Announcement): Promise<Announcement[]> {
+    const body = a.body.trim();
+    if (body === '') throw new Error('a message is required');
+    const existing = a.id ? this.data.announcements.find((x) => x.id === a.id) : undefined;
+    if (existing) {
+      existing.body = body;
+      existing.level = a.level;
+      existing.active = a.active;
+    } else {
+      this.data.announcements.unshift({ id: `ann_${Date.now().toString(36)}`, body, level: a.level, active: true, createdAt: new Date().toISOString() });
+    }
+    this.persist();
+    return this.data.announcements.map((x) => ({ ...x }));
+  }
+  async deleteAnnouncement(id: string): Promise<Announcement[]> {
+    this.data.announcements = this.data.announcements.filter((a) => a.id !== id);
+    this.persist();
+    return this.data.announcements.map((x) => ({ ...x }));
   }
 
   async listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]> {

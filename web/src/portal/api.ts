@@ -2,7 +2,7 @@
 // from the agent-side Repository/store: a customer is a different principal, sees
 // only their own data, and authenticates with a bearer token kept in localStorage.
 
-import type { Attachment, Contact, IntakeAnswer, IntakeForm, KbArticle, Ticket, TicketPriority } from '../data/types';
+import type { Announcement, Attachment, Contact, IntakeAnswer, IntakeForm, KbArticle, Ticket, TicketPriority } from '../data/types';
 
 const TOKEN_KEY = 'basedesk-portal-token';
 
@@ -131,5 +131,9 @@ export const portalApi = {
   /** Published articles most relevant to `q`, for deflecting a ticket (empty = none matched). */
   kbSuggest(q: string) {
     return req<KbArticle[]>(`/kb?q=${encodeURIComponent(q)}`);
+  },
+  /** Active broadcast announcements (public — shown as portal banners). */
+  announcements() {
+    return req<Announcement[]>('/announcements');
   },
 };

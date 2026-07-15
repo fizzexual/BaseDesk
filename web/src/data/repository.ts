@@ -1,14 +1,14 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
   AgentPatch, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
-  AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
+  Announcement, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; currentAgentId: string; deals: Deal[];
+  canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; announcements: Announcement[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; availableModels: ModelCache | null; channels: ChannelConn[];
   slaHours: SlaHours; aiProvider: AiProvider; smtp: SmtpSettings;
@@ -81,6 +81,9 @@ export interface Repository {
   createIncident(title: string, impact: IncidentImpact, body: string): Promise<StatusIncident[]>;
   postIncidentUpdate(id: string, status: IncidentStatus, body: string): Promise<StatusIncident[]>;
   removeIncident(id: string): Promise<StatusIncident[]>;
+  /** Create (empty id) or update an announcement; returns the full list. */
+  saveAnnouncement(a: Announcement): Promise<Announcement[]>;
+  deleteAnnouncement(id: string): Promise<Announcement[]>;
   getStats(): Promise<StatsOverview>;
   search(q: string): Promise<{ ticketIds: string[] }>;
   listDeals(filter?: { stage?: DealStage; type?: DealType; contactId?: string }): Promise<Deal[]>;

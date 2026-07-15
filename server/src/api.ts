@@ -8,6 +8,7 @@ import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getCustomReports, getChannel, getChannels, getContact,
   getStatusComponents, insertStatusComponent, updateStatusComponent, deleteStatusComponent, maxComponentPosition,
   getStatusIncidents, getStatusIncident, insertStatusIncident, updateStatusIncident, deleteStatusIncident,
+  getAnnouncements, insertAnnouncement, updateAnnouncement, deleteAnnouncement, announcementExists,
   awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
@@ -33,7 +34,7 @@ import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
-  BootstrapData, CannedReply, TicketTemplate, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
+  BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
@@ -758,7 +759,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const deals = db.prepare('SELECT * FROM deals ORDER BY updatedAt DESC').all() as unknown as Deal[];
     const kb = db.prepare('SELECT * FROM kb_articles ORDER BY category, title').all() as unknown as KbArticle[];
     const data: BootstrapData = {
-      tickets, contacts, agents, canned, templates: getTicketTemplates(db), customReports: getCustomReports(db), deals,
+      tickets, contacts, agents, canned, templates: getTicketTemplates(db), customReports: getCustomReports(db), announcements: getAnnouncements(db), deals,
       currentAgentId: currentAgentId(),
       sla: slaTargets(),
       automation: automationRules(),
@@ -1815,6 +1816,43 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.delete('/api/status/incidents/:id', (c) => {
     deleteStatusIncident(db, c.req.param('id'));
     return c.json(getStatusIncidents(db));
+  });
+
+  // --- Announcements: PUBLIC read (active only), admin-managed ---
+  const ANNOUNCEMENT_LEVELS: AnnouncementLevel[] = ['info', 'warning', 'critical'];
+  // Public: the portal shows active announcements as a banner.
+  app.get('/api/portal/announcements', (c) => c.json(getAnnouncements(db, true)));
+
+  app.post('/api/announcements', async (c) => {
+    let body: { body?: unknown; level?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.body !== 'string' || body.body.trim() === '') return c.json({ error: 'a message is required' }, 400);
+    const level = typeof body.level === 'string' && ANNOUNCEMENT_LEVELS.includes(body.level as AnnouncementLevel) ? (body.level as AnnouncementLevel) : 'info';
+    const announcement: Announcement = { id: newId('ann_'), body: body.body.trim(), level, active: true, createdAt: new Date().toISOString() };
+    insertAnnouncement(db, announcement);
+    return c.json(getAnnouncements(db));
+  });
+  app.put('/api/announcements/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!announcementExists(db, id)) return c.json({ error: 'announcement not found' }, 404);
+    let body: { body?: unknown; level?: unknown; active?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof body.body !== 'string' || body.body.trim() === '') return c.json({ error: 'a message is required' }, 400);
+    const level = typeof body.level === 'string' && ANNOUNCEMENT_LEVELS.includes(body.level as AnnouncementLevel) ? (body.level as AnnouncementLevel) : 'info';
+    updateAnnouncement(db, { id, body: body.body.trim(), level, active: body.active !== false });
+    return c.json(getAnnouncements(db));
+  });
+  app.delete('/api/announcements/:id', (c) => {
+    deleteAnnouncement(db, c.req.param('id'));
+    return c.json(getAnnouncements(db));
   });
 
   app.get('/api/notifications', (c) => c.json(getNotifications(db, currentAgentId())));

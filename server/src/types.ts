@@ -286,6 +286,10 @@ export interface StatusIncident {
 }
 export interface StatusPageData { components: StatusComponent[]; incidents: StatusIncident[]; }
 
+// --- Portal announcements (broadcast banners) ---
+export type AnnouncementLevel = 'info' | 'warning' | 'critical';
+export interface Announcement { id: string; body: string; level: AnnouncementLevel; active: boolean; createdAt: string; }
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 
@@ -519,7 +523,7 @@ export interface ModelCache { baseUrl: string; models: string[]; fetchedAt: stri
 
 export interface BootstrapData {
   tickets: Ticket[]; contacts: Contact[]; agents: Agent[];
-  canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; currentAgentId: string; deals: Deal[];
+  canned: CannedReply[]; templates: TicketTemplate[]; customReports: CustomReport[]; announcements: Announcement[]; currentAgentId: string; deals: Deal[];
   sla: SlaTargets; automation: AutomationRule[]; kb: KbArticle[];
   aiAgents: AiAgent[]; aiActions: AiAction[]; aiUsage: AiUsage; channels: PublicChannel[];
   availableModels: ModelCache | null;

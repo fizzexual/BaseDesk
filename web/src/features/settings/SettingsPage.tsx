@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
+import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconMegaphone, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { OnCallSettings } from './OnCallSettings';
@@ -14,8 +14,9 @@ import { EmailSettings } from './EmailSettings';
 import { CustomFieldsSettings } from './CustomFieldsSettings';
 import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
+import { AnnouncementsSettings } from './AnnouncementsSettings';
 
-type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'import';
+type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'announcements' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -34,6 +35,7 @@ const TABS: Array<{
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
   { id: 'email', label: 'Email', icon: IconSend },
+  { id: 'announcements', label: 'Announcements', icon: IconMegaphone },
   { id: 'import', label: 'Import', icon: IconImport },
 ];
 
@@ -51,6 +53,7 @@ export function SettingsPage() {
     params.tab === 'automation' ||
     params.tab === 'ai' ||
     params.tab === 'email' ||
+    params.tab === 'announcements' ||
     params.tab === 'import'
       ? params.tab
       : 'profile';
@@ -90,6 +93,7 @@ export function SettingsPage() {
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
         {tab === 'email' && <EmailSettings />}
+        {tab === 'announcements' && <AnnouncementsSettings />}
         {tab === 'import' && <ImportSettings />}
       </div>
     </div>

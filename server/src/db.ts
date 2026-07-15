@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, Announcement, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -143,6 +143,13 @@ export function openDb(dataDir: string): DatabaseSync {
       createdAt TEXT NOT NULL,
       resolvedAt TEXT,
       updates TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE TABLE IF NOT EXISTS announcements (
+      id TEXT PRIMARY KEY,
+      body TEXT NOT NULL,
+      level TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
@@ -487,6 +494,27 @@ export function updateStatusIncident(db: DatabaseSync, i: { id: string; status: 
 }
 export function deleteStatusIncident(db: DatabaseSync, id: string): void {
   db.prepare('DELETE FROM status_incidents WHERE id = ?').run(id);
+}
+
+// --- Portal announcements ---
+export function getAnnouncements(db: DatabaseSync, activeOnly = false): Announcement[] {
+  const rows = db
+    .prepare(`SELECT id, body, level, active, createdAt FROM announcements ${activeOnly ? 'WHERE active = 1' : ''} ORDER BY createdAt DESC, rowid DESC`)
+    .all() as { id: string; body: string; level: string; active: number; createdAt: string }[];
+  return rows.map((r) => ({ id: r.id, body: r.body, level: r.level as Announcement['level'], active: r.active === 1, createdAt: r.createdAt }));
+}
+export function insertAnnouncement(db: DatabaseSync, a: Announcement): void {
+  db.prepare('INSERT INTO announcements (id, body, level, active, createdAt) VALUES (?, ?, ?, ?, ?)')
+    .run(a.id, a.body, a.level, a.active ? 1 : 0, a.createdAt);
+}
+export function updateAnnouncement(db: DatabaseSync, a: { id: string; body: string; level: string; active: boolean }): void {
+  db.prepare('UPDATE announcements SET body = ?, level = ?, active = ? WHERE id = ?').run(a.body, a.level, a.active ? 1 : 0, a.id);
+}
+export function announcementExists(db: DatabaseSync, id: string): boolean {
+  return db.prepare('SELECT 1 FROM announcements WHERE id = ?').get(id) !== undefined;
+}
+export function deleteAnnouncement(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM announcements WHERE id = ?').run(id);
 }
 
 /** Read every ticket template, decoding the JSON `tags` column. */

@@ -5,6 +5,7 @@ import { Avatar } from '../components/Avatar';
 import { Menu } from '../components/Menu';
 import { cx } from '../components/util';
 import { IconBook, IconChevronDown, IconInbox, IconLogo, IconPlus, IconUser } from '../icons';
+import { AnnouncementBanner } from './AnnouncementBanner';
 
 type NavItem = { to: string; label: string; end: boolean; icon: (p: { size?: number; className?: string }) => React.ReactNode };
 
@@ -96,6 +97,8 @@ export function PortalLayout() {
           ))}
         </nav>
       </header>
+
+      <AnnouncementBanner />
 
       <main className="w-full flex-1 min-h-0">
         <Outlet />

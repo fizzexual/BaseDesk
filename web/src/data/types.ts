@@ -277,6 +277,10 @@ export interface StatusIncident {
 }
 export interface StatusPageData { components: StatusComponent[]; incidents: StatusIncident[]; }
 
+// --- Portal announcements ---
+export type AnnouncementLevel = 'info' | 'warning' | 'critical';
+export interface Announcement { id: string; body: string; level: AnnouncementLevel; active: boolean; createdAt: string; }
+
 export type DealType = 'expansion' | 'retention' | 'inbound';
 export type DealStage = 'open' | 'won' | 'lost';
 

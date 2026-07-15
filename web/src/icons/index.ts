@@ -30,6 +30,7 @@ export { IconCheckCircle } from './IconCheckCircle';
 export { IconClock } from './IconClock';
 export { IconHistory } from './IconHistory';
 export { IconActivity } from './IconActivity';
+export { IconMegaphone } from './IconMegaphone';
 export { IconClipboard } from './IconClipboard';
 export { IconPause } from './IconPause';
 export { IconCircle } from './IconCircle';
