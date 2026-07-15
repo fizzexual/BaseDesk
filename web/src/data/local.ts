@@ -1800,22 +1800,39 @@ export class LocalRepository implements Repository {
     }
 
     // First agent reply per ticket (messages scanned in chronological order).
-    const firstAgentReply = new Map<string, string>();
+    const firstAgentReply = new Map<string, { at: string; authorId: string | null }>();
     for (const m of [...this.data.messages].sort((a, b) => a.at.localeCompare(b.at))) {
       if (m.authorKind === 'agent' && m.kind === 'reply' && !firstAgentReply.has(m.ticketId)) {
-        firstAgentReply.set(m.ticketId, m.at);
+        firstAgentReply.set(m.ticketId, { at: m.at, authorId: m.authorId });
       }
     }
+    // Per-agent performance accumulators (mirrors the server).
+    const agentIds = this.data.agents.map((a) => a.id);
+    const firstReplyByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+    const resolutionByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+    const csatByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+    const solvedByAgent = new Map<string, number>(agentIds.map((id) => [id, 0]));
     const firstReplyMinutes: number[] = [];
     const resolutionHours: number[] = [];
     for (const t of this.data.tickets) {
-      const replyAt = firstAgentReply.get(t.id);
-      if (replyAt !== undefined) {
-        const delta = (Date.parse(replyAt) - Date.parse(t.createdAt)) / MIN;
-        if (delta >= 0) firstReplyMinutes.push(delta);
+      const reply = firstAgentReply.get(t.id);
+      if (reply !== undefined) {
+        const delta = (Date.parse(reply.at) - Date.parse(t.createdAt)) / MIN;
+        if (delta >= 0) {
+          firstReplyMinutes.push(delta);
+          if (reply.authorId !== null && firstReplyByAgent.has(reply.authorId)) firstReplyByAgent.get(reply.authorId)!.push(delta);
+        }
       }
       if (solvedStatuses.includes(t.status)) {
-        resolutionHours.push((Date.parse(t.updatedAt) - Date.parse(t.createdAt)) / HOUR);
+        const h = (Date.parse(t.updatedAt) - Date.parse(t.createdAt)) / HOUR;
+        resolutionHours.push(h);
+        if (t.assigneeId !== null && solvedByAgent.has(t.assigneeId)) {
+          solvedByAgent.set(t.assigneeId, solvedByAgent.get(t.assigneeId)! + 1);
+          if (h >= 0) resolutionByAgent.get(t.assigneeId)!.push(h);
+        }
+      }
+      if (typeof t.satisfactionScore === 'number' && t.assigneeId !== null && csatByAgent.has(t.assigneeId)) {
+        csatByAgent.get(t.assigneeId)!.push(t.satisfactionScore);
       }
     }
 
@@ -1827,6 +1844,23 @@ export class LocalRepository implements Repository {
         ).length,
       }))
       .sort((a, b) => b.count - a.count);
+    const openLoadByAgent = new Map(perAgentOpen.map((p) => [p.agentId, p.count]));
+    const perAgentPerformance = agentIds
+      .map((agentId) => {
+        const fr = firstReplyByAgent.get(agentId)!;
+        const cs = csatByAgent.get(agentId)!;
+        return {
+          agentId,
+          solved: solvedByAgent.get(agentId)!,
+          openLoad: openLoadByAgent.get(agentId) ?? 0,
+          firstReplyCount: fr.length,
+          medianFirstReplyMinutes: Math.round(median(fr)),
+          medianResolutionHours: Math.round(median(resolutionByAgent.get(agentId)!) * 10) / 10,
+          csatCount: cs.length,
+          csatAverage: cs.length === 0 ? 0 : Math.round((cs.reduce((s, v) => s + v, 0) / cs.length) * 10) / 10,
+        };
+      })
+      .sort((a, b) => b.solved - a.solved);
 
     return {
       createdLast14Days: days.map((date) => ({ date, count: createdByDay.get(date)! })),
@@ -1834,6 +1868,7 @@ export class LocalRepository implements Repository {
       byPriority,
       byStatus,
       perAgentOpen,
+      perAgentPerformance,
       medianFirstReplyMinutes: Math.round(median(firstReplyMinutes)),
       medianResolutionHours: Math.round(median(resolutionHours) * 10) / 10,
       openNow,

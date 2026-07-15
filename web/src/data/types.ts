@@ -285,12 +285,24 @@ export interface Counts {
   open: number; pending: number; on_hold: number; solved: number; closed: number;
   archive: number; spam: number; trash: number;
 }
+export interface PerAgentPerformance {
+  agentId: string;
+  solved: number;
+  openLoad: number;
+  firstReplyCount: number;
+  medianFirstReplyMinutes: number;
+  medianResolutionHours: number;
+  csatCount: number;
+  csatAverage: number;
+}
+
 export interface StatsOverview {
   createdLast14Days: { date: string; count: number }[];
   solvedLast14Days: { date: string; count: number }[];
   byPriority: Record<TicketPriority, number>;
   byStatus: Record<TicketStatus, number>;
   perAgentOpen: { agentId: string; count: number }[];
+  perAgentPerformance: PerAgentPerformance[];
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

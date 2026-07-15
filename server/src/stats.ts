@@ -63,6 +63,13 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     .map(([agentId, count]) => ({ agentId, count }))
     .sort((a, b) => b.count - a.count);
 
+  // Per-agent performance accumulators. First reply is attributed to the agent who
+  // actually sent it; solved / resolution / CSAT to the ticket's current assignee.
+  const firstReplyByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+  const resolutionByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+  const csatByAgent = new Map<string, number[]>(agentIds.map((id) => [id, []]));
+  const solvedByAgent = new Map<string, number>(agentIds.map((id) => [id, 0]));
+
   // Median first reply: tickets with a contact message followed by an agent reply;
   // delta = first agent reply.at - ticket.createdAt.
   const firstReplyDeltasMin: number[] = [];
@@ -77,7 +84,12 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
     );
     if (firstAgentReply === undefined) continue;
     const deltaMs = new Date(firstAgentReply.at).getTime() - new Date(t.createdAt).getTime();
-    if (deltaMs >= 0) firstReplyDeltasMin.push(deltaMs / 60000);
+    if (deltaMs >= 0) {
+      const min = deltaMs / 60000;
+      firstReplyDeltasMin.push(min);
+      const author = firstAgentReply.authorId;
+      if (author !== null && firstReplyByAgent.has(author)) firstReplyByAgent.get(author)!.push(min);
+    }
   }
 
   // Median resolution: solved/closed tickets, updatedAt - createdAt.
@@ -104,12 +116,41 @@ export function computeStats(db: DatabaseSync, now: Date): StatsOverview {
         : Math.round((rated.filter((t) => (t.satisfactionScore ?? 0) >= 4).length / rated.length) * 100),
   };
 
+  // Attribute solved counts, resolution time and CSAT to each ticket's assignee.
+  for (const t of solvedOrClosed) {
+    if (t.assigneeId !== null && solvedByAgent.has(t.assigneeId)) {
+      solvedByAgent.set(t.assigneeId, solvedByAgent.get(t.assigneeId)! + 1);
+      const h = (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / 3600000;
+      if (h >= 0) resolutionByAgent.get(t.assigneeId)!.push(h);
+    }
+  }
+  for (const t of rated) {
+    if (t.assigneeId !== null && csatByAgent.has(t.assigneeId)) csatByAgent.get(t.assigneeId)!.push(t.satisfactionScore ?? 0);
+  }
+  const perAgentPerformance = agentIds
+    .map((agentId) => {
+      const fr = firstReplyByAgent.get(agentId)!;
+      const cs = csatByAgent.get(agentId)!;
+      return {
+        agentId,
+        solved: solvedByAgent.get(agentId)!,
+        openLoad: perAgentCounts.get(agentId) ?? 0,
+        firstReplyCount: fr.length,
+        medianFirstReplyMinutes: Math.round(median(fr)),
+        medianResolutionHours: Math.round(median(resolutionByAgent.get(agentId)!) * 10) / 10,
+        csatCount: cs.length,
+        csatAverage: cs.length === 0 ? 0 : Math.round((cs.reduce((s, v) => s + v, 0) / cs.length) * 10) / 10,
+      };
+    })
+    .sort((a, b) => b.solved - a.solved);
+
   return {
     createdLast14Days: days.map((date) => ({ date, count: createdByDay.get(date)! })),
     solvedLast14Days: days.map((date) => ({ date, count: solvedByDay.get(date)! })),
     byPriority,
     byStatus,
     perAgentOpen,
+    perAgentPerformance,
     medianFirstReplyMinutes: Math.round(median(firstReplyDeltasMin)),
     medianResolutionHours: Math.round(median(resolutionDeltasH) * 10) / 10,
     openNow,

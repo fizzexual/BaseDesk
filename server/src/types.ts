@@ -285,12 +285,25 @@ export interface Counts {
   open: number; pending: number; on_hold: number; solved: number; closed: number;
   archive: number; spam: number; trash: number;
 }
+/** Per-agent productivity + quality metrics for the Reports leaderboard. */
+export interface PerAgentPerformance {
+  agentId: string;
+  solved: number; // solved/closed tickets currently assigned to them
+  openLoad: number; // current open/pending/on-hold assigned
+  firstReplyCount: number; // tickets where they sent the first agent reply (sample size)
+  medianFirstReplyMinutes: number;
+  medianResolutionHours: number;
+  csatCount: number;
+  csatAverage: number; // 0 when they have no ratings
+}
+
 export interface StatsOverview {
   createdLast14Days: { date: string; count: number }[];
   solvedLast14Days: { date: string; count: number }[];
   byPriority: Record<TicketPriority, number>;
   byStatus: Record<TicketStatus, number>;
   perAgentOpen: { agentId: string; count: number }[];
+  perAgentPerformance: PerAgentPerformance[];
   medianFirstReplyMinutes: number;
   medianResolutionHours: number;
   openNow: number; createdLast7Days: number; solvedLast7Days: number;

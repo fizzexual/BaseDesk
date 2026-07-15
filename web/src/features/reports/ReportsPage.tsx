@@ -4,7 +4,7 @@ import { repo } from '../../data';
 import { useApp } from '../../data/store';
 import { slaAttainment } from '../../data/sla';
 import { formatMoney } from '../../data/money';
-import type { DealType, StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
+import type { Agent, DealType, StatsOverview, TicketPriority, TicketStatus } from '../../data/types';
 import { Avatar } from '../../components/Avatar';
 import { EmptyState } from '../../components/EmptyState';
 import { Tooltip } from '../../components/Tooltip';
@@ -111,6 +111,85 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: color }} />
       {label}
     </span>
+  );
+}
+
+function AgentPerformanceTable({ stats, agents }: { stats: StatsOverview; agents: Record<string, Agent> }) {
+  // Only agents with activity in the window, keeping the leaderboard focused.
+  const rows = stats.perAgentPerformance.filter((p) => p.solved > 0 || p.openLoad > 0 || p.firstReplyCount > 0);
+  return (
+    <ChartCard
+      title="Agent performance"
+      tooltip={{
+        title: 'Agent performance',
+        desc: "Per-agent workload and quality: tickets solved and currently open (assigned to them), median first-reply and resolution time, and average CSAT.",
+      }}
+    >
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<IconUser size={28} />}
+          title="No agent activity yet"
+          hint="Solved counts, response times and CSAT will appear here per agent."
+        />
+      ) : (
+        <div className="-mx-1 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-[13px]">
+            <thead>
+              <tr className="border-b border-line text-left text-[12px] text-text-3">
+                <th className="px-1.5 py-1.5 font-medium">Agent</th>
+                <th className="px-1.5 py-1.5 text-right font-medium">Solved</th>
+                <th className="px-1.5 py-1.5 text-right font-medium">Open</th>
+                <th className="px-1.5 py-1.5 text-right font-medium">
+                  <Tooltip title="Median first reply" label="Median time from a ticket being created to this agent's first reply, over tickets they answered first.">
+                    <span>First reply</span>
+                  </Tooltip>
+                </th>
+                <th className="px-1.5 py-1.5 text-right font-medium">
+                  <Tooltip title="Median resolution" label="Median time from creation to solved, over tickets assigned to this agent.">
+                    <span>Resolution</span>
+                  </Tooltip>
+                </th>
+                <th className="px-1.5 py-1.5 text-right font-medium">CSAT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => {
+                const agent = agents[p.agentId];
+                if (!agent) return null;
+                return (
+                  <tr key={p.agentId} className="border-b border-line/60 last:border-0">
+                    <td className="px-1.5 py-2">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Avatar name={agent.name} hue={agent.avatarHue} size={22} />
+                        <span className="truncate">{agent.name}</span>
+                      </span>
+                    </td>
+                    <td className="px-1.5 py-2 text-right font-medium tabular-nums">{nf.format(p.solved)}</td>
+                    <td className="px-1.5 py-2 text-right tabular-nums text-text-2">{nf.format(p.openLoad)}</td>
+                    <td className="px-1.5 py-2 text-right tabular-nums text-text-2">
+                      {p.firstReplyCount > 0 ? fmtFirstReply(p.medianFirstReplyMinutes) : '—'}
+                    </td>
+                    <td className="px-1.5 py-2 text-right tabular-nums text-text-2">
+                      {p.medianResolutionHours > 0 ? fmtResolution(p.medianResolutionHours) : '—'}
+                    </td>
+                    <td className="px-1.5 py-2 text-right tabular-nums">
+                      {p.csatCount > 0 ? (
+                        <span>
+                          <span className="text-amber">★</span> {p.csatAverage.toFixed(1)}{' '}
+                          <span className="text-text-3">({p.csatCount})</span>
+                        </span>
+                      ) : (
+                        <span className="text-text-3">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ChartCard>
   );
 }
 
@@ -301,6 +380,8 @@ export function ReportsPage() {
               )}
             </ChartCard>
           </div>
+
+          <AgentPerformanceTable stats={stats} agents={agents} />
 
           <header className="mt-2 flex items-baseline gap-2.5">
             <h2 className="text-[15px] font-semibold text-text">Revenue</h2>
