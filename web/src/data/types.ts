@@ -467,6 +467,13 @@ export interface AutoAck {
   message: string;
 }
 
+/** Master switches for AI that would otherwise run on its own — all default OFF. */
+export interface AiAutomation {
+  autoSuggest: boolean;
+  autoResolve: boolean;
+  autoTriage: boolean;
+}
+
 export type OnCallCadence = 'daily' | 'weekly';
 export interface OnCallConfig {
   enabled: boolean;

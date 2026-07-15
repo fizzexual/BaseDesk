@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -9,7 +9,7 @@ import type { Repository } from './repository';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
 import { applyAccent } from './branding';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -20,6 +20,7 @@ export interface AppState {
   sla: SlaTargets;
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
   slaHours: SlaHours;
@@ -101,6 +102,7 @@ export interface AppState {
   saveAutomation(rules: AutomationRule[]): Promise<void>;
   saveAssignment(settings: AssignmentSettings): Promise<void>;
   saveAutoAck(settings: AutoAck): Promise<void>;
+  saveAiAutomation(settings: AiAutomation): Promise<void>;
   saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
   runTimeRules(): Promise<number>;
@@ -114,7 +116,7 @@ export interface AppState {
   createAiAgent(input: AiAgentCreate): Promise<string>;
   updateAiAgent(id: string, patch: AiAgentPatch): Promise<void>;
   deleteAiAgent(id: string): Promise<void>;
-  runAgents(): Promise<number>;
+  runAgents(ticketId?: string): Promise<number>;
   approveAction(id: string): Promise<void>;
   dismissAction(id: string): Promise<void>;
   createChannel(input: ChannelCreate): Promise<string>;
@@ -210,6 +212,7 @@ export function createAppStore(repository: Repository) {
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
+    aiAutomation: DEFAULT_AI_AUTOMATION,
     onCall: DEFAULT_ON_CALL,
     timeRules: DEFAULT_TIME_RULES,
     slaHours: DEFAULT_SLA_HOURS,
@@ -256,6 +259,7 @@ export function createAppStore(repository: Repository) {
         sla: data.sla,
         assignment: data.assignment,
         autoAck: data.autoAck,
+        aiAutomation: data.aiAutomation,
         onCall: data.onCall,
         timeRules: data.timeRules,
         slaHours: data.slaHours,
@@ -836,6 +840,18 @@ export function createAppStore(repository: Repository) {
       }
     },
 
+    async saveAiAutomation(settings) {
+      const prev = get().aiAutomation;
+      set({ aiAutomation: settings });
+      try {
+        const saved = await repository.saveAiAutomation(settings);
+        set({ aiAutomation: saved });
+      } catch (err) {
+        set({ aiAutomation: prev });
+        throw err;
+      }
+    },
+
     async saveOnCall(config) {
       const prev = get().onCall;
       set({ onCall: config });
@@ -984,8 +1000,8 @@ export function createAppStore(repository: Repository) {
       }
     },
 
-    async runAgents() {
-      const { created } = await repository.runAgents();
+    async runAgents(ticketId) {
+      const { created } = await repository.runAgents(ticketId);
       // Refresh actions + tickets: agents may have created actions and resolved tickets.
       const data = await repository.bootstrap();
       set({

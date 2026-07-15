@@ -1,4 +1,4 @@
-import type { AiProviderConfig, AutoAck, AutomationRule, Branding, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
+import type { AiAutomation, AiProviderConfig, AutoAck, AutomationRule, Branding, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
 
 /** Default branding: the product name shown to customers, no custom accent (uses the theme). */
 export const DEFAULT_BRANDING: Branding = { productName: 'BaseDesk', accentColor: '' };
@@ -107,6 +107,9 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
 };
+
+/** AI does nothing on its own out of the box — every switch is opt-in. */
+export const DEFAULT_AI_AUTOMATION: AiAutomation = { autoSuggest: false, autoResolve: false, autoTriage: false };
 
 /** Starter ticket templates so the New Ticket dialog is useful out of the box. */
 export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [

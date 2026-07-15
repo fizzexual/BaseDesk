@@ -3,13 +3,13 @@ import type {
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
-  Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -96,6 +96,7 @@ interface LocalData {
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
   autoAck: AutoAck;
+  aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
   events: TicketEvent[];
@@ -260,6 +261,7 @@ function seedData(): LocalData {
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
     autoAck: { ...DEFAULT_AUTO_ACK },
+    aiAutomation: { ...DEFAULT_AI_AUTOMATION },
     onCall: { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] },
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
     events: [],
@@ -390,6 +392,10 @@ export class LocalRepository implements Repository {
         this.data.autoAck = { ...DEFAULT_AUTO_ACK };
         this.persist();
       }
+      if (this.data.aiAutomation === undefined) {
+        this.data.aiAutomation = { ...DEFAULT_AI_AUTOMATION };
+        this.persist();
+      }
       if (this.data.onCall === undefined) {
         this.data.onCall = { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] };
         this.persist();
@@ -511,6 +517,7 @@ export class LocalRepository implements Repository {
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
       autoAck: { ...this.data.autoAck },
+      aiAutomation: { ...this.data.aiAutomation },
       onCall: { ...this.data.onCall, rotation: [...this.data.onCall.rotation] },
       timeRules: this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
       intakeForm: this.data.intakeForm,
@@ -690,6 +697,16 @@ export class LocalRepository implements Repository {
     return { ...this.data.autoAck };
   }
 
+  async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
+    this.data.aiAutomation = {
+      autoSuggest: settings.autoSuggest === true,
+      autoResolve: settings.autoResolve === true,
+      autoTriage: settings.autoTriage === true,
+    };
+    this.persist();
+    return { ...this.data.aiAutomation };
+  }
+
   async saveOnCall(config: OnCallConfig): Promise<OnCallConfig> {
     const known = new Set(this.data.agents.map((a) => a.id));
     this.data.onCall = {
@@ -769,7 +786,10 @@ export class LocalRepository implements Repository {
   }
 
   /** Mirrors the server: highest-autonomy enabled agent acts on a new ticket. */
-  private runAgentsOnTicket(ticket: Ticket, firstBody: string): AiAction | null {
+  private runAgentsOnTicket(ticket: Ticket, firstBody: string, opts?: { manual?: boolean }): AiAction | null {
+    // Automatic runs are opt-in; a manual "Suggest a reply" bypasses that gate.
+    if (opts?.manual !== true && !this.data.aiAutomation.autoSuggest) return null;
+    const canAutoResolve = this.data.aiAutomation.autoResolve;
     const agents = this.data.aiAgents
       .filter((a) => a.enabled)
       .sort((a, b) => AUTONOMY_RANK[b.autonomy]! - AUTONOMY_RANK[a.autonomy]!);
@@ -783,17 +803,19 @@ export class LocalRepository implements Repository {
         canned: this.data.canned, kb: this.data.kb,
       });
       if (decision === null) continue;
+      // Auto-send is opt-in: without it, a resolve becomes a draft for a human to approve.
+      const kind = decision.kind === 'resolve' && !canAutoResolve ? 'draft' : decision.kind;
       const now = new Date().toISOString();
       const action: AiAction = {
         id: nextId(this.data.aiActions, 'act_', 3), agentId: agent.id, ticketId: ticket.id,
-        kind: decision.kind, status: decision.kind === 'resolve' ? 'sent' : 'pending',
+        kind, status: kind === 'resolve' ? 'sent' : 'pending',
         draftBody: decision.draftBody, suggestedPriority: decision.suggestedPriority,
         suggestedTags: decision.suggestedTags, kbArticleId: decision.kbArticleId,
         promptTokens: 0, completionTokens: 0, // demo mode is rule-based — no model tokens
-        createdAt: now, resolvedAt: decision.kind === 'resolve' ? now : null,
+        createdAt: now, resolvedAt: kind === 'resolve' ? now : null,
       };
       this.data.aiActions.push(action);
-      if (decision.kind === 'resolve' && decision.draftBody !== null) {
+      if (kind === 'resolve' && decision.draftBody !== null) {
         this.data.messages.push({
           id: nextId(this.data.messages, 'm_', 5), ticketId: ticket.id, authorKind: 'agent',
           authorId: CURRENT_AGENT_ID, kind: 'reply', body: decision.draftBody, at: now,
@@ -1675,17 +1697,25 @@ export class LocalRepository implements Repository {
     this.persist();
   }
 
-  async runAgents(): Promise<{ created: number }> {
+  async runAgents(ticketId?: string): Promise<{ created: number }> {
+    const firstContactBody = (id: string) =>
+      this.data.messages
+        .filter((m) => m.ticketId === id)
+        .sort((a, b) => a.at.localeCompare(b.at))
+        .find((m) => m.authorKind === 'contact')?.body ?? '';
+    // Manual per-ticket run (the "Suggest a reply" button).
+    if (ticketId !== undefined) {
+      const t = this.data.tickets.find((x) => x.id === ticketId);
+      const created = t && this.runAgentsOnTicket(t, firstContactBody(t.id), { manual: true }) !== null ? 1 : 0;
+      this.persist();
+      return { created };
+    }
     const actioned = new Set(this.data.aiActions.map((a) => a.ticketId));
     let created = 0;
     for (const t of this.data.tickets) {
       if (t.bucket !== 'inbox' || (t.status !== 'open' && t.status !== 'pending')) continue;
       if (actioned.has(t.id)) continue;
-      const firstContact = this.data.messages
-        .filter((m) => m.ticketId === t.id)
-        .sort((a, b) => a.at.localeCompare(b.at))
-        .find((m) => m.authorKind === 'contact');
-      if (this.runAgentsOnTicket(t, firstContact?.body ?? '') !== null) created += 1;
+      if (this.runAgentsOnTicket(t, firstContactBody(t.id), { manual: true }) !== null) created += 1;
     }
     this.persist();
     return { created };

@@ -22,6 +22,8 @@ it('bootstrap carries AI agents and seeded actions', async () => {
 
 it('a resolve agent auto-resolves a ticket that matches a KB article', async () => {
   const app = makeApp();
+  // Auto-run + auto-send are opt-in now — turn them on for this behavior.
+  await app.request('/api/settings/ai-automation', json('PUT', { autoSuggest: true, autoResolve: true, autoTriage: false }));
   const boot = await (await app.request('/api/bootstrap')).json();
   const apiArticle = boot.kb.find((a: { category: string }) => a.category === 'API');
   const res = await app.request('/api/tickets', json('POST', {

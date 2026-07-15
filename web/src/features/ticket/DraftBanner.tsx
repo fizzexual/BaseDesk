@@ -6,6 +6,7 @@ import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { IconSparkle } from '../../icons';
 import { TokenCost } from '../ai/TokenCost';
+import { aiEnabled } from '../ai/engine';
 
 /**
  * Surfaces a pending AI draft for this ticket right above the composer, so an
@@ -17,13 +18,45 @@ export function DraftBanner({ ticket }: { ticket: Ticket }) {
   const approveAction = useApp((s) => s.approveAction);
   const dismissAction = useApp((s) => s.dismissAction);
   const setComposerPrefill = useApp((s) => s.setComposerPrefill);
+  const runAgents = useApp((s) => s.runAgents);
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
 
   const draft = Object.values(aiActions).find(
     (a) => a.ticketId === ticket.id && a.kind === 'draft' && a.status === 'pending',
   );
-  // Nothing to show — or the ticket is closed and locked for writing.
-  if (draft === undefined || ticket.status === 'closed') return null;
+
+  // No pending draft: offer a manual "Suggest a reply" (auto-suggest is opt-in now).
+  if (draft === undefined) {
+    const canSuggest =
+      aiEnabled() &&
+      (ticket.status === 'open' || ticket.status === 'pending') &&
+      Object.values(aiAgents).some((a) => a.enabled);
+    if (!canSuggest) return null;
+    const suggest = async () => {
+      if (suggesting) return;
+      setSuggesting(true);
+      try {
+        const created = await runAgents(ticket.id);
+        if (created === 0) toast('No AI agent had a suggestion for this ticket');
+      } catch {
+        toast('Could not generate a suggestion');
+      } finally {
+        setSuggesting(false);
+      }
+    };
+    return (
+      <div className="mx-4 mt-2 flex shrink-0 items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px]">
+        <IconSparkle size={14} className="shrink-0 text-text-3" />
+        <span className="min-w-0 text-text-3">Draft a reply with your AI agents.</span>
+        <div className="flex-1" />
+        <Button variant="subtle" size="sm" disabled={suggesting} onClick={() => void suggest()}>
+          {suggesting ? 'Drafting…' : 'Suggest a reply'}
+        </Button>
+      </div>
+    );
+  }
+  if (ticket.status === 'closed') return null;
   const d = draft; // narrowed alias so the async handlers below keep the type
 
   const agent = aiAgents[d.agentId];

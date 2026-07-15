@@ -261,6 +261,8 @@ describe('token usage', () => {
     // A resolve-capable model answer carries usage onto the stored action.
     const url = await mockProvider(() => completion('{"canResolve":true,"reply":"Here is the fix."}', { prompt_tokens: 600, completion_tokens: 120 }));
     await app.request('/api/ai/provider', json('PUT', { enabled: true, baseUrl: url, model: 'm', apiKey: 'k' }));
+    // Auto-run is opt-in — enable it so the agent fires on the new ticket.
+    await app.request('/api/settings/ai-automation', json('PUT', { autoSuggest: true, autoResolve: true, autoTriage: false }));
 
     await app.request('/api/tickets', json('POST', {
       subject: 'Reset help', body: 'how do I reset', requesterId: boot.contacts[0].id, priority: 'low',

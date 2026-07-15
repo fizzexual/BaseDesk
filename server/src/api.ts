@@ -28,13 +28,13 @@ import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
-import { DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
+  AiAction, AiAutomation, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
   SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -362,6 +362,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return DEFAULT_AUTO_ACK;
     }
   };
+  const aiAutomation = (): AiAutomation => {
+    try {
+      const raw = JSON.parse(getSetting(db, 'ai_automation') ?? '') as Partial<AiAutomation>;
+      return { autoSuggest: raw.autoSuggest === true, autoResolve: raw.autoResolve === true, autoTriage: raw.autoTriage === true };
+    } catch {
+      return { ...DEFAULT_AI_AUTOMATION };
+    }
+  };
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
   const branding = (): Branding => {
     try {
@@ -671,7 +679,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
    * a KB article sends the reply and solves the ticket; draft/suggest agents
    * record a pending action for the queues.
    */
-  const runAgentsOnTicket = async (ticket: Ticket, firstBody: string): Promise<AiAction | null> => {
+  const runAgentsOnTicket = async (ticket: Ticket, firstBody: string, opts?: { manual?: boolean }): Promise<AiAction | null> => {
+    // Automatic runs are opt-in; a manual "Suggest a reply" bypasses that gate.
+    if (opts?.manual !== true && !aiAutomation().autoSuggest) return null;
     const agents = getAiAgents(db)
       .filter((a) => a.enabled)
       // A category-scoped agent only works tickets in one of its categories; an
@@ -684,6 +694,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const kb = db.prepare('SELECT * FROM kb_articles').all() as unknown as KbArticle[];
     const cfg = getAiProviderConfig(db);
     const useModel = providerReady(cfg);
+    const canAutoResolve = aiAutomation().autoResolve; // auto-SEND is opt-in even when agents run
     const contactName = contact?.name ?? 'there';
     const thread: ThreadMsg[] = [{ role: 'customer', body: firstBody }];
     for (const agent of agents) {
@@ -722,6 +733,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
           body = d.body; promptTokens = d.usage.promptTokens; completionTokens = d.usage.completionTokens;
         }
       }
+      // Auto-send is opt-in: without it, a resolve becomes a draft for a human to approve.
+      if (kind === 'resolve' && !canAutoResolve) kind = 'draft';
 
       const now = new Date().toISOString();
       const action: AiAction = {
@@ -787,6 +800,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       notifications: getNotifications(db, currentAgentId()),
       assignment: assignmentSettings(),
       autoAck: autoAck(),
+      aiAutomation: aiAutomation(),
       onCall: onCall(),
       timeRules: timeRules(),
       slaHours: slaHours() as BootstrapData['slaHours'],
@@ -2295,6 +2309,22 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(value);
   });
 
+  app.put('/api/settings/ai-automation', async (c) => {
+    let input: Record<string, unknown>;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const value: AiAutomation = {
+      autoSuggest: input.autoSuggest === true,
+      autoResolve: input.autoResolve === true,
+      autoTriage: input.autoTriage === true,
+    };
+    setSetting(db, 'ai_automation', JSON.stringify(value));
+    return c.json(value);
+  });
+
   app.put('/api/settings/on-call', async (c) => {
     let input: unknown;
     try {
@@ -2570,7 +2600,23 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json({ ok: true });
   });
 
+  // Manual: run the agents on demand — over the whole backlog, or one ticket when
+  // `ticketId` is given (the per-ticket "Suggest a reply" button). Bypasses the
+  // auto-suggest gate (it's an explicit click) but still honors auto-resolve.
   app.post('/api/ai/run', async (c) => {
+    let body: { ticketId?: unknown } = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      /* no body — backlog run */
+    }
+    if (typeof body.ticketId === 'string') {
+      const ticket = getTicket(db, body.ticketId);
+      if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+      const firstContact = getMessages(db, ticket.id).find((m) => m.authorKind === 'contact');
+      const action = await runAgentsOnTicket(ticket, firstContact?.body ?? '', { manual: true });
+      return c.json({ created: action !== null ? 1 : 0 });
+    }
     const actioned = new Set(
       (db.prepare('SELECT DISTINCT ticketId FROM ai_actions').all() as { ticketId: string }[]).map((r) => r.ticketId),
     );
@@ -2582,7 +2628,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       const ticket = rowToTicket(row);
       if (actioned.has(ticket.id)) continue;
       const firstContact = getMessages(db, ticket.id).find((m) => m.authorKind === 'contact');
-      if ((await runAgentsOnTicket(ticket, firstContact?.body ?? '')) !== null) created += 1;
+      if ((await runAgentsOnTicket(ticket, firstContact?.body ?? '', { manual: true })) !== null) created += 1;
     }
     return c.json({ created });
   });

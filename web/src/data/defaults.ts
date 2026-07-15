@@ -1,4 +1,4 @@
-import type { AiProvider, AutoAck, AutomationRule, OnCallConfig, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
+import type { AiAutomation, AiProvider, AutoAck, AutomationRule, OnCallConfig, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
 
 /** Starter ticket templates so the New Ticket dialog is useful out of the box (mirrors the server). */
 export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [
@@ -72,6 +72,9 @@ export const DEFAULT_SLA_HOURS: SlaHours = {
   start: '09:00',
   end: '17:00',
 };
+
+/** AI does nothing on its own out of the box — every switch is opt-in. */
+export const DEFAULT_AI_AUTOMATION: AiAutomation = { autoSuggest: false, autoResolve: false, autoTriage: false };
 
 export const DEFAULT_AUTO_ACK: AutoAck = {
   enabled: false,

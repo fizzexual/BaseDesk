@@ -22,6 +22,38 @@ const TOGGLE_OPTIONS: { value: 'on' | 'off'; label: string }[] = [
   { value: 'off', label: 'Off' },
 ];
 
+const AUTOMATION_ROWS: { key: 'autoSuggest' | 'autoTriage' | 'autoResolve'; title: string; desc: string }[] = [
+  { key: 'autoSuggest', title: 'Auto-suggest replies on new tickets', desc: 'Draft a reply automatically when a ticket arrives. Off — agents click “Suggest a reply”.' },
+  { key: 'autoTriage', title: 'Auto-suggest priority & tags', desc: 'Read a ticket for triage as soon as it’s opened. Off — suggested on demand.' },
+  { key: 'autoResolve', title: 'Let AI send resolutions on its own', desc: 'Allow a resolve agent to send its reply and close the ticket with no human review.' },
+];
+
+/** Master switches for AI that would otherwise act on its own — all off by default. */
+function AiAutomationCard() {
+  const auto = useApp((s) => s.aiAutomation);
+  const save = useApp((s) => s.saveAiAutomation);
+  const toggle = (key: (typeof AUTOMATION_ROWS)[number]['key']) =>
+    void save({ ...auto, [key]: !auto[key] }).catch(() => toast('Could not update AI automation'));
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-[15px] font-semibold">Automatic AI</h2>
+      <p className="mt-2 text-[13px] text-text-3">By default, AI only runs when someone asks it to. Turn on any of these to let it act on its own.</p>
+      <div className="mt-4 flex flex-col gap-3">
+        {AUTOMATION_ROWS.map((r) => (
+          <div key={r.key} className="flex items-center justify-between gap-4 rounded-lg border border-line p-3.5">
+            <div className="min-w-0">
+              <div className="text-[14px] font-medium">{r.title}</div>
+              <div className="mt-0.5 text-[13px] text-text-2">{r.desc}</div>
+            </div>
+            <Switch enabled={auto[r.key]} onToggle={() => toggle(r.key)} label={r.title} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function AiSettings() {
   const provider = useApp((s) => s.aiProvider);
   const availableModels = useApp((s) => s.availableModels);
@@ -165,6 +197,8 @@ export function AiSettings() {
         </div>
         <SegmentedControl options={TOGGLE_OPTIONS} value={copilot ? 'on' : 'off'} onChange={onCopilot} />
       </div>
+
+      <AiAutomationCard />
 
       <div className="mt-8 flex items-start justify-between gap-4">
         <div className="min-w-0">

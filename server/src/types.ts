@@ -480,6 +480,16 @@ export interface AutoAck {
   message: string;
 }
 
+/**
+ * Master switches for AI that would otherwise run on its own. All default OFF —
+ * AI is manual (button-triggered) unless an admin opts in here.
+ */
+export interface AiAutomation {
+  autoSuggest: boolean; // run AI agents automatically on new tickets (the suggested reply)
+  autoResolve: boolean; // let AI agents auto-send/resolve a ticket without a human
+  autoTriage: boolean; // auto-suggest priority/tags when a ticket is opened
+}
+
 export type OnCallCadence = 'daily' | 'weekly';
 /** An on-call rotation. Who's on call now is computed from the anchor date + cadence + rotation order. */
 export interface OnCallConfig {
@@ -539,6 +549,7 @@ export interface BootstrapData {
   savedViews: SavedView[];
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
   intakeForm: IntakeForm;
