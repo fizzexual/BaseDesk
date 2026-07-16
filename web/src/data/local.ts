@@ -2,11 +2,12 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, AuditEvent, AutoAck, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
+  AssignmentSettings, AuditEvent, AutoAck, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
+import { normalizeHighlights } from './citationHighlight';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
@@ -1079,9 +1080,10 @@ export class LocalRepository implements Repository {
     return this.sideConvosFor(ticketId);
   }
 
-  async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
+  async addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[]; embeds?: MessageEmbed[] }): Promise<{ message: Message; ticket: Ticket }> {
     const t = this.ticket(ticketId);
     const now = new Date().toISOString();
+    const embeds = this.resolveEmbeds(input.embeds);
     const message: Message = {
       id: nextId(this.data.messages, 'm_', 5),
       ticketId,
@@ -1090,6 +1092,7 @@ export class LocalRepository implements Repository {
       kind: input.kind,
       body: input.body,
       at: now,
+      embeds: embeds.length > 0 ? embeds : undefined,
     };
     this.data.messages.push(message);
     const ids = input.attachmentIds ?? [];
@@ -1103,7 +1106,14 @@ export class LocalRepository implements Repository {
     t.updatedAt = now;
     t.lastMessageAt = now;
     if (input.kind === 'reply') {
-      t.lastMessagePreview = input.body.trim() !== '' ? preview(input.body) : 'Sent an attachment';
+      t.lastMessagePreview =
+        input.body.trim() !== ''
+          ? preview(input.body)
+          : embeds.length > 0
+            ? embeds[0].type === 'kb_citation'
+              ? `Cited “${embeds[0].title}”`
+              : `Asked “${embeds[0].question}”`
+            : 'Sent an attachment';
       if (t.status === 'open') t.status = 'pending';
       if (t.firstRespondedAt === null) t.firstRespondedAt = now;
     }
@@ -1112,9 +1122,45 @@ export class LocalRepository implements Repository {
     return { message: { ...message, attachments }, ticket: { ...t, tags: [...t.tags] } };
   }
 
+  /** Re-resolve KB citations against the local store (parity with the server), dropping unknown/unpublished ones. */
+  private resolveEmbeds(raw?: MessageEmbed[]): MessageEmbed[] {
+    const out: MessageEmbed[] = [];
+    for (const c of raw ?? []) {
+      if (c.type === 'kb_citation') {
+        const passage = c.passage.replace(/\s+/g, ' ').trim().slice(0, 2000);
+        if (passage === '') continue;
+        const article = this.data.kb.find((a) => a.id === c.articleId);
+        if (article === undefined || article.status !== 'published') continue;
+        const highlights = normalizeHighlights(c.highlights, passage.length);
+        out.push({
+          type: 'kb_citation',
+          articleId: article.id,
+          title: article.title,
+          category: article.category.trim() === '' ? null : article.category,
+          slug: article.slug,
+          passage,
+          ...(highlights.length > 0 ? { highlights } : {}),
+        });
+      } else if (c.type === 'choice_prompt') {
+        const question = c.question.replace(/\s+/g, ' ').trim().slice(0, 300);
+        const options: ChoiceOption[] = [];
+        for (const o of c.options ?? []) {
+          const label = o.label.trim().slice(0, 120);
+          if (label === '') continue;
+          options.push({ id: `o${options.length + 1}`, label });
+          if (options.length >= 10) break;
+        }
+        if (question === '' || options.length < 1) continue;
+        out.push({ type: 'choice_prompt', question, layout: c.layout === 'dropdown' ? 'dropdown' : 'buttons', options });
+      } else continue;
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
   /** Mirrors the server: an @mentioned teammate (by first name) gets a notification. */
   private notifyMentions(message: Message, ticketSubject: string): void {
-    const tokens = new Set((message.body.match(/@[A-Za-z]+/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    const tokens = new Set((message.body.match(/@\p{L}[\p{L}'’_-]*/gu) ?? []).map((t) => t.slice(1).toLowerCase()));
     if (tokens.size === 0) return;
     const actorName = this.data.agents.find((a) => a.id === message.authorId)?.name ?? 'A teammate';
     for (const a of this.data.agents) {
