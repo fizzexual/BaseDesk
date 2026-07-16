@@ -540,6 +540,13 @@ export interface BusinessHours {
   days: (DayHours | null)[]; // length 7, index 0 = Sunday; null = closed that day
 }
 
+/** Admin-auth status for the current agent (drives the client login gate). */
+export interface AuthStatus {
+  enabled: boolean; // whether login is required to use the admin app
+  hasPassword: boolean; // the current agent has a password set
+  totpEnabled: boolean; // the current agent has two-factor enabled
+}
+
 /**
  * Master switches for AI that would otherwise run on its own. All default OFF —
  * AI is manual (button-triggered) unless an admin opts in here.
@@ -610,6 +617,7 @@ export interface BootstrapData {
   assignment: AssignmentSettings;
   autoAck: AutoAck;
   businessHours: BusinessHours;
+  auth: AuthStatus;
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];

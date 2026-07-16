@@ -260,6 +260,12 @@ export function openDb(dataDir: string): DatabaseSync {
       sendAt TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS agent_auth (
+      agentId TEXT PRIMARY KEY,
+      passwordHash TEXT,
+      totpSecret TEXT,
+      totpEnabled INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -1129,6 +1135,34 @@ export function getAgents(db: DatabaseSync): Agent[] {
 export function getAgent(db: DatabaseSync, id: string): Agent | null {
   const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow | undefined;
   return row ? rowToAgent(row) : null;
+}
+export function getAgentByEmail(db: DatabaseSync, email: string): Agent | null {
+  const row = db.prepare('SELECT * FROM agents WHERE lower(email) = lower(?)').get(email) as AgentRow | undefined;
+  return row ? rowToAgent(row) : null;
+}
+
+/** Per-agent auth secrets — kept out of the Agent object so they're never serialized. */
+export interface AgentAuth { passwordHash: string | null; totpSecret: string | null; totpEnabled: boolean; }
+export function getAgentAuth(db: DatabaseSync, agentId: string): AgentAuth {
+  const row = db.prepare('SELECT passwordHash, totpSecret, totpEnabled FROM agent_auth WHERE agentId = ?').get(agentId) as
+    | { passwordHash: string | null; totpSecret: string | null; totpEnabled: number }
+    | undefined;
+  return {
+    passwordHash: row?.passwordHash ?? null,
+    totpSecret: row?.totpSecret ?? null,
+    totpEnabled: (row?.totpEnabled ?? 0) === 1,
+  };
+}
+export function upsertAgentAuth(db: DatabaseSync, agentId: string, patch: Partial<AgentAuth>): void {
+  const next = { ...getAgentAuth(db, agentId), ...patch };
+  const exists = db.prepare('SELECT 1 FROM agent_auth WHERE agentId = ?').get(agentId) !== undefined;
+  if (exists) {
+    db.prepare('UPDATE agent_auth SET passwordHash = ?, totpSecret = ?, totpEnabled = ? WHERE agentId = ?')
+      .run(next.passwordHash, next.totpSecret, next.totpEnabled ? 1 : 0, agentId);
+  } else {
+    db.prepare('INSERT INTO agent_auth (agentId, passwordHash, totpSecret, totpEnabled) VALUES (?, ?, ?, ?)')
+      .run(agentId, next.passwordHash, next.totpSecret, next.totpEnabled ? 1 : 0);
+  }
 }
 
 /** The branching intake form (decision tree) stored as a single settings blob. */

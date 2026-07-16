@@ -12,7 +12,7 @@ import {
   awaitingReplyMap, getAiUsage, getAllEvents, getContactByEmail, getCustomField, getCustomFields, getDeal, getKbArticle, getMessage, getMessages, getModelCache, getNotifications, getPortalAuth, getSavedViews, getSetting, getSmtpConfig, getTicket, getTicketEvents, markNotificationsRead, setModelCache, setSavedViews,
   insertAiAction, insertAiUsage, insertAttachment, insertNotification, insertTicketEvent, linkAttachments, openDb, portalSecret, rowToTicket, setAiProviderConfig, setPortalAuth, setSetting, setSmtpConfig,
   toPublicChannel, toPublicProvider, toPublicSmtp, type TicketRow,
-  getAgents, getAgent, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
+  getAgents, getAgent, getAgentByEmail, getAgentAuth, upsertAgentAuth, getIntakeForm, setIntakeForm, categoriesFromForm, recordSeen, getTicketSeen, setTicketIntake, getTicketIntake,
   followTicket, unfollowTicket, getFollowers,
   getTasks, getTask, insertTask, patchTask, removeTask, nextTaskPosition,
   hasTimeRuleFired, recordTimeRuleFired,
@@ -21,7 +21,8 @@ import {
   getSideConversations, getSideConversation, insertSideConversation, insertSideMessage,
   getHandoverNotes, insertHandoverNote, deleteHandoverNote,
 } from './db.js';
-import { hashPassword, signSession, verifyPassword, verifySession } from './auth.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { hashPassword, randomTotpSecret, signSession, totpUri, verifyPassword, verifySession, verifyTotp } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
@@ -577,12 +578,40 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     insertAiUsage(db, { id: newId('use_'), kind, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens, at: new Date().toISOString() });
   };
 
-  const currentAgentId = (): string => {
+  // Per-request identity. When auth is on, middleware runs each request inside this
+  // store holding the signed-in agent's id; otherwise it's empty and we fall back to
+  // the first admin — so a login-less install behaves exactly as it always has.
+  const agentCtx = new AsyncLocalStorage<string>();
+  const firstAdminId = (): string => {
     const row = db.prepare("SELECT id FROM agents WHERE role = 'admin' ORDER BY rowid LIMIT 1").get() as
       | { id: string }
       | undefined;
     if (row === undefined) throw new Error('no admin agent found');
     return row.id;
+  };
+  const currentAgentId = (): string => {
+    const s = agentCtx.getStore();
+    return s !== undefined && s !== '' ? s : firstAdminId();
+  };
+  const authEnabled = (): boolean => getSetting(db, 'auth_enabled') === '1';
+  const authSecret = (): string => {
+    let s = getSetting(db, 'auth_secret');
+    if (s === null) {
+      s = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+      setSetting(db, 'auth_secret', s);
+    }
+    return s;
+  };
+  const bearerToken = (h: string | undefined): string | null => {
+    const m = h !== undefined ? /^Bearer\s+(.+)$/i.exec(h.trim()) : null;
+    return m ? m[1] : null;
+  };
+  const sessionAgentId = (token: string | null): string | null => {
+    if (token === null) return null;
+    const id = verifySession(authSecret(), token);
+    if (id === null) return null;
+    const agent = getAgent(db, id);
+    return agent !== null && agent.status === 'active' ? agent.id : null;
   };
 
   // Ephemeral in-memory presence — who is viewing each ticket right now, keyed by a
@@ -964,7 +993,112 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
 
   const app = new Hono();
 
+  // Admin authentication gate. A no-op passthrough when auth is off (the default), so
+  // existing installs are unchanged. When on, admin /api routes require a valid session;
+  // the SPA, portal, auth, health, branding, uploads and channel webhooks stay open.
+  const isPublicPath = (p: string): boolean =>
+    !p.startsWith('/api/') ||
+    p.startsWith('/api/auth/') ||
+    p.startsWith('/api/portal/') ||
+    p === '/api/health' ||
+    p === '/api/branding' ||
+    p.startsWith('/api/uploads') ||
+    p.includes('/inbound');
+  app.use('*', async (c, next) => {
+    if (!authEnabled()) return next();
+    const agentId = sessionAgentId(bearerToken(c.req.header('Authorization')));
+    if (agentId === null && !isPublicPath(c.req.path)) return c.json({ error: 'authentication required' }, 401);
+    return agentCtx.run(agentId ?? '', next);
+  });
+
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
+
+  // --- Admin authentication (opt-in). Set a password while auth is off, then enable it. ---
+  app.post('/api/auth/login', async (c) => {
+    let input: { email?: unknown; password?: unknown; code?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const email = typeof input.email === 'string' ? input.email.trim() : '';
+    const password = typeof input.password === 'string' ? input.password : '';
+    const agent = getAgentByEmail(db, email);
+    const auth = agent !== null ? getAgentAuth(db, agent.id) : null;
+    if (agent === null || agent.status !== 'active' || auth === null || auth.passwordHash === null || !verifyPassword(password, auth.passwordHash)) {
+      return c.json({ error: 'Invalid email or password' }, 401);
+    }
+    if (auth.totpEnabled) {
+      const code = typeof input.code === 'string' ? input.code : '';
+      if (auth.totpSecret === null || !verifyTotp(auth.totpSecret, code, Date.now())) {
+        return c.json({ error: 'A valid two-factor code is required', needs2fa: true }, 401);
+      }
+    }
+    return c.json({ token: signSession(authSecret(), agent.id), agent });
+  });
+
+  app.post('/api/auth/logout', (c) => c.json({ ok: true })); // stateless — the client drops its token
+
+  app.get('/api/auth/me', (c) => {
+    const agent = getAgent(db, currentAgentId());
+    const a = getAgentAuth(db, currentAgentId());
+    return agent !== null
+      ? c.json({ agent, authEnabled: authEnabled(), hasPassword: a.passwordHash !== null, totpEnabled: a.totpEnabled })
+      : c.json({ error: 'not signed in' }, 401);
+  });
+
+  app.post('/api/auth/password', async (c) => {
+    let input: { password?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.password !== 'string' || input.password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+    upsertAgentAuth(db, currentAgentId(), { passwordHash: hashPassword(input.password) });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/auth/2fa/setup', (c) => {
+    const secret = randomTotpSecret();
+    upsertAgentAuth(db, currentAgentId(), { totpSecret: secret, totpEnabled: false });
+    const agent = getAgent(db, currentAgentId());
+    return c.json({ secret, uri: totpUri(secret, agent?.email ?? 'agent') });
+  });
+
+  app.post('/api/auth/2fa/enable', async (c) => {
+    let input: { code?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const auth = getAgentAuth(db, currentAgentId());
+    const code = typeof input.code === 'string' ? input.code : '';
+    if (auth.totpSecret === null || !verifyTotp(auth.totpSecret, code, Date.now())) return c.json({ error: 'Invalid code' }, 400);
+    upsertAgentAuth(db, currentAgentId(), { totpEnabled: true });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/auth/2fa/disable', (c) => {
+    upsertAgentAuth(db, currentAgentId(), { totpSecret: null, totpEnabled: false });
+    return c.json({ ok: true });
+  });
+
+  app.put('/api/settings/auth', async (c) => {
+    let input: { enabled?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    // Guard against lockout: refuse to require login until the current agent has a password.
+    if (input.enabled === true && getAgentAuth(db, currentAgentId()).passwordHash === null) {
+      return c.json({ error: 'Set your password before enabling login' }, 400);
+    }
+    setSetting(db, 'auth_enabled', input.enabled === true ? '1' : '0');
+    return c.json({ enabled: input.enabled === true });
+  });
 
   app.get('/api/bootstrap', (c) => {
     flushScheduled(Date.now()); // fire any due scheduled sends whenever the app loads
@@ -995,6 +1129,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
       assignment: assignmentSettings(),
       autoAck: autoAck(),
       businessHours: businessHours(),
+      auth: { enabled: authEnabled(), hasPassword: getAgentAuth(db, currentAgentId()).passwordHash !== null, totpEnabled: getAgentAuth(db, currentAgentId()).totpEnabled },
       aiAutomation: aiAutomation(),
       onCall: onCall(),
       timeRules: timeRules(),
