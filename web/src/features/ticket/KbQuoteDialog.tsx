@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Dialog } from '../../components/Dialog';
 import { EmptyState } from '../../components/EmptyState';
 import { useApp } from '../../data/store';
-import type { KbArticle } from '../../data/types';
+import type { KbArticle, KbCitation } from '../../data/types';
 import { IconBook, IconChevronLeft, IconSearch } from '../../icons';
 
 /** Article body split into readable passages (blank-line separated), whitespace collapsed. */
@@ -13,14 +13,21 @@ function passages(body: string): string[] {
     .filter((p) => p.length > 0);
 }
 
-/** The cited quote inserted into the reply — attribution line + the passage. */
-function formatQuote(article: KbArticle, passage: string): string {
-  return `From our help article “${article.title}”:\n\n“${passage}”\n\n`;
+/** Build the structured citation embed attached to the reply for a picked passage. */
+function toCitation(article: KbArticle, passage: string): KbCitation {
+  return {
+    type: 'kb_citation',
+    articleId: article.id,
+    title: article.title,
+    category: article.category.trim() === '' ? null : article.category,
+    slug: article.slug,
+    passage,
+  };
 }
 
 const ROW = 'flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-surface-2';
 
-export function KbQuoteDialog({ onClose, onInsert }: { onClose: () => void; onInsert: (text: string) => void }) {
+export function KbQuoteDialog({ onClose, onCite }: { onClose: () => void; onCite: (citation: KbCitation) => void }) {
   const kb = useApp((s) => s.kb);
   const [q, setQ] = useState('');
   const [article, setArticle] = useState<KbArticle | null>(null);
@@ -35,7 +42,7 @@ export function KbQuoteDialog({ onClose, onInsert }: { onClose: () => void; onIn
   const paras = useMemo(() => (article ? passages(article.body) : []), [article]);
 
   return (
-    <Dialog open onClose={onClose} title={article ? 'Insert a quote' : 'Cite a help article'} width={560}>
+    <Dialog open onClose={onClose} title={article ? 'Attach a citation' : 'Cite a help article'} width={560}>
       {article === null ? (
         <>
           <div className="flex h-9 items-center gap-2 rounded-md border border-line bg-surface px-3">
@@ -75,11 +82,11 @@ export function KbQuoteDialog({ onClose, onInsert }: { onClose: () => void; onIn
             All articles
           </button>
           <h3 className="mt-2 text-[15px] font-semibold">{article.title}</h3>
-          <p className="mt-0.5 text-[12px] text-text-3">Pick a passage to insert as a quote into your reply.</p>
+          <p className="mt-0.5 text-[12px] text-text-3">Pick a passage to attach as a citation to your reply.</p>
           <ul className="mt-3 max-h-[320px] space-y-1 overflow-y-auto">
             {paras.map((p, i) => (
               <li key={i}>
-                <button type="button" className={`${ROW} text-[13px] leading-relaxed text-text-2`} onClick={() => onInsert(formatQuote(article, p))}>
+                <button type="button" className={`${ROW} text-[13px] leading-relaxed text-text-2`} onClick={() => onCite(toCitation(article, p))}>
                   {p.length > 240 ? `${p.slice(0, 240)}…` : p}
                 </button>
               </li>
