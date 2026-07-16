@@ -60,6 +60,17 @@ export interface IntakeForm {
 /** One answered question captured from the intake form, stored as ticket metadata. */
 export interface IntakeAnswer { prompt: string; label: string; }
 
+/** A reply or note queued to post to a ticket at a future time. */
+export interface ScheduledMessage {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  kind: 'reply' | 'note';
+  body: string;
+  sendAt: string;
+  createdAt: string;
+}
+
 /** Aggregate customer-satisfaction figures over rated tickets. */
 export interface CsatStats {
   count: number;

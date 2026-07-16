@@ -8,11 +8,20 @@ import { createApp, refreshModelCache } from './api.js';
 const dataDir = process.env.DATA_DIR ?? './data';
 mkdirSync(dataDir, { recursive: true });
 
-const { app, db } = createApp(dataDir);
+const { app, db, flushScheduled } = createApp(dataDir);
 
 // The model "addresser": re-check the provider's available models once a day
 // (createApp already refreshes on boot). unref() so it never blocks shutdown.
 setInterval(() => void refreshModelCache(db), 24 * 60 * 60 * 1000).unref();
+
+// Fire due scheduled sends every 30s (also flushed opportunistically on bootstrap).
+setInterval(() => {
+  try {
+    flushScheduled(Date.now());
+  } catch {
+    /* keep the timer alive across a transient failure */
+  }
+}, 30_000).unref();
 
 // Serve the built SPA in production (web/dist present). In dev (BASEDESK_DEV=1)
 // the two Vite servers serve the SPA, so the API stays API-only even if a stale

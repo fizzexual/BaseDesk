@@ -250,6 +250,15 @@ export function openDb(dataDir: string): DatabaseSync {
       body TEXT NOT NULL,
       createdAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id TEXT PRIMARY KEY,
+      ticketId TEXT NOT NULL,
+      authorId TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      body TEXT NOT NULL,
+      sendAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

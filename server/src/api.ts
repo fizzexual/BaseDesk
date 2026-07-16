@@ -38,7 +38,7 @@ import type {
   AiAction, AiAutomation, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, BusinessHours, OutsideHours, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   ChoiceOption, CitationHighlight, CustomFieldType, Deal, DealStage, DealType, HighlightColor, IntakeForm, IntakeNode, KbArticle, MacroActions, Message, MessageEmbed,
-  SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
+  SavedView, ScheduledMessage, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
@@ -373,7 +373,7 @@ function viewWhere(view: ViewId, nowIso: string, currentAgentId: string): { sql:
   }
 }
 
-export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
+export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
   // Refresh the available-model list on boot (no-op unless a provider is set up).
@@ -755,6 +755,43 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     deliverReply(ticket, message);
   };
 
+  /** Post any scheduled messages whose time has arrived; returns how many fired.
+   *  Stale entries (ticket gone/closed/merged) are dropped without posting. Called
+   *  on a timer in production and opportunistically on bootstrap. */
+  const flushScheduled = (nowMs: number): number => {
+    const rows = db
+      .prepare('SELECT * FROM scheduled_messages WHERE sendAt <= ? ORDER BY sendAt ASC')
+      .all(new Date(nowMs).toISOString()) as unknown as ScheduledMessage[];
+    let sent = 0;
+    for (const row of rows) {
+      const ticket = getTicket(db, row.ticketId);
+      if (ticket === null || ticket.status === 'closed' || ticket.mergedIntoId !== null) {
+        db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
+        continue;
+      }
+      const now = new Date().toISOString();
+      const nextStatus = row.kind === 'reply' && ticket.status === 'open' ? 'pending' : ticket.status;
+      const nextPreview = row.kind === 'reply' ? preview(row.body) : ticket.lastMessagePreview;
+      const nextFirst = row.kind === 'reply' && ticket.firstRespondedAt === null ? now : ticket.firstRespondedAt;
+      db.exec('BEGIN');
+      try {
+        db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(newId('m_'), row.ticketId, 'agent', row.authorId, row.kind, row.body, now);
+        db.prepare('UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?')
+          .run(nextStatus, now, now, nextPreview, nextFirst, row.ticketId);
+        db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(row.id);
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+      followTicket(db, row.ticketId, row.authorId, now);
+      if (row.kind === 'reply') deliverReply(ticket, row.body);
+      sent++;
+    }
+    return sent;
+  };
+
   // ---- Time-based rules: escalations + stale-ticket cleanup -------------------
   const applyTimeRule = (t: Ticket, rule: TimeRule, nowIso: string): void => {
     let priority = t.priority;
@@ -919,6 +956,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
 
   app.get('/api/bootstrap', (c) => {
+    flushScheduled(Date.now()); // fire any due scheduled sends whenever the app loads
     const awaiting = awaitingReplyMap(db);
     const tickets = (db.prepare('SELECT * FROM tickets ORDER BY lastMessageAt DESC').all() as unknown as TicketRow[])
       .map(rowToTicket)
@@ -1656,6 +1694,43 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     if (forTicket.size === 0) presence.delete(id);
     return c.json({ present });
+  });
+
+  // Queue a reply/note to post to a ticket at a future time (send later).
+  app.post('/api/tickets/:id/schedule', async (c) => {
+    const id = c.req.param('id');
+    const ticket = getTicket(db, id);
+    if (ticket === null) return c.json({ error: `ticket not found: ${id}` }, 404);
+    let input: { kind?: unknown; body?: unknown; sendAt?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (input.kind !== 'reply' && input.kind !== 'note') return c.json({ error: "kind must be 'reply' or 'note'" }, 400);
+    if (typeof input.body !== 'string' || input.body.trim() === '') return c.json({ error: 'body is required' }, 400);
+    const when = typeof input.sendAt === 'string' ? Date.parse(input.sendAt) : NaN;
+    if (Number.isNaN(when)) return c.json({ error: 'sendAt must be an ISO timestamp' }, 400);
+    if (when <= Date.now()) return c.json({ error: 'sendAt must be in the future' }, 400);
+    const row: ScheduledMessage = {
+      id: newId('sm_'), ticketId: id, authorId: currentAgentId(), kind: input.kind,
+      body: input.body, sendAt: new Date(when).toISOString(), createdAt: new Date().toISOString(),
+    };
+    db.prepare('INSERT INTO scheduled_messages (id, ticketId, authorId, kind, body, sendAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(row.id, row.ticketId, row.authorId, row.kind, row.body, row.sendAt, row.createdAt);
+    return c.json(row);
+  });
+
+  app.get('/api/tickets/:id/scheduled', (c) => {
+    const rows = db
+      .prepare('SELECT * FROM scheduled_messages WHERE ticketId = ? ORDER BY sendAt ASC')
+      .all(c.req.param('id')) as unknown as ScheduledMessage[];
+    return c.json(rows);
+  });
+
+  app.delete('/api/scheduled/:sid', (c) => {
+    db.prepare('DELETE FROM scheduled_messages WHERE id = ?').run(c.req.param('sid'));
+    return c.json({ ok: true });
   });
 
   // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
@@ -3857,5 +3932,5 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   }, 5 * 60_000);
   if (typeof timeRuleTimer.unref === 'function') timeRuleTimer.unref();
 
-  return { app, db };
+  return { app, db, flushScheduled };
 }
