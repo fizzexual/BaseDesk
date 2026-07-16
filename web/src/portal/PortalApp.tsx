@@ -12,6 +12,7 @@ import { PortalNewTicket } from './PortalNewTicket';
 import { PortalProfile } from './PortalProfile';
 import { HelpLayout, HelpIndex, HelpArticle } from './PortalHelp';
 import { PortalStatus } from './PortalStatus';
+import { PortalForum } from './PortalForum';
 
 /** Scrollable, centered column for the portal's non-ticket pages. */
 function ContainedPage() {
@@ -64,6 +65,8 @@ export function PortalApp() {
             <Route path="ticket/:id" element={<PortalTicket />} />
             <Route element={<ContainedPage />}>
               <Route path="profile" element={<PortalProfile />} />
+              <Route path="community" element={<PortalForum />} />
+              <Route path="community/:id" element={<PortalForum />} />
             </Route>
           </Route>
         )}

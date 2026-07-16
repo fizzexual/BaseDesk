@@ -2,7 +2,7 @@
 // from the agent-side Repository/store: a customer is a different principal, sees
 // only their own data, and authenticates with a bearer token kept in localStorage.
 
-import type { Announcement, Attachment, Branding, Contact, IntakeAnswer, IntakeForm, KbArticle, MessageEmbed, Ticket, TicketPriority } from '../data/types';
+import type { Announcement, Attachment, Branding, Contact, ForumCategory, ForumList, ForumTopicDetail, IntakeAnswer, IntakeForm, KbArticle, MessageEmbed, Ticket, TicketPriority } from '../data/types';
 
 const TOKEN_KEY = 'basedesk-portal-token';
 
@@ -150,5 +150,21 @@ export const portalApi = {
   /** White-label branding (public — product name + accent). */
   branding() {
     return req<Branding>('/branding');
+  },
+  // Community forum (customer side): browse, post, reply, and accept an answer on your own topics.
+  forumTopics(category?: string) {
+    return req<ForumList>(`/forum/topics${category !== undefined && category !== '' ? `?category=${encodeURIComponent(category)}` : ''}`);
+  },
+  forumTopic(id: string) {
+    return req<ForumTopicDetail>(`/forum/topics/${encodeURIComponent(id)}`);
+  },
+  createForumTopic(input: { title: string; body: string; category: ForumCategory }) {
+    return req<ForumTopicDetail>('/forum/topics', body(input));
+  },
+  replyForumTopic(id: string, message: string) {
+    return req<ForumTopicDetail>(`/forum/topics/${encodeURIComponent(id)}/replies`, body({ body: message }));
+  },
+  acceptForumReply(id: string, replyId: string) {
+    return req<ForumTopicDetail>(`/forum/topics/${encodeURIComponent(id)}/accept`, body({ replyId }));
   },
 };

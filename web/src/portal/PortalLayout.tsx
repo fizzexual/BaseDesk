@@ -4,7 +4,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { Avatar } from '../components/Avatar';
 import { Menu } from '../components/Menu';
 import { cx } from '../components/util';
-import { IconBook, IconChevronDown, IconInbox, IconLogo, IconPlus, IconUser } from '../icons';
+import { IconBook, IconChevronDown, IconCommunity, IconInbox, IconLogo, IconPlus, IconUser } from '../icons';
 import { AnnouncementBanner } from './AnnouncementBanner';
 
 type NavItem = { to: string; label: string; end: boolean; icon: (p: { size?: number; className?: string }) => React.ReactNode };
@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { to: '/portal', label: 'My tickets', end: true, icon: IconInbox },
   { to: '/portal/new', label: 'New ticket', end: false, icon: IconPlus },
   { to: '/portal/help', label: 'Help center', end: false, icon: IconBook },
+  { to: '/portal/community', label: 'Community', end: false, icon: IconCommunity },
 ];
 
 const firstName = (name: string): string => name.trim().split(/\s+/)[0] || name;
