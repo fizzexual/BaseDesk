@@ -64,6 +64,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'Press **⌘K** / **Ctrl-K** to open the command palette. From there you can jump to any view, open a ticket by number or subject, or run actions like **New ticket**, **New contact**, **Toggle theme**, and **Open wallboard**.',
       '',
+      '{{example:command-palette}}',
+      '',
       '## Handy shortcuts',
       '| Keys | Action |',
       '| --- | --- |',
@@ -82,6 +84,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'The **bell** in the top bar collects your notifications — replies on tickets you follow, assignments, and @mentions.',
       '',
+      '{{example:notification}}',
+      '',
       'In an **internal note**, type **@** and a teammate’s name to mention them. They get a notification linking back to the ticket. Mentions work with non-ASCII names too. You start **following** a ticket automatically when you act on it, so later activity reaches you.',
     ].join('\n'),
   },
@@ -97,6 +101,8 @@ export const DOCS: DocArticle[] = [
       '- **Pending** — you replied; waiting on the customer.',
       '- **On hold** — parked, waiting on something internal.',
       '- **Solved** / **Closed** — resolved. A closed ticket is locked; reopen it to reply.',
+      '',
+      '{{example:status-badges}}',
       '',
       '## Priority',
       'Every ticket has a priority (**Urgent / High / Medium / Low**). The AI can suggest one, automation can set one, and you can change it from the header.',
@@ -120,6 +126,8 @@ export const DOCS: DocArticle[] = [
       '1. If the ticket has a category and any agent **covers** that category (Settings → Team → *Handles categories*), the pool narrows to those coverers.',
       '2. Within that pool, if the opening message is detected to be in a specific non-English language and an agent **speaks** it (Settings → Team → *Speaks*), it routes to a speaker.',
       '',
+      '{{example:skills-language}}',
+      '',
       'Both are soft preferences — if no one matches, the ticket still gets assigned rather than stranded.',
     ].join('\n'),
   },
@@ -131,6 +139,8 @@ export const DOCS: DocArticle[] = [
     body: [
       '## Merge (mark as duplicate)',
       'From a ticket’s **⋯ → Merge into…**, pick the ticket this one duplicates. GitHub-style: the source **keeps its own conversation**, is closed as a read-only pointer to the target, and the target gets a cross-reference note. Nothing is moved or deleted, and you stay on the source (which now shows a "merged into #N" banner with a button to open the target).',
+      '',
+      '{{example:merged-banner}}',
       '',
       '## Split',
       '**⋯ → Split…** moves selected messages out of a ticket into a new, related ticket — the inverse of merge — for when one thread is really two issues.',
@@ -188,6 +198,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'Save common responses as **canned replies** (Settings → Canned replies). Insert one in the composer by typing **/** and picking from the list, or via the quick-reply chips.',
       '',
+      '{{example:canned-macro}}',
+      '',
       'A canned reply can also carry **macro actions** — applying it can set the status, priority, or a tag and add the text in one move. Canned replies marked with a spark do more than paste text.',
     ].join('\n'),
   },
@@ -215,6 +227,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Read a customer’s message in your language.',
     body: [
       'On a customer message, click **Translate** to render it in your language using the configured AI model. It shows the detected source language and a toggle back to the original.',
+      '',
+      '{{example:translate}}',
       '',
       'Translation is precise (it uses whatever model you’ve set up, including a local one) and degrades gracefully — with no provider configured, the Translate control simply isn’t offered. See **AI copilot → Setting up a model**.',
     ].join('\n'),
@@ -268,6 +282,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'In **Settings → Automation**, build rules that run when a ticket is created. Each rule is a set of **conditions** (subject contains, message contains, sender contains, priority is, channel is) and **actions** (set priority, set status, set category, add tag, assign to).',
       '',
+      '{{example:automation-rule}}',
+      '',
       'Rules run in order, so a Spam rule can tag and archive junk before anything else touches it, and a VIP rule can raise priority for known senders.',
     ].join('\n'),
   },
@@ -292,6 +308,8 @@ export const DOCS: DocArticle[] = [
     body: [
       '**SLA targets** (Settings → SLA) define how quickly tickets should get a first response and a resolution, by priority. Each ticket shows an SLA badge that turns urgent as a target approaches or is missed.',
       '',
+      '{{example:sla-badge}}',
+      '',
       '**Time rules** act on age — for example, escalate a ticket that hasn’t had a first response in N hours, or clean up stale tickets. They’re evaluated on a schedule.',
     ].join('\n'),
   },
@@ -314,6 +332,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Customer-facing help articles, written in Markdown.',
     body: [
       'The **knowledge base** (rail → Knowledge base) holds customer-facing articles. Write them in **Markdown** — headings, bold/italic, lists, links, tables, code blocks — with a Write/Preview toggle. Draft stays private; **Published** makes it live in the help center and available to the AI for drafting and deflection.',
+      '',
+      '{{example:kb-editor}}',
       '',
       'This is different from **this Guide**: the KB is your editable customer content; the Guide is built-in, read-only documentation of BaseDesk itself.',
     ].join('\n'),
@@ -338,6 +358,8 @@ export const DOCS: DocArticle[] = [
       '## CSAT',
       'After a ticket is solved or closed, the customer can leave a **1–5 satisfaction rating** with a comment. It shows in the ticket’s details panel and rolls up into Reports and the wallboard.',
       '',
+      '{{example:csat}}',
+      '',
       '## Status page & announcements',
       'Publish a public **status page** with component health and **incidents**, and show in-portal **announcement** banners (info / warning / critical).',
       '',
@@ -353,6 +375,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Everyone and what they’re carrying.',
     body: [
       'The **Team** page (rail → Team) lists every member with their current **workload** and their **assigned tickets**, so you can rebalance at a glance. Reassign from a member’s card, assign to yourself, or unassign.',
+      '',
+      '{{example:workload-bar}}',
       '',
       'A **"Needs reassignment"** bucket collects tickets assigned to people who are no longer active. Manage each teammate’s **categories** (skills) and **languages** in Settings → Team — these drive auto-assignment.',
     ].join('\n'),
@@ -381,6 +405,8 @@ export const DOCS: DocArticle[] = [
       '',
       '## Revenue',
       'BaseDesk includes a light CRM: log **deals / opportunities** against a contact (right from a ticket’s details panel), track stage (open / won / lost) and value, and see revenue context while you support that customer.',
+      '',
+      '{{example:deal-card}}',
     ].join('\n'),
   },
   {
@@ -402,6 +428,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Where tickets come from.',
     body: [
       'Connect the places customers reach you in **Channels** (rail → Channels). Supported types include **Email**, **Web chat**, **Discord**, **Slack**, **WhatsApp**, and generic **Webhook**. Inbound messages become tickets; replies go back out over the same channel.',
+      '',
+      '{{example:channel-badges}}',
       '',
       'Each ticket shows its **source channel** in the header, so you know where a conversation is happening.',
     ].join('\n'),
