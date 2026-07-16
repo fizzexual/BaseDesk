@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconMegaphone, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
+import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconLock, IconMegaphone, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { OnCallSettings } from './OnCallSettings';
@@ -16,8 +16,9 @@ import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
 import { AnnouncementsSettings } from './AnnouncementsSettings';
 import { BusinessHoursSettings } from './BusinessHoursSettings';
+import { SecuritySettings } from './SecuritySettings';
 
-type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'hours' | 'automation' | 'ai' | 'email' | 'announcements' | 'import';
+type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'hours' | 'automation' | 'ai' | 'email' | 'announcements' | 'security' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -38,6 +39,7 @@ const TABS: Array<{
   { id: 'ai', label: 'AI', icon: IconSparkle },
   { id: 'email', label: 'Email', icon: IconSend },
   { id: 'announcements', label: 'Announcements', icon: IconMegaphone },
+  { id: 'security', label: 'Security', icon: IconLock },
   { id: 'import', label: 'Import', icon: IconImport },
 ];
 
@@ -57,6 +59,7 @@ export function SettingsPage() {
     params.tab === 'ai' ||
     params.tab === 'email' ||
     params.tab === 'announcements' ||
+    params.tab === 'security' ||
     params.tab === 'import'
       ? params.tab
       : 'profile';
@@ -98,6 +101,7 @@ export function SettingsPage() {
         {tab === 'ai' && <AiSettings />}
         {tab === 'email' && <EmailSettings />}
         {tab === 'announcements' && <AnnouncementsSettings />}
+        {tab === 'security' && <SecuritySettings />}
         {tab === 'import' && <ImportSettings />}
       </div>
     </div>

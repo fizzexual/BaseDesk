@@ -28,6 +28,7 @@ export { IconAlert } from './IconAlert';
 export { IconTrash } from './IconTrash';
 export { IconCheck } from './IconCheck';
 export { IconCheckCircle } from './IconCheckCircle';
+export { IconLock } from './IconLock';
 export { IconClock } from './IconClock';
 export { IconHistory } from './IconHistory';
 export { IconActivity } from './IconActivity';

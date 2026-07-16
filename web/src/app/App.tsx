@@ -24,9 +24,11 @@ import { KbPage } from '../features/kb/KbPage';
 import { ChannelsPage } from '../features/channels/ChannelsPage';
 import { WallboardPage } from '../features/wallboard/WallboardPage';
 import { DocsPage } from '../features/docs/DocsPage';
+import { LoginScreen } from './LoginScreen';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
+  const needsLogin = useApp((s) => s.needsLogin);
   const init = useApp((s) => s.init);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +48,9 @@ function Boot({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     );
+  }
+  if (needsLogin) {
+    return <LoginScreen />;
   }
   if (!ready) {
     return (
