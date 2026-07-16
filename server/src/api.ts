@@ -574,6 +574,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return row.id;
   };
 
+  // Ephemeral in-memory presence — who is viewing each ticket right now, keyed by a
+  // per-tab session id so concurrent viewers stay distinct even under one login.
+  // Never persisted; entries expire once heartbeats stop.
+  const presence = new Map<string, Map<string, { agentId: string; at: number }>>();
+  const PRESENCE_TTL = 18_000;
+
   /**
    * Create an @mention notification for every teammate named in an internal
    * note. Matches an `@word` token against each agent's first name
@@ -1615,6 +1621,41 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       throw err;
     }
     return c.json({ source: getTicket(db, id), target: getTicket(db, into) });
+  });
+
+  // Heartbeat + read presence in one call: records that this session is viewing the
+  // ticket and returns the other sessions currently on it (for collision avoidance).
+  app.post('/api/tickets/:id/presence', async (c) => {
+    const id = c.req.param('id');
+    let body: { sessionId?: unknown; agentId?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+    const agentId = typeof body.agentId === 'string' && body.agentId !== '' ? body.agentId : currentAgentId();
+    const now = Date.now();
+    let forTicket = presence.get(id);
+    if (forTicket === undefined) {
+      forTicket = new Map();
+      presence.set(id, forTicket);
+    }
+    if (sessionId !== '') forTicket.set(sessionId, { agentId, at: now });
+    const seen = new Set<string>();
+    const present: string[] = [];
+    for (const [sid, e] of forTicket) {
+      if (now - e.at > PRESENCE_TTL) {
+        forTicket.delete(sid);
+        continue;
+      }
+      if (sid !== sessionId && !seen.has(e.agentId)) {
+        seen.add(e.agentId);
+        present.push(e.agentId);
+      }
+    }
+    if (forTicket.size === 0) presence.delete(id);
+    return c.json({ present });
   });
 
   // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
