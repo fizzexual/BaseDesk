@@ -3,7 +3,7 @@ import type {
   AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
-  SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
+  MessageEmbed, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
 import type { Repository } from './repository';
 import { repo } from './index';
@@ -77,7 +77,7 @@ export interface AppState {
   refreshNotifications(): Promise<void>;
   patchTicket(id: string, patch: TicketPatch): Promise<void>;   // optimistic + rollback on error
   bulkPatch(ids: string[], patch: TicketPatch, addTags?: string[]): Promise<void>;
-  sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[]): Promise<void>;
+  sendMessage(ticketId: string, kind: 'reply' | 'note', body: string, attachmentIds?: string[], embeds?: MessageEmbed[]): Promise<void>;
   mergeTicket(ticketId: string, into: string): Promise<void>;
   /** Split messages out into a new related ticket; resolves to the new ticket's id. */
   splitTicket(ticketId: string, subject: string, messageIds: string[]): Promise<string>;
@@ -484,7 +484,7 @@ export function createAppStore(repository: Repository) {
       }
     },
 
-    async sendMessage(ticketId, kind, body, attachmentIds = []) {
+    async sendMessage(ticketId, kind, body, attachmentIds = [], embeds = []) {
       const { tickets, messages, currentAgentId } = get();
       const prevTicket = tickets[ticketId] as Ticket | undefined;
       if (!prevTicket) throw new Error('Ticket not found');
@@ -499,10 +499,18 @@ export function createAppStore(repository: Repository) {
         kind,
         body,
         at: now,
+        embeds: embeds.length > 0 ? embeds : undefined,
       };
       const optimistic: Ticket = { ...prevTicket, updatedAt: now, lastMessageAt: now };
       if (kind === 'reply') {
-        optimistic.lastMessagePreview = previewOf(body);
+        optimistic.lastMessagePreview =
+          body.trim() !== ''
+            ? previewOf(body)
+            : embeds.length > 0
+              ? embeds[0].type === 'kb_citation'
+                ? `Cited “${embeds[0].title}”`
+                : `Asked “${embeds[0].question}”`
+              : previewOf(body);
         if (optimistic.status === 'open') optimistic.status = 'pending';
       }
       set((s) => ({
@@ -510,7 +518,7 @@ export function createAppStore(repository: Repository) {
         messages: { ...s.messages, [ticketId]: [...prevMessages, temp] },
       }));
       try {
-        const { message, ticket } = await repository.addMessage(ticketId, { kind, body, attachmentIds });
+        const { message, ticket } = await repository.addMessage(ticketId, { kind, body, attachmentIds, embeds });
         set((s) => ({
           tickets: { ...s.tickets, [ticketId]: ticket },
           messages: {
