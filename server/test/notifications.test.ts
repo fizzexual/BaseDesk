@@ -56,6 +56,16 @@ describe('@mention notifications', () => {
     expect(n.readAt).toBeNull();
   });
 
+  it('notifies a teammate whose first name is hyphenated (@Anne-Marie)', async () => {
+    const { app, db } = makeApp();
+    const tid = await openTicketId(app);
+    // Rename Priya (a_2) to a hyphenated first name — the old @[A-Za-z]+ token would stop at the hyphen.
+    await app.request('/api/agents/a_2', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Anne-Marie Dupont' }) });
+    const before = getNotifications(db, 'a_2').length;
+    await app.request(`/api/tickets/${tid}/messages`, note('Hey @Anne-Marie, can you take this one?'));
+    expect(getNotifications(db, 'a_2').length).toBe(before + 1);
+  });
+
   it('does not notify on a public reply, only on notes', async () => {
     const { app, db } = makeApp();
     const tid = await openTicketId(app);
