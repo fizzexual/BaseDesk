@@ -11,8 +11,9 @@ import { TimeAgo } from '../components/TimeAgo';
 import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
-import type { Attachment, Ticket } from '../data/types';
-import { IconCheckCircle, IconChevronLeft, IconClock, IconPaperclip, IconPlus, IconX } from '../icons';
+import type { Attachment, ChoicePrompt, KbCitation, Ticket } from '../data/types';
+import { CitationPassage } from '../features/kb/CitationPassage';
+import { IconBook, IconCheckCircle, IconChevronLeft, IconClock, IconList, IconPaperclip, IconPlus, IconX } from '../icons';
 
 /** Friendly "by 3:45 PM today" / "by Mon, Jul 20, 3:45 PM" for an expected-reply time. */
 function formatExpected(iso: string): string {
