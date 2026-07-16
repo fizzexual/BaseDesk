@@ -74,8 +74,8 @@ function timeAgo(iso: string): string {
 function Snippet({ text }: { text: string }) {
   return (
     <>
-      {text.split(/(@[A-Za-z]+)/g).map((part, i) =>
-        /^@[A-Za-z]+$/.test(part) ? (
+      {text.split(/(@\p{L}[\p{L}'’_-]*)/gu).map((part, i) =>
+        /^@\p{L}[\p{L}'’_-]*$/u.test(part) ? (
           <span key={i} className="font-medium text-blue">
             {part}
           </span>
