@@ -21,21 +21,23 @@ async function twoOpenTickets(app: ReturnType<typeof makeApp>['app']): Promise<[
 }
 
 describe('merge tickets', () => {
-  it('moves messages onto the target, drops a note, and closes the source as a pointer', async () => {
+  it('preserves the source thread, cross-references it on the target, and closes the source as a pointer', async () => {
     const { app, db } = makeApp();
     const [src, dst] = await twoOpenTickets(app);
     const srcCount = getMessages(db, src).length;
     const dstCount = getMessages(db, dst).length;
+    expect(srcCount).toBeGreaterThan(0); // the source has a conversation worth keeping
 
     const res = await (await app.request(`/api/tickets/${src}/merge`, post(dst))).json();
     expect(res.source.mergedIntoId).toBe(dst);
     expect(res.source.status).toBe('closed');
     expect(res.target.mergedIntoId).toBeNull();
 
-    // Source thread is emptied; target absorbed those messages + a merge note.
-    expect(getMessages(db, src).length).toBe(0);
+    // GitHub-style: the source keeps its full conversation (nothing moved or deleted);
+    // the target only gains a single cross-reference note.
+    expect(getMessages(db, src).length).toBe(srcCount);
     const dstMsgs = getMessages(db, dst);
-    expect(dstMsgs.length).toBe(srcCount + dstCount + 1);
+    expect(dstMsgs.length).toBe(dstCount + 1);
     expect(dstMsgs.some((m) => m.kind === 'note' && m.body.startsWith('Merged ticket #'))).toBe(true);
   });
 
