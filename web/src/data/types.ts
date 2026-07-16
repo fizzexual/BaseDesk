@@ -517,6 +517,13 @@ export interface AutoAck {
   message: string;
 }
 
+/** Admin-auth status for the current agent (drives the client login gate). */
+export interface AuthStatus {
+  enabled: boolean;
+  hasPassword: boolean;
+  totpEnabled: boolean;
+}
+
 /** One day's opening window in 24h "HH:MM"; a null day means closed. */
 export interface DayHours { open: string; close: string; }
 /** Opening hours — used to auto-reply when a customer writes in while closed. */

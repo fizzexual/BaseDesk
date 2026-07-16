@@ -7,8 +7,32 @@ import type {
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
+const TOKEN_KEY = 'bd_admin_token';
+export function getAdminToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setAdminToken(token: string | null): void {
+  try {
+    if (token === null) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* storage unavailable — session stays in-memory */
+  }
+}
+
+/** Thrown when the server requires login and we don't have a valid session. */
+export class AuthRequiredError extends Error {}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, init);
+  const token = getAdminToken();
+  const res = await fetch(`/api${path}`, {
+    ...init,
+    headers: { ...(init?.headers as Record<string, string> | undefined), ...(token !== null ? { authorization: `Bearer ${token}` } : {}) },
+  });
   if (!res.ok) {
     let detail: string | undefined;
     try {
@@ -17,6 +41,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body; fall back to the status text
     }
+    if (res.status === 401) throw new AuthRequiredError(detail ?? 'Authentication required');
     throw new Error(detail ?? res.statusText);
   }
   return (await res.json()) as T;
@@ -271,6 +296,36 @@ export class ApiRepository implements Repository {
   }
   cancelScheduled(scheduledId: string): Promise<void> {
     return request<{ ok: true }>(`/scheduled/${encodeURIComponent(scheduledId)}`, { method: 'DELETE' }).then(() => undefined);
+  }
+  async login(email: string, password: string, code?: string): Promise<Agent> {
+    const res = await fetch('/api/auth/login', jsonInit('POST', { email, password, code }));
+    const data = (await res.json().catch(() => ({}))) as { token?: string; agent?: Agent; error?: string; needs2fa?: boolean };
+    if (!res.ok || data.token === undefined || data.agent === undefined) {
+      const err = new Error(data.error ?? 'Login failed') as Error & { needs2fa?: boolean };
+      err.needs2fa = data.needs2fa === true;
+      throw err;
+    }
+    setAdminToken(data.token);
+    return data.agent;
+  }
+  async logout(): Promise<void> {
+    setAdminToken(null);
+    await fetch('/api/auth/logout', jsonInit('POST', {})).catch(() => undefined);
+  }
+  setAdminPassword(password: string): Promise<void> {
+    return request<{ ok: true }>('/auth/password', jsonInit('POST', { password })).then(() => undefined);
+  }
+  setup2fa(): Promise<{ secret: string; uri: string }> {
+    return request('/auth/2fa/setup', jsonInit('POST', {}));
+  }
+  enable2fa(code: string): Promise<void> {
+    return request<{ ok: true }>('/auth/2fa/enable', jsonInit('POST', { code })).then(() => undefined);
+  }
+  disable2fa(): Promise<void> {
+    return request<{ ok: true }>('/auth/2fa/disable', jsonInit('POST', {})).then(() => undefined);
+  }
+  setAuthRequired(enabled: boolean): Promise<boolean> {
+    return request<{ enabled: boolean }>('/settings/auth', jsonInit('PUT', { enabled })).then((r) => r.enabled);
   }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));

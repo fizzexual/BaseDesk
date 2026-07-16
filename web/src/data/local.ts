@@ -531,6 +531,7 @@ export class LocalRepository implements Repository {
       assignment: { ...this.data.assignment },
       autoAck: { ...this.data.autoAck },
       businessHours: { ...this.data.businessHours },
+      auth: { enabled: false, hasPassword: false, totpEnabled: false },
       aiAutomation: { ...this.data.aiAutomation },
       onCall: { ...this.data.onCall, rotation: [...this.data.onCall.rotation] },
       timeRules: this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
@@ -745,6 +746,21 @@ export class LocalRepository implements Repository {
   async cancelScheduled(scheduledId: string): Promise<void> {
     this.data.scheduled = this.data.scheduled.filter((s) => s.id !== scheduledId);
     this.persist();
+  }
+
+  // Local (offline) mode has no server sessions — auth is a no-op here.
+  async login(): Promise<Agent> {
+    throw new Error('Login requires the server (you are running in local mode).');
+  }
+  async logout(): Promise<void> {}
+  async setAdminPassword(): Promise<void> {}
+  async setup2fa(): Promise<{ secret: string; uri: string }> {
+    throw new Error('Two-factor requires the server.');
+  }
+  async enable2fa(): Promise<void> {}
+  async disable2fa(): Promise<void> {}
+  async setAuthRequired(): Promise<boolean> {
+    return false;
   }
 
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {

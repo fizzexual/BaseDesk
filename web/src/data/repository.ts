@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
-  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, ScheduledMessage, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, AuthStatus, BusinessHours, ScheduledMessage, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -18,6 +18,7 @@ export interface BootstrapData {
   assignment: AssignmentSettings;
   autoAck: AutoAck;
   businessHours: BusinessHours;
+  auth: AuthStatus;
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -130,6 +131,14 @@ export interface Repository {
   scheduleMessage(ticketId: string, kind: 'reply' | 'note', body: string, sendAt: string): Promise<ScheduledMessage>;
   listScheduled(ticketId: string): Promise<ScheduledMessage[]>;
   cancelScheduled(scheduledId: string): Promise<void>;
+  // Admin auth (opt-in). login stores the session token; the rest act as the current agent.
+  login(email: string, password: string, code?: string): Promise<Agent>;
+  logout(): Promise<void>;
+  setAdminPassword(password: string): Promise<void>;
+  setup2fa(): Promise<{ secret: string; uri: string }>;
+  enable2fa(code: string): Promise<void>;
+  disable2fa(): Promise<void>;
+  setAuthRequired(enabled: boolean): Promise<boolean>;
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation>;
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig>;
   getHandover(): Promise<HandoverNote[]>;
