@@ -245,7 +245,7 @@ function seedData(): LocalData {
     tickets: seed.tickets.map((t) => ({ ...t, tags: [...t.tags], mergedIntoId: t.mergedIntoId ?? null, awaitingReply: t.awaitingReply ?? false, customFields: { ...(t.customFields ?? {}) }, category: t.category ?? null })),
     messages: seed.messages.map((m) => ({ ...m })),
     contacts: seed.contacts.map((c) => ({ ...c })),
-    agents: seed.agents.map((a) => ({ ...a, categories: a.categories ?? [] })),
+    agents: seed.agents.map((a) => ({ ...a, categories: a.categories ?? [], languages: a.languages ?? [] })),
     canned: seed.canned.map((c) => ({ ...c, actions: c.actions ?? null })),
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
@@ -1586,6 +1586,7 @@ export class LocalRepository implements Repository {
       inviteToken: `inv_${randomToken(16)}`,
       signature: '',
       categories: [],
+      languages: [],
     };
     this.data.agents.push(agent);
     this.persist();
@@ -1604,6 +1605,8 @@ export class LocalRepository implements Repository {
       a.role = patch.role;
     }
     if (patch.signature !== undefined) a.signature = patch.signature;
+    if (patch.categories !== undefined) a.categories = patch.categories.filter((x): x is string => typeof x === 'string');
+    if (patch.languages !== undefined) a.languages = patch.languages.filter((x): x is string => typeof x === 'string');
     this.persist();
     return { ...a };
   }

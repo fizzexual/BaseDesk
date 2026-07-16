@@ -157,6 +157,17 @@ export interface IntakeForm {
 /** One answered question captured when a ticket is opened via the intake form. */
 export interface IntakeAnswer { prompt: string; label: string; }
 
+/** A reply or note queued to post to a ticket at a future time. */
+export interface ScheduledMessage {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  kind: 'reply' | 'note';
+  body: string;
+  sendAt: string;
+  createdAt: string;
+}
+
 /** Model-provider status as seen by the client — never carries the API key. */
 export interface AiProvider {
   enabled: boolean;
@@ -263,9 +274,11 @@ export interface Agent {
   status: AgentStatus; inviteToken: string | null; signature: string;
   /** Ticket categories this agent handles; new tickets in these route to them. Empty = all. */
   categories: string[];
+  /** Languages this agent speaks; a ticket detected in one routes to a speaker when possible. */
+  languages: string[];
 }
 export type AgentInvite = { name: string; email: string; role: 'admin' | 'agent' };
-export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature' | 'categories'>>;
+export type AgentPatch = Partial<Pick<Agent, 'name' | 'role' | 'signature' | 'categories' | 'languages'>>;
 /** Ticket mutations a canned reply applies when inserted, making it a macro. */
 export interface MacroActions {
   status?: TicketStatus;

@@ -145,6 +145,17 @@ function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins
     }
   }
 
+  async function toggleLanguage(language: string) {
+    const next = agent.languages.includes(language)
+      ? agent.languages.filter((l) => l !== language)
+      : [...agent.languages, language];
+    try {
+      await updateAgent(agent.id, { languages: next });
+    } catch {
+      toast('Could not update languages');
+    }
+  }
+
   return (
     <div className="rounded-lg border border-line p-3">
       <div className="flex items-center gap-3">
@@ -246,6 +257,33 @@ function MemberRow({ agent, activeAdmins, isSelf }: { agent: Agent; activeAdmins
             <p className="mt-1.5 text-[12px] text-text-3">Empty = covers every category.</p>
           </>
         )}
+      </div>
+      <div className="mt-3 border-t border-line pt-3">
+        <Tooltip title="Speaks" label="A ticket detected in one of these languages routes to this teammate when possible.">
+          <span className="text-[13px] font-medium">Speaks</span>
+        </Tooltip>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {['English', 'Spanish', 'French', 'German', 'Portuguese', 'Italian'].map((l) => {
+            const active = agent.languages.includes(l);
+            return (
+              <button
+                key={l}
+                type="button"
+                aria-pressed={active}
+                className={cx(
+                  'inline-flex h-7 items-center rounded-full border px-2.5 text-[12px] font-medium transition-colors',
+                  active
+                    ? 'border-accent bg-accent text-accent-fg'
+                    : 'border-line text-text-2 hover:bg-surface-2 hover:text-text',
+                )}
+                onClick={() => void toggleLanguage(l)}
+              >
+                {l}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[12px] text-text-3">Routes non-English tickets to a speaker.</p>
       </div>
     </div>
   );
