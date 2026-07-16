@@ -11,6 +11,7 @@ import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconBook, IconDots, IconPlus, IconSearch, IconTrash } from '../../icons';
 import { KbEditor } from './KbEditor';
+import { Markdown } from './Markdown';
 
 /** What each article status means for visitors and for AI matching. */
 const ARTICLE_STATUS_INFO: Record<ArticleStatus, { title: string; desc: string }> = {
@@ -37,15 +38,6 @@ function Reader({
   onEdit: (article: KbArticle) => void;
   onDelete: (article: KbArticle) => void;
 }) {
-  const paragraphs = useMemo(
-    () =>
-      article.body
-        .split(/\n{2,}/)
-        .map((p) => p.trim())
-        .filter((p) => p !== ''),
-    [article.body],
-  );
-
   return (
     <article className="mx-auto max-w-[720px] p-8">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -83,16 +75,10 @@ function Reader({
           </Tooltip>
         </div>
       </div>
-      {paragraphs.length === 0 ? (
+      {article.body.trim() === '' ? (
         <p className="text-[15px] text-text-3">No content yet.</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {paragraphs.map((p, i) => (
-            <p key={i} className="whitespace-pre-line text-[15px] leading-relaxed text-text">
-              {p}
-            </p>
-          ))}
-        </div>
+        <Markdown text={article.body} />
       )}
     </article>
   );
