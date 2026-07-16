@@ -32,6 +32,7 @@ import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { isOpenNow, nextOpenIso, normalizeBusinessHours } from './business-hours.js';
+import { classifySub } from './taxonomy.js';
 import { detectLanguage } from './detect-language.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI, translateAI } from './ai-llm.js';
@@ -1959,6 +1960,99 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   app.delete('/api/forum/replies/:rid', (c) => {
     deleteForumReply(db, c.req.param('rid'));
     return c.json({ ok: true });
+  });
+
+  // --- Ticket knowledge graph: a category → sub-category → ticket hierarchy.
+  // The visual graph reads the JSON (hubs + leaves for the current drill level);
+  // the AI copilot reads ?format=outline to navigate the tree token-cheaply,
+  // drilling with ?category= and ?sub= instead of scanning every ticket body. ---
+  app.get('/api/graph', (c) => {
+    const focusCat = c.req.query('category') || null;
+    const focusSub = c.req.query('sub') || null;
+
+    const rows = db.prepare(
+      `SELECT id, number, subject, status, priority, COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category
+       FROM tickets
+       WHERE mergedIntoId IS NULL AND bucket NOT IN ('spam', 'trash')
+       ORDER BY lastMessageAt DESC`,
+    ).all() as { id: string; number: number; subject: string; status: string; priority: string; category: string }[];
+
+    // Classify every ticket into a sub-category and tally the two-level tree.
+    const classified = rows.map((r) => ({ ...r, sub: classifySub(r.category, r.subject) }));
+    const catCount = new Map<string, number>();
+    const subCount = new Map<string, Map<string, number>>();
+    for (const t of classified) {
+      catCount.set(t.category, (catCount.get(t.category) ?? 0) + 1);
+      let subs = subCount.get(t.category);
+      if (!subs) { subs = new Map(); subCount.set(t.category, subs); }
+      subs.set(t.sub, (subs.get(t.sub) ?? 0) + 1);
+    }
+    const taxonomy = [...catCount.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        name,
+        count,
+        subs: [...(subCount.get(name) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).map(([n, cnt]) => ({ name: n, count: cnt })),
+      }));
+
+    if (c.req.query('format') === 'outline') {
+      const lines = [`Ticket map — ${rows.length} tickets, ${taxonomy.length} categories.`];
+      for (const cat of taxonomy) {
+        if (focusCat && cat.name !== focusCat) continue;
+        lines.push('', `## ${cat.name} (${cat.count})`);
+        for (const sub of cat.subs) {
+          if (focusSub && sub.name !== focusSub) continue;
+          lines.push(`- ${sub.name} (${sub.count})`);
+          // List titles only when drilled into a specific sub-category.
+          if (focusCat && focusSub) {
+            for (const t of classified.filter((x) => x.category === cat.name && x.sub === sub.name).slice(0, 500)) {
+              lines.push(`    - #${t.number} ${t.subject} [${t.status}]`);
+            }
+          }
+        }
+      }
+      if (!focusCat) lines.push('', 'Drill: GET /api/graph?format=outline&category=<name> then &sub=<name> for titles.');
+      return c.text(lines.join('\n'));
+    }
+
+    const catColor = new Map(taxonomy.map((t, i) => [t.name, i]));
+    type Hub = { key: string; label: string; count: number; colorKey: number };
+    type Leaf = { key: string; label: string; hub: string; kind: 'sub' | 'ticket'; category: string; sub: string; ticketId?: string; number?: number; status?: string; priority?: string };
+    const hubs: Hub[] = [];
+    const leaves: Leaf[] = [];
+
+    if (!focusCat) {
+      // Level 0 — categories are hubs, their sub-categories are the leaves.
+      for (const cat of taxonomy) hubs.push({ key: `cat:${cat.name}`, label: cat.name, count: cat.count, colorKey: catColor.get(cat.name) ?? 0 });
+      for (const cat of taxonomy) for (const sub of cat.subs) {
+        leaves.push({ key: `sub:${cat.name}/${sub.name}`, label: `${sub.name} (${sub.count})`, hub: `cat:${cat.name}`, kind: 'sub', category: cat.name, sub: sub.name });
+      }
+      return c.json({ taxonomy, level: 0, focus: { category: null, sub: null }, hubs, leaves, total: rows.length, shown: leaves.length });
+    }
+
+    const inCat = classified.filter((t) => t.category === focusCat);
+    const subs = taxonomy.find((t) => t.name === focusCat)?.subs ?? [];
+    if (!focusSub) {
+      // Level 1 — sub-categories are hubs, a sample of their tickets are the leaves.
+      subs.forEach((s, i) => hubs.push({ key: `sub:${focusCat}/${s.name}`, label: s.name, count: s.count, colorKey: i }));
+      const perSub = 16;
+      const seen = new Map<string, number>();
+      for (const t of inCat) {
+        const n = seen.get(t.sub) ?? 0;
+        if (n >= perSub) continue;
+        seen.set(t.sub, n + 1);
+        leaves.push({ key: t.id, label: t.subject, hub: `sub:${focusCat}/${t.sub}`, kind: 'ticket', category: focusCat, sub: t.sub, ticketId: t.id, number: t.number, status: t.status, priority: t.priority });
+      }
+      return c.json({ taxonomy, level: 1, focus: { category: focusCat, sub: null }, hubs, leaves, total: inCat.length, shown: leaves.length });
+    }
+
+    // Level 2 — one sub-category hub, all of its tickets are the leaves.
+    const inSub = inCat.filter((t) => t.sub === focusSub);
+    hubs.push({ key: `sub:${focusCat}/${focusSub}`, label: focusSub, count: inSub.length, colorKey: Math.max(0, subs.findIndex((s) => s.name === focusSub)) });
+    for (const t of inSub.slice(0, 250)) {
+      leaves.push({ key: t.id, label: t.subject, hub: `sub:${focusCat}/${focusSub}`, kind: 'ticket', category: focusCat, sub: focusSub, ticketId: t.id, number: t.number, status: t.status, priority: t.priority });
+    }
+    return c.json({ taxonomy, level: 2, focus: { category: focusCat, sub: focusSub }, hubs, leaves, total: inSub.length, shown: leaves.length });
   });
 
   // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
