@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../data/store';
 import type { Agent, Contact, Ticket } from '../../data/types';
+import { Leaderboard } from './Leaderboard';
 import { Avatar } from '../../components/Avatar';
 import { CategoryPill } from '../../components/CategoryPill';
 import { EmptyState } from '../../components/EmptyState';
@@ -391,6 +392,7 @@ export function TeamPage() {
           />
         ) : (
           <div className="flex flex-col gap-3 p-4">
+            {q === '' && <Leaderboard />}
             {members.map(({ agent, tickets: list }) => (
               <TeamCard
                 key={agent.id}
