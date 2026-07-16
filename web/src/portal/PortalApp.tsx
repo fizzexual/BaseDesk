@@ -45,20 +45,23 @@ export function PortalApp() {
     <>
       <Routes>
         <Route path="/portal/login" element={contact ? <Navigate to="/portal" replace /> : <PortalAuth />} />
-        {/* Public — the service status page is visible to anyone, signed in or not. */}
+        {/* Public — the service status page and help center are visible to anyone,
+            signed in or not. A documentation site shouldn't sit behind a login wall. */}
         <Route path="/portal/status" element={<PortalStatus />} />
+        <Route path="/portal/help" element={<PortalLayout />}>
+          <Route element={<HelpLayout />}>
+            <Route index element={<HelpIndex />} />
+            <Route path=":slug" element={<HelpArticle />} />
+          </Route>
+        </Route>
         {contact && (
           <Route path="/portal" element={<PortalLayout />}>
-            {/* The list, composer, ticket view and help center are all full-bleed
-                app screens — each lays out its own sidebar + content. Only the
-                profile settings page stays in a narrow contained column. */}
+            {/* The list, composer and ticket view are all full-bleed app screens —
+                each lays out its own sidebar + content. Only the profile settings
+                page stays in a narrow contained column. */}
             <Route index element={<PortalTickets />} />
             <Route path="new" element={<PortalNewTicket />} />
             <Route path="ticket/:id" element={<PortalTicket />} />
-            <Route path="help" element={<HelpLayout />}>
-              <Route index element={<HelpIndex />} />
-              <Route path=":slug" element={<HelpArticle />} />
-            </Route>
             <Route element={<ContainedPage />}>
               <Route path="profile" element={<PortalProfile />} />
             </Route>
