@@ -1535,9 +1535,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json({ message: getMessages(db, tid).find((m) => m.id === mid) ?? null });
   });
 
-  // Merge a duplicate ticket into another: move its messages/attachments onto the
-  // target, drop a note recording the merge, and close the source as a tombstone
-  // pointing at the target. Idempotency and cycles are rejected up front.
+  // Merge a duplicate ticket into another, GitHub-style: the source keeps its own
+  // conversation, is closed as a tombstone pointing at the target, and the target
+  // gets a cross-reference note. Nothing is moved or deleted. Idempotency and
+  // cycles are rejected up front.
   app.post('/api/tickets/:id/merge', async (c) => {
     const id = c.req.param('id');
     const source = getTicket(db, id);
@@ -1559,22 +1560,14 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const now = new Date().toISOString();
     db.exec('BEGIN');
     try {
-      db.prepare('UPDATE messages SET ticketId = ? WHERE ticketId = ?').run(into, id);
-      db.prepare('UPDATE attachments SET ticketId = ? WHERE ticketId = ?').run(into, id);
+      // Keep the source's messages/attachments on the source; only cross-reference
+      // the merge on the target so nothing is moved or lost.
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(newId('m_'), into, 'agent', currentAgentId(), 'note', `Merged ticket #${source.number} — "${source.subject}" — into this one.`, now);
       db.prepare('UPDATE tickets SET mergedIntoId = ?, status = ?, updatedAt = ? WHERE id = ?').run(into, 'closed', now, id);
       logEvent(id, 'merged', currentAgentId(), { targetId: into, targetNumber: target.number }, now);
-      // Reflect the merged-in activity on the target from its newest customer/agent reply.
-      const newestReply = db
-        .prepare("SELECT body, at FROM messages WHERE ticketId = ? AND kind = 'reply' AND deletedAt IS NULL ORDER BY at DESC LIMIT 1")
-        .get(into) as { body: string; at: string } | undefined;
-      if (newestReply !== undefined) {
-        db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
-          .run(now, newestReply.at, preview(newestReply.body), into);
-      } else {
-        db.prepare('UPDATE tickets SET updatedAt = ? WHERE id = ?').run(now, into);
-      }
+      // The merge is fresh activity on the target — bump it so it surfaces in views.
+      db.prepare('UPDATE tickets SET updatedAt = ? WHERE id = ?').run(now, into);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');

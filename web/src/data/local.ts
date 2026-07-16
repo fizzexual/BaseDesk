@@ -1189,8 +1189,8 @@ export class LocalRepository implements Repository {
     if (target.mergedIntoId !== null) throw new Error('cannot merge into an already-merged ticket');
 
     const now = new Date().toISOString();
-    for (const m of this.data.messages) if (m.ticketId === ticketId) m.ticketId = into;
-    for (const a of this.data.attachments) if (a.ticketId === ticketId) a.ticketId = into;
+    // GitHub-style: the source keeps its own conversation; we only cross-reference
+    // the merge on the target and close the source as a pointer. Nothing is moved.
     this.data.messages.push({
       id: nextId(this.data.messages, 'm_', 5), ticketId: into, authorKind: 'agent',
       authorId: CURRENT_AGENT_ID, kind: 'note',
@@ -1200,15 +1200,8 @@ export class LocalRepository implements Repository {
     source.status = 'closed';
     source.updatedAt = now;
     this.pushEvent(source.id, 'merged', CURRENT_AGENT_ID, { targetId: into, targetNumber: target.number }, now);
-    const newestReply = this.data.messages
-      .filter((m) => m.ticketId === into && m.kind === 'reply' && !m.deletedAt)
-      .sort((a, b) => a.at.localeCompare(b.at))
-      .at(-1);
+    // The merge is fresh activity on the target — bump it so it surfaces in views.
     target.updatedAt = now;
-    if (newestReply) {
-      target.lastMessageAt = newestReply.at;
-      target.lastMessagePreview = preview(newestReply.body);
-    }
     this.persist();
     return { source: this.stampAwaiting({ ...source, tags: [...source.tags] }), target: this.stampAwaiting({ ...target, tags: [...target.tags] }) };
   }
