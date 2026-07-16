@@ -9,6 +9,7 @@ import { InboxPage } from '../features/inbox/InboxPage';
 import { TicketPage } from '../features/ticket/TicketPage';
 import { ContactsPage } from '../features/contacts/ContactsPage';
 import { ContactPage } from '../features/contacts/ContactPage';
+import { TeamPage } from '../features/team/TeamPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
 import { ReportBuilderPage } from '../features/reports/ReportBuilderPage';
 import { StatusPage } from '../features/status/StatusPage';
@@ -64,6 +65,7 @@ function AgentApp() {
           <Route path="/ticket/:id" element={<TicketPage />} />
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/contacts/:id" element={<ContactPage />} />
+          <Route path="/team" element={<TeamPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/reports/builder" element={<ReportBuilderPage />} />
           <Route path="/status" element={<StatusPage />} />
