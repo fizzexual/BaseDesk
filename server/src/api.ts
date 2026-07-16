@@ -27,7 +27,7 @@ import { hashPassword, randomTotpSecret, signSession, totpUri, verifyPassword, v
 import { parseCsv, toCsv } from './csv.js';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
-import { seedIfEmpty } from './seed-load.js';
+import { seedIfEmpty, seedForumIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
@@ -381,6 +381,7 @@ function viewWhere(view: ViewId, nowIso: string, currentAgentId: string): { sql:
 export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number } {
   const db = openDb(dataDir);
   seedIfEmpty(db);
+  seedForumIfEmpty(db); // idempotent — also backfills databases created before the forum existed
   // Refresh the available-model list on boot (no-op unless a provider is set up).
   void refreshModelCache(db);
 

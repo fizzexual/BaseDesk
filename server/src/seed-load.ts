@@ -25,10 +25,22 @@ interface SeedData {
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-/** A handful of showcase community-forum topics so the Community tab isn't empty. */
-function seedForum(db: DatabaseSync, agents: Agent[], contacts: Contact[], hoursAgo: (h: number) => string): void {
+/**
+ * Seed a handful of showcase community-forum topics so the Community tab isn't
+ * empty. Runs independently of the main seed and is idempotent, so databases
+ * created before the forum existed get populated on their next boot too.
+ */
+export function seedForumIfEmpty(db: DatabaseSync): void {
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM forum_topics').get() as { n: number };
+  if (existing.n > 0) return;
+  const agents = db.prepare('SELECT id, name FROM agents ORDER BY rowid').all() as { id: string; name: string }[];
+  const contacts = db.prepare('SELECT id, name FROM contacts ORDER BY rowid').all() as { id: string; name: string }[];
+  if (agents.length === 0 || contacts.length === 0) return; // nothing to attribute posts to yet
+
   const agent = agents[0];
-  const c = (i: number): Contact => contacts[i] ?? contacts[0];
+  const c = (i: number): { id: string; name: string } => contacts[i] ?? contacts[0];
+  const nowMs = Date.now();
+  const hoursAgo = (h: number): string => new Date(nowMs - h * 3_600_000).toISOString();
   const insTopic = db.prepare(
     `INSERT INTO forum_topics (id, category, title, body, authorId, authorName, authorIsAgent, pinned, locked, views, createdAt, lastActivityAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -37,6 +49,8 @@ function seedForum(db: DatabaseSync, agents: Agent[], contacts: Contact[], hours
     'INSERT INTO forum_replies (id, topicId, authorId, authorName, authorIsAgent, body, accepted, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   );
 
+  db.exec('BEGIN');
+  try {
   // topic: [id, category, title, body, authorId, authorName, isAgent, pinned, locked, views, createdAt, lastActivityAt]
   insTopic.run('ft_welcome', 'general', 'Welcome to the BaseDesk community 👋',
     'This is the place to ask questions, share tips, and suggest features. Be kind, search before posting, and mark the answer that helped you.',
@@ -65,6 +79,11 @@ function seedForum(db: DatabaseSync, agents: Agent[], contacts: Contact[], hours
   insTopic.run('ft_tips', 'tips', 'Tip: canned replies + keyboard shortcuts save me hours',
     'Press Ctrl-K to jump anywhere, and set up canned replies for your top 10 answers. My handle time dropped a ton.',
     c(0).id, c(0).name, 0, 0, 0, 156, hoursAgo(15), hoursAgo(15));
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 /** Imports shared/seed.json into the database if the tickets table is empty. */
@@ -178,8 +197,6 @@ export function seedIfEmpty(db: DatabaseSync): void {
     ];
     db.prepare('INSERT INTO status_incidents (id, title, impact, status, createdAt, resolvedAt, updates) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run('si_seed', 'Elevated email delivery latency', 'minor', 'resolved', hoursAgo(50), hoursAgo(47), JSON.stringify(incidentUpdates));
-
-    seedForum(db, seed.agents, seed.contacts, hoursAgo);
 
     db.exec('COMMIT');
   } catch (err) {
