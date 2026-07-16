@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { useApp } from '../../data/store';
-import type { Attachment, Message, Ticket, TicketEvent } from '../../data/types';
+import type { Attachment, ChoicePrompt, KbCitation, Message, MessageEmbed, Ticket, TicketEvent } from '../../data/types';
 import { attachmentUrl, formatBytes, isImage } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { TimeAgo } from '../../components/TimeAgo';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
-import { IconPaperclip, IconTrash } from '../../icons';
+import { IconBook, IconCheck, IconList, IconPaperclip, IconTrash } from '../../icons';
+import { CitationPassage } from '../kb/CitationPassage';
 import { describeTicketEvent } from './eventText';
 
 /** Renders a message body, highlighting @mentions. */
 function Body({ text }: { text: string }) {
-  const parts = text.split(/(@[A-Za-z]+)/g);
+  const parts = text.split(/(@\p{L}[\p{L}'’_-]*)/gu);
   const nodes: ReactNode[] = parts.map((part, i) =>
-    /^@[A-Za-z]+$/.test(part) ? (
+    /^@\p{L}[\p{L}'’_-]*$/u.test(part) ? (
       <span key={i} className="font-medium text-blue">
         {part}
       </span>
