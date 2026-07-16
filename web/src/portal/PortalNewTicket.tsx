@@ -8,6 +8,7 @@ import { toast } from '../components/Toast';
 import { cx } from '../components/util';
 import { formatBytes } from '../data/attachments';
 import type { Attachment, IntakeAnswer, IntakeForm, IntakeNode, IntakeOption, KbArticle, TicketPriority } from '../data/types';
+import { Markdown } from '../features/kb/Markdown';
 import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconPaperclip, IconX } from '../icons';
 
 const FIELD =
@@ -330,8 +331,8 @@ export function PortalNewTicket() {
                           {a.title}
                           <IconChevronRight size={16} className="shrink-0 text-text-3 transition-transform group-open:rotate-90" />
                         </summary>
-                        <div className="mt-2.5 whitespace-pre-wrap border-t border-line pt-2.5 text-[13px] leading-relaxed text-text-2">
-                          {a.body}
+                        <div className="mt-2.5 border-t border-line pt-1 [&>div>*:first-child]:mt-0">
+                          <Markdown text={a.body} />
                         </div>
                       </details>
                     ))}
