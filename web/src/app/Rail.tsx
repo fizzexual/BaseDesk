@@ -18,6 +18,7 @@ import {
   IconSettings,
   IconSparkle,
   IconSun,
+  IconTeam,
   IconUser,
 } from '../icons';
 import { cx } from '../components/util';
@@ -27,6 +28,7 @@ const NAV = [
   { to: '/view/all', label: 'Inbox', icon: IconInbox, matches: ['/view', '/ticket'] },
   { to: '/channels', label: 'Channels', icon: IconChannels, matches: ['/channels'] },
   { to: '/contacts', label: 'Contacts', icon: IconContacts, matches: ['/contacts'] },
+  { to: '/team', label: 'Team', icon: IconTeam, matches: ['/team'] },
   { to: '/revenue', label: 'Revenue', icon: IconRevenue, matches: ['/revenue'] },
   { to: '/ai', label: 'AI agents', icon: IconSparkle, matches: ['/ai'] },
   { to: '/reports', label: 'Reports', icon: IconChart, matches: ['/reports'] },
@@ -74,10 +76,10 @@ export function Rail() {
       <button
         type="button"
         aria-label="BaseDesk home"
-        className="mb-2 inline-flex size-10 items-center justify-center rounded-md text-text"
+        className="mb-2 inline-flex size-10 items-center justify-center rounded-lg bg-accent text-accent-fg shadow-1 transition-opacity hover:opacity-90"
         onClick={() => navigate('/view/all')}
       >
-        <IconLogo size={28} />
+        <IconLogo size={24} />
       </button>
 
       {NAV.map(({ to, label, icon: Icon, matches }) => (
