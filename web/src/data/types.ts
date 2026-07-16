@@ -168,6 +168,47 @@ export interface ScheduledMessage {
   createdAt: string;
 }
 
+/** Community forum (mirrors the server types). */
+export const FORUM_CATEGORIES = ['general', 'how-to', 'tips', 'bugs', 'feature-requests'] as const;
+export type ForumCategory = (typeof FORUM_CATEGORIES)[number];
+
+export interface ForumReply {
+  id: string;
+  topicId: string;
+  authorId: string;
+  authorName: string;
+  authorIsAgent: boolean;
+  body: string;
+  accepted: boolean;
+  createdAt: string;
+}
+
+export interface ForumTopic {
+  id: string;
+  category: ForumCategory;
+  title: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  authorIsAgent: boolean;
+  pinned: boolean;
+  locked: boolean;
+  solved: boolean;
+  replyCount: number;
+  views: number;
+  createdAt: string;
+  lastActivityAt: string;
+}
+
+export interface ForumTopicDetail extends ForumTopic {
+  replies: ForumReply[];
+}
+
+export interface ForumList {
+  topics: ForumTopic[];
+  categories: readonly ForumCategory[];
+}
+
 /** Model-provider status as seen by the client — never carries the API key. */
 export interface AiProvider {
   enabled: boolean;

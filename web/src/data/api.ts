@@ -4,6 +4,7 @@ import type {
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
+  ForumCategory, ForumList, ForumTopicDetail,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -326,6 +327,30 @@ export class ApiRepository implements Repository {
   }
   setAuthRequired(enabled: boolean): Promise<boolean> {
     return request<{ enabled: boolean }>('/settings/auth', jsonInit('PUT', { enabled })).then((r) => r.enabled);
+  }
+  getForumTopics(category?: string): Promise<ForumList> {
+    return request(`/forum/topics${category !== undefined && category !== '' ? `?category=${encodeURIComponent(category)}` : ''}`);
+  }
+  getForumTopic(id: string): Promise<ForumTopicDetail> {
+    return request(`/forum/topics/${encodeURIComponent(id)}`);
+  }
+  createForumTopic(input: { title: string; body: string; category: ForumCategory }): Promise<ForumTopicDetail> {
+    return request('/forum/topics', jsonInit('POST', input));
+  }
+  replyForumTopic(id: string, body: string): Promise<ForumTopicDetail> {
+    return request(`/forum/topics/${encodeURIComponent(id)}/replies`, jsonInit('POST', { body }));
+  }
+  acceptForumReply(topicId: string, replyId: string): Promise<ForumTopicDetail> {
+    return request(`/forum/topics/${encodeURIComponent(topicId)}/accept`, jsonInit('POST', { replyId }));
+  }
+  moderateForumTopic(id: string, flags: { pinned?: boolean; locked?: boolean; category?: ForumCategory }): Promise<ForumTopicDetail> {
+    return request(`/forum/topics/${encodeURIComponent(id)}`, jsonInit('PATCH', flags));
+  }
+  deleteForumTopic(id: string): Promise<void> {
+    return request(`/forum/topics/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  deleteForumReply(replyId: string): Promise<void> {
+    return request(`/forum/replies/${encodeURIComponent(replyId)}`, { method: 'DELETE' });
   }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));

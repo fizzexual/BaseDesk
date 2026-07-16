@@ -4,7 +4,9 @@ import type {
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ScheduledMessage, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
+  ForumCategory, ForumList, ForumTopicDetail,
 } from './types';
+import { FORUM_CATEGORIES } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { normalizeHighlights } from './citationHighlight';
@@ -311,6 +313,7 @@ export class LocalRepository implements Repository {
   private sideConvos: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[] = []; // demo-only
   private sideMsgs: { id: string; sideId: string; authorId: string; body: string; at: string }[] = []; // demo-only
   private handover: { id: string; authorId: string; body: string; createdAt: string }[] = []; // demo-only
+  private forum: ForumTopicDetail[] | null = null; // demo-only, lazily seeded from the loaded contacts/agents
 
   constructor(storage?: StorageLike) {
     this.storage = storage ?? defaultStorage();
@@ -761,6 +764,90 @@ export class LocalRepository implements Repository {
   async disable2fa(): Promise<void> {}
   async setAuthRequired(): Promise<boolean> {
     return false;
+  }
+
+  // --- Community forum (in-memory demo; the real store lives on the server) ---
+  private agentName(id: string): string {
+    return this.data.agents.find((a) => a.id === id)?.name ?? 'Support';
+  }
+  private forumStore(): ForumTopicDetail[] {
+    if (this.forum === null) {
+      const agent = this.data.agents[0];
+      const c = (i: number): Contact => this.data.contacts[i] ?? this.data.contacts[0];
+      const iso = (h: number): string => new Date(Date.now() - h * 3_600_000).toISOString();
+      this.forum = [
+        {
+          id: 'ft_welcome', category: 'general', title: 'Welcome to the BaseDesk community 👋',
+          body: 'Ask questions, share tips, and suggest features here. Be kind and mark the answer that helped you.',
+          authorId: agent.id, authorName: agent.name, authorIsAgent: true, pinned: true, locked: false, solved: false, replyCount: 0, views: 342,
+          createdAt: iso(240), lastActivityAt: iso(6),
+          replies: [{ id: 'fr_w1', topicId: 'ft_welcome', authorId: c(0).id, authorName: c(0).name, authorIsAgent: false, body: 'Loving BaseDesk so far!', accepted: false, createdAt: iso(200) }],
+        },
+        {
+          id: 'ft_darkmode', category: 'feature-requests', title: 'Add a dark mode to the customer portal',
+          body: 'The agent workspace has a lovely dark theme — would love the same for the portal.',
+          authorId: c(1).id, authorName: c(1).name, authorIsAgent: false, pinned: false, locked: false, solved: false, replyCount: 0, views: 210,
+          createdAt: iso(120), lastActivityAt: iso(20), replies: [],
+        },
+      ];
+    }
+    return this.forum;
+  }
+  private forumView(t: ForumTopicDetail): ForumTopicDetail {
+    return { ...t, replyCount: t.replies.length, solved: t.replies.some((r) => r.accepted), replies: t.replies.map((r) => ({ ...r })) };
+  }
+  async getForumTopics(category?: string): Promise<ForumList> {
+    const topics = this.forumStore()
+      .filter((t) => category === undefined || category === '' || t.category === category)
+      .slice()
+      .sort((a, b) => (a.pinned === b.pinned ? b.lastActivityAt.localeCompare(a.lastActivityAt) : a.pinned ? -1 : 1))
+      .map((t) => this.forumView(t));
+    return { topics, categories: FORUM_CATEGORIES };
+  }
+  async getForumTopic(id: string): Promise<ForumTopicDetail> {
+    const t = this.forumStore().find((x) => x.id === id);
+    if (t === undefined) throw new Error('topic not found');
+    t.views += 1;
+    return this.forumView(t);
+  }
+  async createForumTopic(input: { title: string; body: string; category: ForumCategory }): Promise<ForumTopicDetail> {
+    const now = new Date().toISOString();
+    const t: ForumTopicDetail = {
+      id: `ft_${Date.now().toString(36)}`, category: input.category, title: input.title.trim().slice(0, 200), body: input.body.trim().slice(0, 5000),
+      authorId: CURRENT_AGENT_ID, authorName: this.agentName(CURRENT_AGENT_ID), authorIsAgent: true, pinned: false, locked: false, solved: false, replyCount: 0, views: 0,
+      createdAt: now, lastActivityAt: now, replies: [],
+    };
+    this.forumStore().unshift(t);
+    return this.forumView(t);
+  }
+  async replyForumTopic(id: string, body: string): Promise<ForumTopicDetail> {
+    const t = this.forumStore().find((x) => x.id === id);
+    if (t === undefined) throw new Error('topic not found');
+    if (t.locked) throw new Error('This topic is locked');
+    const now = new Date().toISOString();
+    t.replies.push({ id: `fr_${Date.now().toString(36)}`, topicId: id, authorId: CURRENT_AGENT_ID, authorName: this.agentName(CURRENT_AGENT_ID), authorIsAgent: true, body: body.trim().slice(0, 5000), accepted: false, createdAt: now });
+    t.lastActivityAt = now;
+    return this.forumView(t);
+  }
+  async acceptForumReply(topicId: string, replyId: string): Promise<ForumTopicDetail> {
+    const t = this.forumStore().find((x) => x.id === topicId);
+    if (t === undefined) throw new Error('topic not found');
+    t.replies.forEach((r) => (r.accepted = r.id === replyId));
+    return this.forumView(t);
+  }
+  async moderateForumTopic(id: string, flags: { pinned?: boolean; locked?: boolean; category?: ForumCategory }): Promise<ForumTopicDetail> {
+    const t = this.forumStore().find((x) => x.id === id);
+    if (t === undefined) throw new Error('topic not found');
+    if (flags.pinned !== undefined) t.pinned = flags.pinned;
+    if (flags.locked !== undefined) t.locked = flags.locked;
+    if (flags.category !== undefined) t.category = flags.category;
+    return this.forumView(t);
+  }
+  async deleteForumTopic(id: string): Promise<void> {
+    this.forum = this.forumStore().filter((t) => t.id !== id);
+  }
+  async deleteForumReply(replyId: string): Promise<void> {
+    for (const t of this.forumStore()) t.replies = t.replies.filter((r) => r.id !== replyId);
   }
 
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
