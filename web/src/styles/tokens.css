@@ -13,7 +13,7 @@
   --text-3: #68716d; /* darkened from #7c8681 to meet WCAG AA (4.5:1) on light surfaces */
   --line: #e5e9e7;
   --line-2: #d6ddd9;
-  --accent: #171a19;
+  --accent: #2563eb; /* blue brand accent */
   --accent-fg: #ffffff;
   --green: #0f7050; /* AA-compliant on --green-bg (badge text) and white */
   --green-bg: #e4f3ec;
