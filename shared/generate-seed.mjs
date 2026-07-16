@@ -621,6 +621,147 @@ ticketSlots.forEach((slot, index) => {
   });
 });
 
+// ---------------------------------------------------------------- bulk backlog
+// Layer a large, realistic history on top of the curated tickets: hundreds of customers
+// and thousands of tickets spread over ~11 months, so the instance looks lived-in.
+const FIRST_NAMES = ['Emma','Liam','Olivia','Noah','Ava','Ethan','Sophia','Mason','Isabella','Lucas','Mia','Oliver','Amelia','Elijah','Harper','James','Evelyn','Benjamin','Abigail','Sebastian','Emily','Henry','Ella','Alexander','Scarlett','Daniel','Grace','Matthew','Chloe','Jack','Zoe','Samuel','Lily','David','Hannah','Joseph','Aria','Carter','Layla','Owen','Nora','Wyatt','Riley','Aurora','Levi','Nadia','Gabriel','Hazel','Julian','Ruby','Leo','Ivy','Adrian','Freya','Nathan','Isaac','Maya','Diego','Yara','Omar','Kenji','Mei','Tariq','Lena','Ravi','Sana','Marco','Andre','Fatima','Sven','Hugo','Clara','Mateo','Aisha','Noor','Bjorn','Sofia','Elias','Camila'];
+const LAST_NAMES = ['Smith','Johnson','Williams','Brown','Garcia','Miller','Davis','Rodriguez','Martinez','Lopez','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Perez','Thompson','White','Harris','Sanchez','Clark','Ramirez','Lewis','Walker','Young','Allen','King','Wright','Scott','Torres','Nguyen','Hill','Flores','Green','Adams','Nakamura','Baker','Kowalski','Rossi','Nielsen','Haas','Novak','Okafor','Patel','Singh','Cohen','Murphy','Fischer','Weber','Dubois','Costa','Silva','Vaughan','Andersen','Yilmaz','Petrov','Reyes'];
+const CO_A = ['North','Blue','Bright','Iron','Silver','Green','Cedar','Oak','Harbor','Summit','Vertex','Nova','Apex','Cobalt','Amber','Pine','River','Stone','Coral','Quartz','Zenith','Orbit','Lunar','Solar','Ember','Frost','Onyx','Crimson','Golden','Maple','Delta','Aster'];
+const CO_B = ['Labs','Systems','Works','Trading','Analytics','Digital','Studio','Group','Partners','Logistics','Software','Foods','Retail','Media','Health','Robotics','Networks','Dynamics','Ventures','Supply','Goods','Interactive','Solutions','Industries','Collective','Technologies','Outfitters','Traders','Holdings','Commerce'];
+const LOCS = [['San Francisco, US','America/Los_Angeles'],['New York, US','America/New_York'],['Austin, US','America/Chicago'],['Denver, US','America/Denver'],['London, UK','Europe/London'],['Manchester, UK','Europe/London'],['Berlin, Germany','Europe/Berlin'],['Munich, Germany','Europe/Berlin'],['Paris, France','Europe/Paris'],['Madrid, Spain','Europe/Madrid'],['Milan, Italy','Europe/Rome'],['Amsterdam, Netherlands','Europe/Amsterdam'],['Stockholm, Sweden','Europe/Stockholm'],['Oslo, Norway','Europe/Oslo'],['Warsaw, Poland','Europe/Warsaw'],['Prague, Czechia','Europe/Prague'],['Dublin, Ireland','Europe/Dublin'],['Toronto, Canada','America/Toronto'],['Mexico City, Mexico','America/Mexico_City'],['Sao Paulo, Brazil','America/Sao_Paulo'],['Tokyo, Japan','Asia/Tokyo'],['Seoul, South Korea','Asia/Seoul'],['Singapore','Asia/Singapore'],['Mumbai, India','Asia/Kolkata'],['Bengaluru, India','Asia/Kolkata'],['Sydney, Australia','Australia/Sydney'],['Dubai, UAE','Asia/Dubai'],['Lagos, Nigeria','Africa/Lagos'],['Cape Town, South Africa','Africa/Johannesburg'],['Auckland, New Zealand','Pacific/Auckland']];
+const PERSONAL_DOMAINS = ['gmail.com','outlook.com','proton.me','yahoo.com','icloud.com','hey.com'];
+const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+const seenEmails = new Set(contacts.map((c) => c.email.toLowerCase()));
+
+const BULK_CONTACTS = 540;
+const bulkContacts = [];
+for (let i = 0; i < BULK_CONTACTS; i++) {
+  const first = pick(FIRST_NAMES), last = pick(LAST_NAMES);
+  const hasCompany = rnd() < 0.62;
+  const company = hasCompany ? `${pick(CO_A)} ${pick(CO_B)}` : null;
+  const domain = hasCompany ? `${slugify(company)}.com` : pick(PERSONAL_DOMAINS);
+  let local = `${slugify(first)}.${slugify(last)}`, dedupe = 1;
+  while (seenEmails.has(`${local}@${domain}`)) local = `${slugify(first)}.${slugify(last)}${++dedupe}`;
+  const email = `${local}@${domain}`;
+  seenEmails.add(email);
+  const [location, timezone] = pick(LOCS);
+  const c = {
+    id: 'c_' + pad(contacts.length + 1, 4),
+    name: `${first} ${last}`, email, company,
+    avatarHue: hashHue(email), location, timezone,
+    createdAt: iso(NOW_MS - ri(20, 345) * DAY - ri(0, 23) * HOUR),
+    mrr: company === null ? null : pick(MRR_TIERS),
+  };
+  contacts.push(c);
+  bulkContacts.push(c);
+}
+
+const BULK_TICKETS = 2400;
+const bulkStates = [];
+const addBulk = (n, s) => { for (let i = 0; i < n; i++) bulkStates.push(s); };
+addBulk(9, { bucket: 'inbox', status: 'open', snooze: false });
+addBulk(8, { bucket: 'inbox', status: 'pending', snooze: false });
+addBulk(3, { bucket: 'inbox', status: 'on_hold', snooze: false });
+addBulk(46, { bucket: 'inbox', status: 'solved', snooze: false });
+addBulk(27, { bucket: 'inbox', status: 'closed', snooze: false });
+addBulk(2, { bucket: 'inbox', status: 'open', snooze: true });
+addBulk(2, { bucket: 'archive', status: 'solved', snooze: false });
+addBulk(1, { bucket: 'spam', status: 'closed', snooze: false });
+addBulk(1, { bucket: 'trash', status: 'closed', snooze: false });
+
+const bulkHoursAgo = (st) => {
+  if (st.bucket === 'spam' || st.bucket === 'trash') return ri(24, 60 * 24);
+  if (st.bucket === 'archive') return ri(160 * 24, 345 * 24);
+  if (st.snooze) return ri(24, 18 * 24);
+  switch (st.status) {
+    case 'open': return ri(2, 22 * 24);
+    case 'pending': return ri(6, 32 * 24);
+    case 'on_hold': return ri(24, 70 * 24);
+    case 'solved': return ri(24, 270 * 24);
+    default: return ri(72, 345 * 24); // closed
+  }
+};
+const bulkPriority = (scn) => {
+  if (scn.prio && scn.prio.length && rnd() < 0.45) return pick(scn.prio);
+  const r = rnd();
+  return r < 0.05 ? 'urgent' : r < 0.2 ? 'high' : r < 0.8 ? 'medium' : 'low';
+};
+
+const bulkDrafts = [];
+for (let j = 0; j < BULK_TICKETS; j++) {
+  const st = pick(bulkStates);
+  const scnKey = st.bucket === 'spam' ? 'spam' : pick(scenarioPool);
+  const scn = S[scnKey];
+  const contact = pick(bulkContacts);
+  const assigneeId = (st.status === 'open' || st.status === 'pending') && rnd() < 0.22 ? null : pick(agents).id;
+  const handler = agents.find((a) => a.id === assigneeId) ?? pick(agents);
+  const ctx = { first: contact.name.split(' ')[0], agent: handler.name.split(' ')[0], order: String(ri(30000, 49999)) };
+  const priority = bulkPriority(scn);
+  const tags = [];
+  if (scn.tags[0] && rnd() < 0.85) tags.push(scn.tags[0]);
+  if (scn.tags[1] && rnd() < 0.35) tags.push(scn.tags[1]);
+  if (priority === 'urgent' && rnd() < 0.5) tags.push('urgent-escalation');
+  const channel = scnKey === 'api_429' || scnKey === 'integration_bug'
+    ? pick(['api', 'api', 'email', 'web'])
+    : scnKey === 'spam' ? 'email'
+      : pick(['email', 'email', 'email', 'email', 'email', 'email', 'web', 'web', 'chat', 'chat']);
+  const createdMs = NOW_MS - bulkHoursAgo(st) * HOUR - ri(0, 59) * MIN - ri(0, 59) * 1000;
+  const pattern = patternFor(st);
+  const times = threadTimes(createdMs, pattern.length);
+  const pv = mkVariantPicker();
+  const msgs = pattern.map((step, i) => {
+    let authorKind = 'agent', kind = 'reply', body = '';
+    if (step === 'o') { authorKind = 'contact'; body = pv('opener', scn.opener); }
+    else if (step === 'f') { authorKind = 'contact'; body = pv('followup', scn.followup); }
+    else if (step === 't') { authorKind = 'contact'; body = pv('thanks', scn.thanks); }
+    else if (step === 'a') { body = pv('agent', scn.agent); }
+    else if (step === 'r') { body = pv('resolution', scn.resolution); }
+    else if (step === 'n') {
+      kind = 'note';
+      body = st.bucket === 'trash' ? pick(trashNotes)
+        : scn.notes.length && rnd() < 0.7 ? pv('notes', scn.notes) : pick(genericNotes);
+    } else { kind = 'note'; body = pick(snoozeNotes); }
+    let authorId = contact.id;
+    if (authorKind === 'agent') authorId = kind === 'note' && rnd() < 0.25 ? pick(agents.filter((a) => a.id !== handler.id)).id : handler.id;
+    return { authorKind, authorId, kind, body: fill(body, ctx), at: iso(times[i]) };
+  });
+  const subject = fill(pv('subject', scn.subjects), ctx);
+  const lastReply = [...msgs].reverse().find((m) => m.kind === 'reply') ?? msgs[msgs.length - 1];
+  const lastAt = msgs[msgs.length - 1].at;
+  const firstAgentReply = msgs.find((m) => m.authorKind === 'agent' && m.kind === 'reply');
+  const resolved = st.status === 'solved' || st.status === 'closed';
+  const category = tags.map((t) => CATEGORY_BY_TAG[t]).find(Boolean) ?? null;
+  let satisfactionScore = null, satisfactionComment = null, satisfactionAt = null;
+  if (resolved && rnd() < 0.55) {
+    const roll = rnd();
+    satisfactionScore = roll < 0.58 ? 5 : roll < 0.83 ? 4 : roll < 0.93 ? 3 : roll < 0.98 ? 2 : 1;
+    const band = satisfactionScore >= 4 ? 'good' : satisfactionScore === 3 ? 'ok' : 'bad';
+    if (rnd() < 0.4) satisfactionComment = pick(csatComments[band]);
+    satisfactionAt = iso(new Date(lastAt).getTime() + ri(1, 40) * HOUR);
+  }
+  bulkDrafts.push({
+    createdMs, msgs,
+    ticket: {
+      subject, status: st.status, priority, bucket: st.bucket, requesterId: contact.id, assigneeId,
+      tags, channel, category, createdAt: msgs[0].at, updatedAt: lastAt,
+      snoozedUntil: st.snooze ? iso(NOW_MS + ri(20, 720) * HOUR + ri(0, 59) * MIN) : null,
+      lastMessageAt: lastAt, lastMessagePreview: preview(lastReply.body),
+      firstRespondedAt: firstAgentReply ? firstAgentReply.at : null,
+      resolvedAt: resolved ? lastAt : null,
+      satisfactionScore, satisfactionComment, satisfactionAt,
+    },
+  });
+}
+bulkDrafts.sort((a, b) => a.createdMs - b.createdMs);
+bulkDrafts.forEach((d) => {
+  const id = 't_' + pad(tickets.length + 1, 3);
+  for (const m of d.msgs) rawMessages.push({ ticketId: id, ...m });
+  tickets.push({ id, number: 0, ...d.ticket });
+});
+
+// Renumber every ticket chronologically — `number` is display-only, `id` is the stable key.
+[...tickets].sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0)).forEach((t, i) => { t.number = 1000 + i; });
+
 // global message ids, ascending by time
 rawMessages.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.ticketId < b.ticketId ? -1 : 1));
 const messages = rawMessages.map((m, i) => ({ id: 'm_' + pad(i + 1, 5), ...m }));
@@ -681,6 +822,45 @@ for (let i = 0; i < 35; i++) {
     updatedAt: iso(updatedMs),
   });
 }
+
+// Bulk pipeline: hundreds more deals across the customer base and the last ~7 months,
+// so Revenue, accounts and the pipeline look as busy as the ticket volume.
+const BULK_DEALS = 300;
+const dealNotesBy = {
+  expansion: ['Wants SSO and more seats; positive on the call.', 'Outgrowing Starter — the ops lead is championing it.', 'Strong quarter, ready to expand.', 'Adding a second team to the platform.'],
+  retention: ['Renewal at risk; weighing options.', 'Budget review this cycle — needs a business case.', 'Happy overall; renewal is a formality.', 'Considering an annual commit for the discount.'],
+  inbound: ['Inbound from the pricing page; evaluating plans.', 'Referred by an existing customer.', 'Trial started; scoping a rollout.', 'Migrating off a competitor.'],
+};
+for (let i = 0; i < BULK_DEALS; i++) {
+  const type = pick(['expansion', 'expansion', 'expansion', 'inbound', 'inbound', 'retention']);
+  const roll = rnd();
+  const stage = roll < 0.46 ? 'won' : roll < 0.86 ? 'open' : 'lost';
+  const contact = pick(companyContacts);
+  const value = pick(dealValues);
+  const ownerId = pick(agents).id;
+  let createdMs, closedMs = null;
+  if (stage === 'open') {
+    createdMs = NOW_MS - ri(1, 90) * DAY - ri(0, 23) * HOUR;
+  } else {
+    // Won/lost close somewhere in the last ~200 days, skewed recent so the charts stay lively.
+    closedMs = NOW_MS - Math.floor(rnd() ** 1.7 * 200) * DAY - ri(1, 23) * HOUR;
+    createdMs = closedMs - ri(3, 40) * DAY - ri(0, 23) * HOUR;
+  }
+  const cTickets = ticketsByContact[contact.id] || [];
+  const ticketId = cTickets.length && rnd() < 0.5 ? pick(cTickets).id : null;
+  const title =
+    type === 'expansion' ? `Upgrade to Business — ${ri(2, 60)} seats`
+    : type === 'retention' ? `Retention: ${contact.company} renewal`
+    : `New: ${contact.company} team plan`;
+  deals.push({
+    id: 'd_' + pad(deals.length + 1, 3),
+    title, type, stage, value, currency: 'USD',
+    contactId: contact.id, ticketId, ownerId, note: pick(dealNotesBy[type]),
+    createdAt: iso(createdMs),
+    closedAt: closedMs !== null ? iso(closedMs) : null,
+    updatedAt: iso(closedMs ?? createdMs),
+  });
+}
 deals.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
 
 // ---------------------------------------------------------------- knowledge base
@@ -697,6 +877,199 @@ const kbSeed = [
     'The API allows 600 requests per minute per token, measured over a sliding window. Every response includes an X-RateLimit-Remaining header so your client can back off before hitting a 429. For bulk work, batch into chunks of about 50 requests with a short pause between them to stay comfortably under the limit.'],
   ['Account', 'Reset two-factor authentication',
     'If you have lost your authenticator and your backup codes, reply from the billing email on the account and include the last four digits of the card on file. After an identity check we reset 2FA and add an entry to the audit log. Set up fresh backup codes right after you are back in so this does not recur.'],
+  ['Getting started', 'Invite your team and set roles',
+    'Add teammates from Settings then Team. Admins manage billing, channels and other agents; agents work tickets. An invite email carries a one-time link that expires in seven days — resend it from the same screen if it lapses. You can change anyone’s role later without re-inviting them.'],
+  ['Getting started', 'Connect an email channel',
+    'Forward your support address to the inbound address shown under Channels, or connect a mailbox directly. New mail lands as a ticket, replies thread back to the customer, and the original From name and address are preserved. Send a test message after connecting to confirm both directions work.'],
+  ['Billing', 'Change your plan or seat count',
+    'Upgrade, downgrade or adjust seats from the billing profile at any time. Increases are prorated to the day so you only pay the difference for the rest of the cycle; decreases take effect at the next renewal. Annual plans can add seats mid-term at the annual rate.'],
+  ['Billing', 'Understand your invoice',
+    'Each invoice lists the plan, the seat count for the period, any proration lines from mid-cycle changes, and tax where it applies. The billing history keeps every invoice as a PDF. If a charge looks wrong, reply with the invoice number and we will walk through the lines with you.'],
+  ['API', 'Authenticate with API tokens',
+    'Create a token under Settings then API and send it as a Bearer token in the Authorization header. Tokens carry the permissions of the agent who created them, so scope them to a service account for automations. Rotate a token by creating a new one and deleting the old; revocation is immediate.'],
+  ['API', 'Verify inbound webhook signatures',
+    'Every webhook we send includes a signature header computed as an HMAC-SHA256 of the raw body using your endpoint secret. Recompute it on your side and compare in constant time before trusting the payload. Reject anything that does not match, and keep a short replay window on the timestamp.'],
+  ['Account', 'Set up single sign-on (SSO)',
+    'Business plans can require SSO for all agents. Point your identity provider at the SAML endpoint under Settings then Security, map email as the primary attribute, and test with one account before enforcing. Once enforced, password sign-in is disabled and access follows your directory.'],
+  ['Account', 'Export or delete your data',
+    'Admins can export tickets and contacts to CSV from Settings then Data, and request a full account export. To remove a specific person’s data on request, delete the contact — their tickets are anonymised and attachments purged. Deletions are logged in the audit trail.'],
+  ['Shipping', 'Track a delayed order',
+    'Carrier tracking often lags a day or two behind the parcel’s real movement, especially over weekends and holidays. If a label shows created but has not scanned in 48 hours, we open a trace with the carrier and keep you updated here. Most traced parcels surface within a few business days.'],
+  ['Integrations', 'Send tickets to Slack',
+    'Add a Slack channel under Channels to post new tickets and replies into a workspace channel, or route a specific inbox there. Threading keeps each ticket in its own Slack thread, and agents can reply from BaseDesk without leaving the customer conversation. Outbound uses a signed webhook.'],
+  ['Reporting', 'Build a custom report',
+    'Open Reports then New report to combine a metric (volume, solved, resolution time, or CSAT) with a dimension (day, agent, priority, status, category, or tag) over a time range. Save it to revisit later. The overview page already covers the common cuts, so start there before building your own.'],
+  ['Automations', 'Route tickets with rules',
+    'Automation rules run on create or on update: match on subject, body, priority, channel or sender, then set a priority, add a tag, assign an agent, change status or set a category. Rules run top to bottom, so order the specific ones first. Time-based rules handle escalations for tickets left waiting.'],
+  ['API', 'Complete API reference', [
+    '# API reference',
+    '',
+    'The BaseDesk API is a JSON-over-HTTPS API. Every request is authenticated with a **Bearer token** scoped to the permissions of the agent who created it.',
+    '',
+    '> **Base URL:** `https://api.basedesk.example/v1` — every path below is relative to it.',
+    '',
+    '## Authentication',
+    '',
+    'Send your token in the `Authorization` header on every request:',
+    '',
+    '```bash',
+    'curl https://api.basedesk.example/v1/tickets \\',
+    '  -H "Authorization: Bearer sk_live_..." \\',
+    '  -H "Content-Type: application/json"',
+    '```',
+    '',
+    'Create tokens under **Settings → API**. Rotate one by creating a new token and deleting the old — revocation is immediate.',
+    '',
+    '## Rate limits',
+    '',
+    'Limits are per token, over a 60-second sliding window. Every response carries these headers:',
+    '',
+    '| Header | Meaning |',
+    '| --- | --- |',
+    '| `X-RateLimit-Limit` | Requests allowed per window |',
+    '| `X-RateLimit-Remaining` | Requests left in the window |',
+    '| `X-RateLimit-Reset` | Unix time the window resets |',
+    '',
+    'Exceeding the limit returns `429 Too Many Requests`. Back off using `Reset` rather than retrying in a tight loop.',
+    '',
+    '## Core endpoints',
+    '',
+    '| Method | Path | Description |',
+    '| --- | --- | --- |',
+    '| `GET` | `/tickets` | List tickets, filtered by `status`, `assignee`, `tag` |',
+    '| `POST` | `/tickets` | Open a ticket |',
+    '| `GET` | `/tickets/:id` | One ticket with its messages |',
+    '| `POST` | `/tickets/:id/messages` | Reply or add a note |',
+    '| `PATCH` | `/tickets/:id` | Update status, priority, assignee or tags |',
+    '',
+    '### Creating a ticket',
+    '',
+    'Post the requester and an opening message:',
+    '',
+    '```json',
+    '{',
+    '  "subject": "Charged twice for Pro",',
+    '  "requesterEmail": "sofia@example.com",',
+    '  "priority": "high",',
+    '  "body": "I see two charges within seconds of each other."',
+    '}',
+    '```',
+    '',
+    'A successful create returns `201` with the new ticket and its `number`.',
+    '',
+    '## Error codes',
+    '',
+    'Errors return a JSON body with a machine `code` and a human `message`.',
+    '',
+    '| Status | Code | When |',
+    '| --- | --- | --- |',
+    '| `400` | `invalid_request` | A field is missing or malformed |',
+    '| `401` | `unauthorized` | Missing or invalid token |',
+    '| `404` | `not_found` | The resource does not exist |',
+    '| `409` | `conflict` | e.g. replying to a closed ticket |',
+    '| `429` | `rate_limited` | Too many requests |',
+    '',
+    '## Webhooks',
+    '',
+    'Subscribe to events to react in real time. Each delivery is signed:',
+    '',
+    '1. Compute `HMAC-SHA256` of the raw body with your endpoint secret.',
+    '2. Compare it, in constant time, to the `X-BaseDesk-Signature` header.',
+    '3. Reject mismatches, and enforce a short timestamp window to block replays.',
+    '',
+    'Events include `ticket.created`, `ticket.updated`, `message.created` and `ticket.reopened`.',
+    '',
+    '---',
+    '',
+    'Something missing? Reach us at [support@basedesk.example](mailto:support@basedesk.example).',
+  ].join('\n')],
+  ['Getting started', 'Onboarding runbook: signup to first resolved ticket', [
+    '# Onboarding runbook',
+    '',
+    'This takes a new workspace from **signup to first resolved ticket** in about 30 minutes. Work top to bottom — each step builds on the last.',
+    '',
+    '## 1. Set up your team',
+    '',
+    'Invite the people who will work tickets and give them a role.',
+    '',
+    '| Role | Can do | Cannot do |',
+    '| --- | --- | --- |',
+    '| **Admin** | Everything — billing, channels, agents, settings | — |',
+    '| **Agent** | Work tickets, write KB, run reports | Manage billing or other agents |',
+    '',
+    'Send invites from **Settings → Team**. Invites expire after 7 days.',
+    '',
+    '## 2. Connect a channel',
+    '',
+    'Tickets have to come from somewhere. The fastest path is email:',
+    '',
+    '- Forward your support address (e.g. `help@yourco.com`) to the inbound address under **Channels**.',
+    '- Send a test message and confirm it lands as a ticket.',
+    '- Reply from BaseDesk and confirm the customer receives it.',
+    '',
+    '> Chat, webhook, Slack and the rest work the same way — connect, test both directions, done.',
+    '',
+    '## 3. Triage with views',
+    '',
+    'Views are saved filters. Start with the built-ins:',
+    '',
+    '1. **Unassigned** — the shared queue nobody owns yet.',
+    '2. **My open** — your personal workload.',
+    '3. **Awaiting reply** — the ball is in your court.',
+    '',
+    '## 4. Reply faster',
+    '',
+    'Two tools cut reply time the most:',
+    '',
+    '- **Canned replies** — pre-written answers. Type `/` in the composer to insert one.',
+    '- **Macros** — a canned reply *plus* actions (status, tags, assignee) in one click.',
+    '',
+    '## 5. Close the loop',
+    '',
+    'Solve the ticket when the customer is happy. A customer reply reopens it automatically, so there is no risk in solving early.',
+    '',
+    '---',
+    '',
+    'That is the whole loop: **intake → triage → reply → solve**. Everything else just makes one of those four faster.',
+  ].join('\n')],
+  ['Billing', 'Plans & pricing explained', [
+    '# Plans & pricing',
+    '',
+    'BaseDesk has two paid plans, billed **per active agent per month**. Change plans anytime — increases are prorated to the day.',
+    '',
+    '## Compare plans',
+    '',
+    '| Feature | Team — $12/seat | Business — $18/seat |',
+    '| --- | :---: | :---: |',
+    '| Shared inboxes & views | Yes | Yes |',
+    '| Canned replies & macros | Yes | Yes |',
+    '| Reporting | Core | Advanced |',
+    '| SSO / SAML | — | Yes |',
+    '| Audit log | — | Yes |',
+    '| Priority support | — | Yes |',
+    '',
+    '## How proration works',
+    '',
+    'Add a seat mid-cycle and you pay only the remaining days:',
+    '',
+    '```',
+    'charge = seat_price × (days_left_in_cycle ÷ days_in_cycle)',
+    '```',
+    '',
+    'Downgrades take effect at the **next** renewal, so you keep what you paid for until then.',
+    '',
+    '## Invoices',
+    '',
+    'Every invoice lists:',
+    '',
+    '- The plan and the seat count for the period',
+    '- Any proration lines from mid-cycle changes',
+    '- Tax, where it applies',
+    '',
+    'Find them under **Settings → Billing → History** as downloadable PDFs.',
+    '',
+    '> Spot a charge that looks wrong? Reply with the invoice number and we will walk through it line by line.',
+  ].join('\n')],
 ].map(([category, title, body], i) => ({
   id: 'kb_' + pad(i + 1, 2),
   title,
@@ -704,8 +1077,9 @@ const kbSeed = [
   category,
   body,
   status: 'published',
-  createdAt: iso(NOW_MS - (60 - i * 5) * DAY),
-  updatedAt: iso(NOW_MS - (20 - i * 2) * DAY),
+  // Spread over the last ~7 months; each article was updated a while after it was created.
+  createdAt: iso(NOW_MS - (200 - i * 9) * DAY),
+  updatedAt: iso(NOW_MS - Math.max(2, 200 - i * 9 - 30) * DAY),
 }));
 
 // ---------------------------------------------------------------- ai agents
