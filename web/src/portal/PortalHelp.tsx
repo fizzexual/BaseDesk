@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { TimeAgo } from '../components/TimeAgo';
 import { cx } from '../components/util';
 import type { KbArticle } from '../data/types';
+import { Markdown, plainText } from '../features/kb/Markdown';
 import { IconBook, IconChevronLeft, IconChevronRight, IconSearch, IconTicket } from '../icons';
 
 // The help center is a small documentation site: a category sidebar, a searchable
@@ -194,7 +195,7 @@ export function HelpIndex() {
                 <li key={a.id}>
                   <Link to={`/portal/help/${a.slug}`} className="block px-4 py-3 transition-colors hover:bg-surface-2">
                     <div className="text-[14px] font-medium">{a.title}</div>
-                    <div className="mt-0.5 line-clamp-1 text-[12px] text-text-3">{a.category} · {a.body}</div>
+                    <div className="mt-0.5 line-clamp-1 text-[12px] text-text-3">{a.category} · {plainText(a.body)}</div>
                   </Link>
                 </li>
               ))}
@@ -269,8 +270,6 @@ export function HelpArticle() {
 
   const prev = idx > 0 ? ctx.ordered[idx - 1] : null;
   const next = idx < ctx.ordered.length - 1 ? ctx.ordered[idx + 1] : null;
-  const paragraphs = article.body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-
   return (
     <div className="mx-auto w-full max-w-[760px] px-5 py-10 sm:px-8">
       <nav className="flex items-center gap-1.5 text-[12px] text-text-3">
@@ -286,10 +285,8 @@ export function HelpArticle() {
         Updated <TimeAgo iso={article.updatedAt} />
       </p>
 
-      <article className="mt-6 flex flex-col gap-4 text-[15px] leading-7 text-text-2">
-        {paragraphs.map((p, i) => (
-          <p key={i}>{p}</p>
-        ))}
+      <article className="mt-6">
+        <Markdown text={article.body} />
       </article>
 
       <div className="mt-10 flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-6 text-center">
