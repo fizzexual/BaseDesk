@@ -163,12 +163,46 @@ export interface Attachment {
   id: string; messageId: string | null; ticketId: string | null;
   filename: string; mimeType: string; size: number; createdAt: string;
 }
+/** Highlighter colors an agent can apply to words in a cited passage. */
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+/** A highlighted character range [start, end) within a citation's passage. */
+export interface CitationHighlight { start: number; end: number; color: HighlightColor; }
+/** A cited knowledge-base passage carried by a message as a structured card. */
+export interface KbCitation {
+  type: 'kb_citation';
+  articleId: string;
+  title: string;
+  category: string | null;
+  slug: string;
+  passage: string;
+  /** Agent-applied highlight ranges over `passage` (sorted, non-overlapping); omitted when none. */
+  highlights?: CitationHighlight[];
+}
+/** How a choice prompt's options are presented to the customer. */
+export type ChoiceLayout = 'buttons' | 'dropdown';
+/** One selectable option in a choice prompt. */
+export interface ChoiceOption { id: string; label: string; }
+/** The customer's selection on a choice prompt, recorded when they pick. */
+export interface ChoiceAnswer { optionIds: string[]; at: string; }
+/** An interactive question an agent asks the customer, answered by tapping a button or picking from a dropdown. */
+export interface ChoicePrompt {
+  type: 'choice_prompt';
+  question: string;
+  layout: ChoiceLayout;
+  options: ChoiceOption[];
+  /** The customer's pick once made; absent/null until answered. */
+  answer?: ChoiceAnswer | null;
+}
+/** A structured card attached to a message (rendered as its own block, not part of the body). */
+export type MessageEmbed = KbCitation | ChoicePrompt;
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
   kind: 'reply' | 'note'; body: string; at: string;
   /** Populated on read (getMessages joins them); omitted on insert. */
   attachments?: Attachment[];
+  /** Structured cards (e.g. KB citations) shown beneath the body; omitted when none. */
+  embeds?: MessageEmbed[];
   /** Soft-delete tombstone: set when a message is removed but kept for the record. */
   deletedAt?: string | null;
   deletedBy?: string | null;
