@@ -36,7 +36,7 @@ import type { ThreadMsg } from './ai-prompts.js';
 import type {
   AiAction, AiAutomation, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
-  CustomFieldType, Deal, DealStage, DealType, IntakeForm, IntakeNode, KbArticle, MacroActions, Message,
+  ChoiceOption, CitationHighlight, CustomFieldType, Deal, DealStage, DealType, HighlightColor, IntakeForm, IntakeNode, KbArticle, MacroActions, Message, MessageEmbed,
   SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
 } from './types.js';
 
@@ -211,6 +211,57 @@ function djb2(s: string): number {
 
 function preview(body: string): string {
   return body.replace(/\s+/g, ' ').trim().slice(0, 90);
+}
+
+/**
+ * Text form of a message's embeds, appended to outbound replies (email/channel) since the
+ * customer sees no embed card there — a cited passage, or a question with its options listed.
+ */
+function embedsText(embeds: MessageEmbed[]): string {
+  return embeds
+    .map((e) =>
+      e.type === 'kb_citation'
+        ? `From our help article “${e.title}”:\n\n“${e.passage}”`
+        : `${e.question}\n${e.options.map((o) => `- ${o.label}`).join('\n')}`,
+    )
+    .filter((s) => s.trim() !== '')
+    .join('\n\n');
+}
+
+/** Short inbox/preview label for a message that carries an embed but no body text. */
+function embedPreview(e: MessageEmbed): string {
+  return e.type === 'kb_citation' ? `Cited “${e.title}”` : `Asked “${e.question}”`;
+}
+
+const HL_COLORS = new Set<HighlightColor>(['yellow', 'green', 'blue', 'pink']);
+
+/**
+ * Validate client highlight ranges and collapse them to sorted, non-overlapping runs
+ * clamped to a passage of length `len`. Bad shapes/colors and out-of-range parts are dropped.
+ */
+function normalizeHighlights(raw: unknown, len: number): CitationHighlight[] {
+  if (!Array.isArray(raw) || len === 0) return [];
+  const colors: (HighlightColor | null)[] = new Array(len).fill(null);
+  for (const item of raw.slice(0, 200)) {
+    if (item === null || typeof item !== 'object') continue;
+    const h = item as Record<string, unknown>;
+    if (typeof h.start !== 'number' || typeof h.end !== 'number' || typeof h.color !== 'string') continue;
+    if (!HL_COLORS.has(h.color as HighlightColor)) continue;
+    const s = Math.max(0, Math.min(Math.trunc(h.start), len));
+    const e = Math.max(0, Math.min(Math.trunc(h.end), len));
+    for (let i = s; i < e; i++) colors[i] = h.color as HighlightColor;
+  }
+  const out: CitationHighlight[] = [];
+  let i = 0;
+  while (i < len) {
+    const color = colors[i];
+    if (color === null) { i++; continue; }
+    let j = i + 1;
+    while (j < len && colors[j] === color) j++;
+    out.push({ start: i, end: j, color });
+    i = j;
+  }
+  return out;
 }
 
 function slugify(title: string): string {
@@ -515,7 +566,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
    * (case-insensitive); the author never notifies themselves.
    */
   const notifyMentions = (opts: { body: string; ticketId: string; messageId: string; actorId: string; now: string }): void => {
-    const tokens = new Set((opts.body.match(/@[A-Za-z]+/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    const tokens = new Set((opts.body.match(/@\p{L}[\p{L}'’_-]*/gu) ?? []).map((t) => t.slice(1).toLowerCase()));
     if (tokens.size === 0) return;
     const agents = db.prepare('SELECT id, name FROM agents').all() as { id: string; name: string }[];
     const actorName = agents.find((a) => a.id === opts.actorId)?.name ?? 'A teammate';
@@ -584,6 +635,54 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
   const deliverReply = (ticket: Ticket, body: string): void => {
     emailReplyToCustomer(ticket, body);
     sendReplyToChannel(ticket, body);
+  };
+
+  /**
+   * Validate client-supplied message embeds, re-resolving each KB citation against the
+   * store so the stored title/category/slug are trustworthy (only the picked passage
+   * comes from the client). Unknown or unpublished articles are dropped.
+   */
+  const sanitizeEmbeds = (raw: unknown): MessageEmbed[] => {
+    if (!Array.isArray(raw)) return [];
+    const out: MessageEmbed[] = [];
+    // Scan at most a bounded slice (far more than the 10 we accept) so a giant array can't
+    // tie up the event loop with per-item DB lookups before the accept-cap is reached.
+    for (const item of raw.slice(0, 50)) {
+      if (item === null || typeof item !== 'object') continue;
+      const e = item as Record<string, unknown>;
+      if (e.type === 'kb_citation' && typeof e.articleId === 'string' && typeof e.passage === 'string') {
+        const passage = e.passage.replace(/\s+/g, ' ').trim().slice(0, 2000);
+        if (passage === '') continue;
+        const article = getKbArticle(db, e.articleId);
+        if (article === null || article.status !== 'published') continue;
+        const highlights = normalizeHighlights(e.highlights, passage.length);
+        out.push({
+          type: 'kb_citation',
+          articleId: article.id,
+          title: article.title,
+          category: article.category.trim() === '' ? null : article.category,
+          slug: article.slug,
+          passage,
+          ...(highlights.length > 0 ? { highlights } : {}),
+        });
+      } else if (e.type === 'choice_prompt') {
+        const question = typeof e.question === 'string' ? e.question.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
+        // Options get fresh, stable server ids (o1, o2, …); the customer answers against these.
+        const options: ChoiceOption[] = [];
+        for (const raw of Array.isArray(e.options) ? e.options : []) {
+          if (raw === null || typeof raw !== 'object') continue;
+          const label = typeof (raw as { label?: unknown }).label === 'string' ? (raw as { label: string }).label.trim().slice(0, 120) : '';
+          if (label === '') continue;
+          options.push({ id: `o${options.length + 1}`, label });
+          if (options.length >= 10) break;
+        }
+        if (question === '' || options.length < 1) continue;
+        // An answer is only ever set via the portal answer endpoint — never trusted from the client on create.
+        out.push({ type: 'choice_prompt', question, layout: e.layout === 'dropdown' ? 'dropdown' : 'buttons', options });
+      } else continue;
+      if (out.length >= 10) break; // a message can't carry an unbounded number of embeds
+    }
+    return out;
   };
 
   /** If enabled, fire an automatic first reply the instant a ticket is opened. */
@@ -1355,7 +1454,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     if (ticket.status === 'closed') return c.json({ error: 'ticket is closed — reopen it to reply' }, 409);
     if (ticket.mergedIntoId !== null) return c.json({ error: 'ticket was merged — reply on the ticket it was merged into' }, 409);
 
-    let input: { kind?: unknown; body?: unknown; attachmentIds?: unknown };
+    let input: { kind?: unknown; body?: unknown; attachmentIds?: unknown; embeds?: unknown };
     try {
       input = await c.req.json();
     } catch {
@@ -1367,7 +1466,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const attachmentIds = Array.isArray(input.attachmentIds)
       ? input.attachmentIds.filter((x): x is string => typeof x === 'string')
       : [];
-    if (body.trim() === '' && attachmentIds.length === 0) return c.json({ error: 'a message or attachment is required' }, 400);
+    const embeds = sanitizeEmbeds(input.embeds);
+    if (body.trim() === '' && attachmentIds.length === 0 && embeds.length === 0)
+      return c.json({ error: 'a message, attachment, or citation is required' }, 400);
 
     const now = new Date().toISOString();
     const message: Message = {
@@ -1378,8 +1479,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       kind,
       body,
       at: now,
+      embeds: embeds.length > 0 ? embeds : undefined,
     };
-    const previewText = body.trim() !== '' ? preview(body) : 'Sent an attachment';
+    const previewText =
+      body.trim() !== '' ? preview(body) : embeds.length > 0 ? embedPreview(embeds[0]) : 'Sent an attachment';
     const nextStatus = kind === 'reply' && ticket.status === 'open' ? 'pending' : ticket.status;
     const nextPreview = kind === 'reply' ? previewText : ticket.lastMessagePreview;
     // The first agent reply stamps the SLA first-response clock.
@@ -1388,8 +1491,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     db.exec('BEGIN');
     try {
       db.prepare(
-        'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
+        'INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at, embeds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at,
+        embeds.length > 0 ? JSON.stringify(embeds) : null,
+      );
       if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, id);
       db.prepare(
         'UPDATE tickets SET status = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, firstRespondedAt = ? WHERE id = ?',
@@ -1402,7 +1508,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     // The agent who acts on a ticket starts watching it, so later activity reaches them.
     followTicket(db, id, message.authorId, now);
     // Notify the customer on a public reply (never on an internal note): email + source channel.
-    if (kind === 'reply') deliverReply(ticket, body.trim() !== '' ? body : '(sent an attachment)');
+    // Cited passages ride along as attributed quote text — the customer has no embed card.
+    if (kind === 'reply') {
+      const outbound =
+        [body.trim(), embeds.length > 0 ? embedsText(embeds) : ''].filter((s) => s !== '').join('\n\n') ||
+        '(sent an attachment)';
+      deliverReply(ticket, outbound);
+    }
     // An internal note can @mention teammates — alert each of them.
     if (kind === 'note') notifyMentions({ body, ticketId: id, messageId: message.id, actorId: message.authorId, now });
     const saved = getMessages(db, id).find((m) => m.id === message.id) ?? message;
@@ -3004,9 +3116,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const ticket = getTicket(db, c.req.param('id'));
     if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
     recordSeen(db, ticket.id, contact.id, 'contact', new Date().toISOString()); // customer viewed the thread
-    // Customers see public replies only — never internal notes.
+    // Customers see public replies only — never internal notes, and never soft-deleted ones
+    // (which would otherwise render as an empty "ghost" bubble).
     const messages = getMessages(db, ticket.id)
-      .filter((m) => m.kind === 'reply')
+      .filter((m) => m.kind === 'reply' && !m.deletedAt)
       .map((m) => ({
         id: m.id,
         authorKind: m.authorKind,
@@ -3015,6 +3128,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
         body: m.body,
         at: m.at,
         attachments: m.attachments ?? [],
+        embeds: m.embeds ?? [],
       }));
     // Customer-facing "support team": agents who've replied (or are assigned),
     // with when they last viewed the thread — a read receipt for the customer.
@@ -3123,6 +3237,59 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     }
     notifyCustomerReply({ ticket, message, contactName: contact.name });
     return c.json({ ticket: getTicket(db, ticket.id) });
+  });
+
+  // The customer answers a choice prompt: lock the prompt with their pick and post it as a reply.
+  app.post('/api/portal/tickets/:id/messages/:mid/answer', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const ticket = getTicket(db, c.req.param('id'));
+    if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    const mid = c.req.param('mid');
+    let input: { embedIndex?: unknown; optionIds?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    // Read the prompt AFTER awaiting the body, and don't await again before the write, so the
+    // read → already-answered check → write runs atomically — two tabs can't both record an answer.
+    const msg = getMessage(db, mid);
+    if (msg === null || msg.ticketId !== ticket.id || msg.authorKind !== 'agent' || msg.kind !== 'reply' || msg.deletedAt) {
+      return c.json({ error: 'prompt not found' }, 404);
+    }
+    const embeds = msg.embeds ?? [];
+    const embedIndex = typeof input.embedIndex === 'number' ? input.embedIndex : embeds.findIndex((e) => e.type === 'choice_prompt');
+    const prompt = embeds[embedIndex];
+    if (prompt === undefined || prompt.type !== 'choice_prompt') return c.json({ error: 'no such choice prompt' }, 404);
+    if (prompt.answer) return c.json({ error: 'this question was already answered' }, 409);
+    const optionIds = Array.isArray(input.optionIds) ? input.optionIds.filter((x): x is string => typeof x === 'string') : [];
+    // Single-select: keep the first valid pick.
+    const chosen = optionIds.filter((oid) => prompt.options.some((o) => o.id === oid)).slice(0, 1);
+    if (chosen.length === 0) return c.json({ error: 'pick a valid option' }, 400);
+
+    const now = new Date().toISOString();
+    const nextEmbeds = embeds.map((e, i) =>
+      i === embedIndex && e.type === 'choice_prompt' ? { ...e, answer: { optionIds: chosen, at: now } } : e,
+    );
+    const replyBody = chosen.map((oid) => prompt.options.find((o) => o.id === oid)?.label ?? '').filter((s) => s !== '').join(', ');
+    const reply: Message = { id: newId('m_'), ticketId: ticket.id, authorKind: 'contact', authorId: contact.id, kind: 'reply', body: replyBody, at: now };
+    const nextStatus = ticket.status === 'solved' || ticket.status === 'closed' ? 'open' : ticket.status;
+
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE messages SET embeds = ? WHERE id = ?').run(JSON.stringify(nextEmbeds), mid);
+      db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(reply.id, reply.ticketId, reply.authorKind, reply.authorId, reply.kind, reply.body, reply.at);
+      db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+        .run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, preview(replyBody), ticket.id);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    notifyCustomerReply({ ticket, message: reply, contactName: contact.name });
+    return c.json({ ok: true });
   });
 
   // A customer rates their support once the ticket is solved or closed (CSAT).
@@ -3552,7 +3719,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     // Customers see public replies only — never internal notes — and get a
     // trimmed shape (no authorId) plus each reply's attachments.
     const messages = getMessages(db, ticket.id)
-      .filter((m) => m.kind === 'reply')
+      .filter((m) => m.kind === 'reply' && !m.deletedAt)
       .map((m) => ({ id: m.id, authorKind: m.authorKind, body: m.body, at: m.at, attachments: m.attachments ?? [] }));
     return c.json(messages);
   });
