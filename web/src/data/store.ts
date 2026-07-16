@@ -560,20 +560,19 @@ export function createAppStore(repository: Repository) {
     async mergeTicket(ticketId, into) {
       const { source, target } = await repository.mergeTicket(ticketId, into);
       set((s) => {
-        // Drop cached threads + timelines for both tickets so they reload fresh.
+        // The source keeps its own (unchanged) conversation, so leave its thread on
+        // screen. The target gained a cross-reference note — drop its cached thread
+        // so it reloads with that note when next opened.
         const messages = { ...s.messages };
-        const ticketEvents = { ...s.ticketEvents };
-        delete messages[ticketId];
         delete messages[into];
-        delete ticketEvents[ticketId];
-        delete ticketEvents[into];
-        return {
-          tickets: { ...s.tickets, [source.id]: source, [target.id]: target },
-          messages,
-          ticketEvents,
-        };
+        return { tickets: { ...s.tickets, [source.id]: source, [target.id]: target }, messages };
       });
+      // We stay on the source after merging, and the ticket-page load effect keys on
+      // the (unchanged) ticket id — so refresh the source's thread here to surface the
+      // new "merged into #N" timeline event over its preserved conversation.
+      await get().loadMessages(ticketId).catch(() => {});
     },
+
 
     async splitTicket(ticketId, subject, messageIds) {
       const { source, created } = await repository.splitTicket(ticketId, subject, messageIds);

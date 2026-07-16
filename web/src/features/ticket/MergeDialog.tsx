@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Dialog } from '../../components/Dialog';
 import { toast } from '../../components/Toast';
 import { useApp } from '../../data/store';
@@ -7,13 +6,13 @@ import type { Ticket } from '../../data/types';
 import { IconMerge, IconSearch } from '../../icons';
 
 /**
- * Pick a target ticket to fold the source into. The source's messages move to
- * the target and the source is closed as a pointer — irreversible, so we say so.
+ * Pick a target ticket to mark this one as a duplicate of. The source keeps its
+ * own conversation, is closed as a read-only pointer to the target, and the
+ * target gets a cross-reference note — irreversible, so we say so.
  */
 export function MergeDialog({ source, onClose }: { source: Ticket; onClose: () => void }) {
   const tickets = useApp((s) => s.tickets);
   const mergeTicket = useApp((s) => s.mergeTicket);
-  const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -36,9 +35,10 @@ export function MergeDialog({ source, onClose }: { source: Ticket; onClose: () =
     setBusy(true);
     try {
       await mergeTicket(source.id, into.id);
+      // Stay on the source: it now shows the "merged into #N" banner over its own
+      // (preserved) conversation, with a button to open the target — GitHub-style.
       toast(`Merged #${source.number} into #${into.number}`);
       onClose();
-      navigate(`/ticket/${into.id}`);
     } catch {
       toast('Could not merge the ticket');
       setBusy(false);
@@ -48,8 +48,8 @@ export function MergeDialog({ source, onClose }: { source: Ticket; onClose: () =
   return (
     <Dialog open onClose={onClose} title={`Merge ticket #${source.number}`}>
       <p className="text-[13px] text-text-2">
-        Fold this ticket into another one. Its messages and attachments move over and this ticket is closed as a
-        pointer to the target. This can't be undone.
+        Mark this ticket as a duplicate of another. It keeps its own conversation but is closed and locked as a
+        pointer to the target, which gets a cross-reference. This can't be undone.
       </p>
       <div className="mt-4 flex h-9 items-center gap-2 rounded-sm border border-line bg-surface px-3">
         <IconSearch size={15} className="shrink-0 text-text-3" />
