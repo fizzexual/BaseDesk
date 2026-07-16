@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, Announcement, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, Announcement, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, MessageEmbed, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -96,6 +96,7 @@ export function openDb(dataDir: string): DatabaseSync {
       kind TEXT NOT NULL,
       body TEXT NOT NULL,
       at TEXT NOT NULL,
+      embeds TEXT,
       deletedAt TEXT,
       deletedBy TEXT
     );
@@ -367,6 +368,7 @@ export function openDb(dataDir: string): DatabaseSync {
   const messageCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[];
   if (!messageCols.some((c) => c.name === 'deletedAt')) db.exec('ALTER TABLE messages ADD COLUMN deletedAt TEXT');
   if (!messageCols.some((c) => c.name === 'deletedBy')) db.exec('ALTER TABLE messages ADD COLUMN deletedBy TEXT');
+  if (!messageCols.some((c) => c.name === 'embeds')) db.exec('ALTER TABLE messages ADD COLUMN embeds TEXT');
 
   const cannedCols = db.prepare('PRAGMA table_info(canned_replies)').all() as { name: string }[];
   if (!cannedCols.some((c) => c.name === 'actions')) db.exec('ALTER TABLE canned_replies ADD COLUMN actions TEXT');
@@ -1025,6 +1027,17 @@ export function portalSecret(db: DatabaseSync, generate: () => string): string {
   return secret;
 }
 
+/** Turn the stored embeds JSON into typed cards; missing/blank/invalid → undefined. */
+function parseEmbeds(raw: unknown): MessageEmbed[] | undefined {
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0 ? (parsed as MessageEmbed[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
   const messages = db
     .prepare('SELECT * FROM messages WHERE ticketId = ? ORDER BY at ASC, id ASC')
@@ -1040,16 +1053,17 @@ export function getMessages(db: DatabaseSync, ticketId: string): Message[] {
     byMessage.set(f.messageId, list);
   }
   // A soft-deleted message keeps its tombstone (who/when) but never leaks its content.
-  return messages.map((m) =>
-    m.deletedAt
-      ? { ...m, body: '', attachments: [] }
-      : { ...m, attachments: byMessage.get(m.id) ?? [] },
-  );
+  return messages.map((m) => {
+    const embeds = parseEmbeds((m as unknown as { embeds?: unknown }).embeds);
+    return m.deletedAt
+      ? { ...m, body: '', attachments: [], embeds: undefined }
+      : { ...m, attachments: byMessage.get(m.id) ?? [], embeds };
+  });
 }
 
 export function getMessage(db: DatabaseSync, id: string): Message | null {
-  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as Message | undefined;
-  return row ?? null;
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as (Message & { embeds?: unknown }) | undefined;
+  return row === undefined ? null : { ...row, embeds: parseEmbeds(row.embeds) };
 }
 
 export function insertAttachment(db: DatabaseSync, a: Attachment): void {
