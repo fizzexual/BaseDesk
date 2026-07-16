@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, OnCallConfig, TimeRule, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, BusinessHours, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   MessageEmbed, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -9,7 +9,7 @@ import type { Repository } from './repository';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
 import { applyAccent } from './branding';
-import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TIME_RULES } from './defaults';
 import { applyTheme, readThemePref } from '../app/theme';
 
 export interface AppState {
@@ -20,6 +20,7 @@ export interface AppState {
   sla: SlaTargets;
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  businessHours: BusinessHours;
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -102,6 +103,7 @@ export interface AppState {
   saveAutomation(rules: AutomationRule[]): Promise<void>;
   saveAssignment(settings: AssignmentSettings): Promise<void>;
   saveAutoAck(settings: AutoAck): Promise<void>;
+  saveBusinessHours(settings: BusinessHours): Promise<void>;
   saveAiAutomation(settings: AiAutomation): Promise<void>;
   saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
@@ -212,6 +214,7 @@ export function createAppStore(repository: Repository) {
     sla: DEFAULT_SLA_TARGETS,
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
+    businessHours: DEFAULT_BUSINESS_HOURS,
     aiAutomation: DEFAULT_AI_AUTOMATION,
     onCall: DEFAULT_ON_CALL,
     timeRules: DEFAULT_TIME_RULES,
@@ -259,6 +262,7 @@ export function createAppStore(repository: Repository) {
         sla: data.sla,
         assignment: data.assignment,
         autoAck: data.autoAck,
+        businessHours: data.businessHours,
         aiAutomation: data.aiAutomation,
         onCall: data.onCall,
         timeRules: data.timeRules,
@@ -509,7 +513,9 @@ export function createAppStore(repository: Repository) {
             : embeds.length > 0
               ? embeds[0].type === 'kb_citation'
                 ? `Cited “${embeds[0].title}”`
-                : `Asked “${embeds[0].question}”`
+                : embeds[0].type === 'choice_prompt'
+                  ? `Asked “${embeds[0].question}”`
+                  : 'Outside working hours'
               : previewOf(body);
         if (optimistic.status === 'open') optimistic.status = 'pending';
       }
@@ -843,6 +849,18 @@ export function createAppStore(repository: Repository) {
         set({ autoAck: saved });
       } catch (err) {
         set({ autoAck: prev });
+        throw err;
+      }
+    },
+
+    async saveBusinessHours(settings) {
+      const prev = get().businessHours;
+      set({ businessHours: settings });
+      try {
+        const saved = await repository.saveBusinessHours(settings);
+        set({ businessHours: saved });
+      } catch (err) {
+        set({ businessHours: prev });
         throw err;
       }
     },

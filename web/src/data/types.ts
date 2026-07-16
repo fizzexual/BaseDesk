@@ -236,8 +236,11 @@ export interface ChoicePrompt {
   /** The customer's pick once made; absent/null until answered. */
   answer?: ChoiceAnswer | null;
 }
+/** An automatic "we're outside working hours" card, carrying the next opening
+ *  instant so the client can show a live countdown to reopening. */
+export interface OutsideHours { type: 'outside_hours'; message: string; nextOpenAt: string | null; }
 /** A structured card attached to a message (rendered as its own block, not part of the body). */
-export type MessageEmbed = KbCitation | ChoicePrompt;
+export type MessageEmbed = KbCitation | ChoicePrompt | OutsideHours;
 export interface Message {
   id: string; ticketId: string;
   authorKind: 'contact' | 'agent'; authorId: string;
@@ -499,6 +502,16 @@ export interface AutoAck {
   enabled: boolean;
   /** Body of the auto-reply; supports {{number}} and {{name}} placeholders. */
   message: string;
+}
+
+/** One day's opening window in 24h "HH:MM"; a null day means closed. */
+export interface DayHours { open: string; close: string; }
+/** Opening hours — used to auto-reply when a customer writes in while closed. */
+export interface BusinessHours {
+  enabled: boolean;
+  timezone: string; // IANA zone, e.g. "America/New_York"
+  message: string; // shown to customers who write in outside hours ({{name}}/{{number}} supported)
+  days: (DayHours | null)[]; // length 7, index 0 = Sunday; null = closed that day
 }
 
 /** Master switches for AI that would otherwise run on its own — all default OFF. */

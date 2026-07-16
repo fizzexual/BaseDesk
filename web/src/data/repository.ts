@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
-  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -17,6 +17,7 @@ export interface BootstrapData {
   notifications: Notification[];
   assignment: AssignmentSettings;
   autoAck: AutoAck;
+  businessHours: BusinessHours;
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -120,6 +121,7 @@ export interface Repository {
   exportCsv(type: ImportType): Promise<string>;
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings>;
   saveAutoAck(settings: AutoAck): Promise<AutoAck>;
+  saveBusinessHours(settings: BusinessHours): Promise<BusinessHours>;
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation>;
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig>;
   getHandover(): Promise<HandoverNote[]>;

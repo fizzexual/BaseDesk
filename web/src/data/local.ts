@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, AuditEvent, AutoAck, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
+  AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
@@ -10,7 +10,7 @@ import type { BootstrapData, Repository } from './repository';
 import { normalizeHighlights } from './citationHighlight';
 import { registerLocalAttachment } from './attachments';
 import { computeRevenue } from './deal-stats';
-import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AI_PROVIDER, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_SMTP, DEFAULT_TICKET_TEMPLATES, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults';
 import { draftReply, runAgent, suggestTriage, summarizeThread } from '../features/ai/engine';
 import seedJson from '../../../shared/seed.json';
 
@@ -97,6 +97,7 @@ interface LocalData {
   assignment: AssignmentSettings;
   assignmentRr: number; // round-robin cursor
   autoAck: AutoAck;
+  businessHours: BusinessHours;
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -262,6 +263,7 @@ function seedData(): LocalData {
     assignment: { enabled: false, strategy: 'round_robin' },
     assignmentRr: 0,
     autoAck: { ...DEFAULT_AUTO_ACK },
+    businessHours: { ...DEFAULT_BUSINESS_HOURS },
     aiAutomation: { ...DEFAULT_AI_AUTOMATION },
     onCall: { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] },
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
@@ -393,6 +395,10 @@ export class LocalRepository implements Repository {
         this.data.autoAck = { ...DEFAULT_AUTO_ACK };
         this.persist();
       }
+      if (this.data.businessHours === undefined) {
+        this.data.businessHours = { ...DEFAULT_BUSINESS_HOURS };
+        this.persist();
+      }
       if (this.data.aiAutomation === undefined) {
         this.data.aiAutomation = { ...DEFAULT_AI_AUTOMATION };
         this.persist();
@@ -518,6 +524,7 @@ export class LocalRepository implements Repository {
         .map((n) => ({ ...n })),
       assignment: { ...this.data.assignment },
       autoAck: { ...this.data.autoAck },
+      businessHours: { ...this.data.businessHours },
       aiAutomation: { ...this.data.aiAutomation },
       onCall: { ...this.data.onCall, rotation: [...this.data.onCall.rotation] },
       timeRules: this.data.timeRules.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
@@ -696,6 +703,17 @@ export class LocalRepository implements Repository {
     this.data.autoAck = { enabled: settings.enabled === true, message: String(settings.message) };
     this.persist();
     return { ...this.data.autoAck };
+  }
+
+  async saveBusinessHours(settings: BusinessHours): Promise<BusinessHours> {
+    this.data.businessHours = {
+      enabled: settings.enabled === true,
+      timezone: typeof settings.timezone === 'string' && settings.timezone.trim() !== '' ? settings.timezone : 'UTC',
+      message: String(settings.message),
+      days: Array.isArray(settings.days) ? settings.days.slice(0, 7) : [...DEFAULT_BUSINESS_HOURS.days],
+    };
+    this.persist();
+    return { ...this.data.businessHours };
   }
 
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
@@ -1112,7 +1130,9 @@ export class LocalRepository implements Repository {
           : embeds.length > 0
             ? embeds[0].type === 'kb_citation'
               ? `Cited “${embeds[0].title}”`
-              : `Asked “${embeds[0].question}”`
+              : embeds[0].type === 'choice_prompt'
+                ? `Asked “${embeds[0].question}”`
+                : 'Outside working hours'
             : 'Sent an attachment';
       if (t.status === 'open') t.status = 'pending';
       if (t.firstRespondedAt === null) t.firstRespondedAt = now;

@@ -15,8 +15,9 @@ import { CustomFieldsSettings } from './CustomFieldsSettings';
 import { IntakeFormSettings } from './IntakeFormSettings';
 import { ImportSettings } from './ImportSettings';
 import { AnnouncementsSettings } from './AnnouncementsSettings';
+import { BusinessHoursSettings } from './BusinessHoursSettings';
 
-type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'automation' | 'ai' | 'email' | 'announcements' | 'import';
+type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'hours' | 'automation' | 'ai' | 'email' | 'announcements' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -32,6 +33,7 @@ const TABS: Array<{
   { id: 'fields', label: 'Ticket fields', icon: IconTag },
   { id: 'form', label: 'Ticket form', icon: IconList },
   { id: 'sla', label: 'SLA', icon: IconClock },
+  { id: 'hours', label: 'Business hours', icon: IconClock },
   { id: 'automation', label: 'Automation', icon: IconFilter },
   { id: 'ai', label: 'AI', icon: IconSparkle },
   { id: 'email', label: 'Email', icon: IconSend },
@@ -50,6 +52,7 @@ export function SettingsPage() {
     params.tab === 'fields' ||
     params.tab === 'form' ||
     params.tab === 'sla' ||
+    params.tab === 'hours' ||
     params.tab === 'automation' ||
     params.tab === 'ai' ||
     params.tab === 'email' ||
@@ -90,6 +93,7 @@ export function SettingsPage() {
         {tab === 'fields' && <CustomFieldsSettings />}
         {tab === 'form' && <IntakeFormSettings />}
         {tab === 'sla' && <SlaSettings />}
+        {tab === 'hours' && <BusinessHoursSettings />}
         {tab === 'automation' && <AutomationSettings />}
         {tab === 'ai' && <AiSettings />}
         {tab === 'email' && <EmailSettings />}

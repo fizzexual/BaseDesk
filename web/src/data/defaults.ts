@@ -1,4 +1,4 @@
-import type { AiAutomation, AiProvider, AutoAck, AutomationRule, OnCallConfig, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
+import type { AiAutomation, AiProvider, AutoAck, AutomationRule, BusinessHours, OnCallConfig, SlaHours, SlaTargets, SmtpSettings, TicketTemplate, TimeRule } from './types';
 
 /** Starter ticket templates so the New Ticket dialog is useful out of the box (mirrors the server). */
 export const DEFAULT_TICKET_TEMPLATES: TicketTemplate[] = [
@@ -80,6 +80,22 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   enabled: false,
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
+};
+
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
+  enabled: false,
+  timezone: 'UTC',
+  message:
+    "Thanks for reaching out! You've caught us outside our working hours, so a reply may take a little longer. We'll be back and answering {{name}} as soon as we reopen.",
+  days: [
+    null,
+    { open: '09:00', close: '17:00' },
+    { open: '09:00', close: '17:00' },
+    { open: '09:00', close: '17:00' },
+    { open: '09:00', close: '17:00' },
+    { open: '09:00', close: '17:00' },
+    null,
+  ],
 };
 
 /** On-call rotation, disabled by default (mirrors the server). */
