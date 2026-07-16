@@ -51,6 +51,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'The inbox shows one **view** at a time. Built-in views include **All**, **Unassigned**, **Mine**, **Awaiting reply** (the customer is waiting on you), and per-status views (**Open**, **Pending**, **On hold**, **Solved**, **Closed**), plus **Snoozed**, **Archive**, and **Spam**.',
       '',
+      '{{example:inbox-views}}',
+      '',
       'Tickets sort by most-recent activity. Large views are paginated for speed — the newest matches render first. You can also save your own filtered **saved views**.',
       '',
       '**Awaiting reply** is the queue that matters most day-to-day: it lists tickets where the customer sent the last public message and no one has answered yet.',
@@ -187,6 +189,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'At the bottom of a ticket, switch between **Reply** (goes to the customer) and **Note** (internal, team-only). **Enter** sends; **Shift+Enter** adds a new line. Attach files with the paperclip.',
       '',
+      '{{example:composer}}',
+      '',
       'A **reply** notifies the customer over their channel (email, etc.) and moves the ticket to *Pending*. A **note** never reaches the customer and can @mention teammates.',
     ].join('\n'),
   },
@@ -270,6 +274,8 @@ export const DOCS: DocArticle[] = [
       '- **Summarise thread** — condense a long conversation for a fast hand-off.',
       '- **Auto-resolve** (opt-in) — let an agent send a KB-backed reply and close a ticket on its own, only when it’s confident.',
       '',
+      '{{example:ai-draft}}',
+      '',
       'Each automatic behaviour is a separate switch in **Settings → AI** — off until you turn it on. Reports also flag **knowledge gaps**: recurring questions your KB doesn’t answer yet.',
     ].join('\n'),
   },
@@ -322,6 +328,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'The **portal** is the customer-facing side, served separately from the admin app. It has a public **help center**, a guided **new-ticket** flow, and a signed-in area where customers track their tickets and reply.',
       '',
+      '{{example:portal-help}}',
+      '',
       'The help center is public (no login needed to read docs). Opening or tracking a ticket uses a customer account (register / sign in). When you host BaseDesk publicly, expose only the portal — the admin app has no login and is meant to stay on your network.',
     ].join('\n'),
   },
@@ -345,6 +353,8 @@ export const DOCS: DocArticle[] = [
     summary: 'A guided form that routes and deflects.',
     body: [
       'The **intake form** (Settings → Ticket form) is a decision tree the customer walks when opening a ticket. Each choice can set the ticket’s **category** and add **tags**, so tickets arrive pre-routed. The captured questions/answers show in the ticket’s details panel.',
+      '',
+      '{{example:intake-tree}}',
       '',
       'As the customer types, matching KB articles are surfaced to **deflect** — answering the question before a ticket is even created.',
     ].join('\n'),
@@ -441,6 +451,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Capture the extra data you need.',
     body: [
       '**Custom fields** (Settings → Ticket fields) add structured metadata to tickets — text, number, select, checkbox, or date — shown and editable in the details panel.',
+      '',
+      '{{example:custom-field}}',
       '',
       '**Ticket templates** pre-fill common ticket setups, and **auto-acknowledgement** (Settings) can send an instant "we got your message" reply on every new ticket (separate from the outside-hours auto-reply).',
     ].join('\n'),

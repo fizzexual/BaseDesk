@@ -3,7 +3,7 @@ import { Markdown } from '../kb/Markdown';
 import { Avatar } from '../../components/Avatar';
 import { OutsideHoursCard } from '../ticket/OutsideHoursCard';
 import type { OutsideHours } from '../../data/types';
-import { IconAlert, IconBook, IconChart, IconClock, IconInbox, IconMerge, IconPlus, IconSearch, IconSparkle, IconX } from '../../icons';
+import { IconAlert, IconBook, IconChart, IconClock, IconInbox, IconMerge, IconNote, IconPlus, IconReply, IconSearch, IconSend, IconSparkle, IconX } from '../../icons';
 
 // Built-in, live example mockups for the System Guide. Where a real component can
 // stand in with sample props it does (e.g. OutsideHoursCard); the rest are small,
@@ -354,6 +354,104 @@ Object.assign(EXAMPLES, {
       <div className="max-w-[320px] rounded-lg border border-line bg-surface p-3 text-[13px]">
         <div className="flex items-center gap-1.5"><span className="rounded px-1.5 py-0.5 text-[11px] font-medium text-accent" style={{ background: 'color-mix(in oklab, var(--accent) 14%, transparent)' }}>Upsell</span><span className="font-medium">Business plan upgrade</span></div>
         <div className="mt-1.5 flex items-center justify-between"><span className="tabular-nums text-text-2">$4,800</span><span className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: 'var(--green)', background: 'color-mix(in oklab, var(--green) 14%, transparent)' }}>Open</span></div>
+      </div>
+    ),
+  },
+});
+
+// A final batch covering the remaining articles.
+Object.assign(EXAMPLES, {
+  'inbox-views': {
+    title: 'The inbox',
+    caption: 'Pick a view on the left; tickets sort by most-recent activity.',
+    node: (
+      <div className="flex gap-3 text-[13px]">
+        <div className="w-32 shrink-0 space-y-0.5">
+          {([['All', ''], ['Unassigned', '12'], ['Mine', '5'], ['Awaiting reply', '8']] as const).map(([v, n]) => (
+            <div key={v} className={v === 'Awaiting reply' ? 'flex items-center justify-between rounded-md bg-surface-2 px-2 py-1 font-medium' : 'flex items-center justify-between rounded-md px-2 py-1 text-text-2'}>
+              <span>{v}</span>
+              {n !== '' && <span className="text-[11px] text-text-3">{n}</span>}
+            </div>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1 rounded-lg border border-line bg-surface p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate font-medium">Double charged on order 46770</span>
+            <span className="shrink-0 text-[11px] text-text-3">2m</span>
+          </div>
+          <div className="mt-0.5 truncate text-text-3">I was billed twice for the same order…</div>
+        </div>
+      </div>
+    ),
+  },
+  composer: {
+    title: 'Bottom of a ticket',
+    caption: 'Switch Reply / Note; Enter sends, and 🕐 queues it for later.',
+    node: (
+      <div className="max-w-[440px] rounded-lg border border-line bg-surface p-2.5">
+        <div className="mb-2 flex gap-1 text-[12px] font-medium">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1"><IconReply size={13} />Reply</span>
+          <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-text-3"><IconNote size={13} />Note</span>
+        </div>
+        <div className="rounded-md border border-line bg-bg px-2.5 py-2 text-[13px] text-text-3">Reply to Lukas…</div>
+        <div className="mt-2 flex items-center justify-end gap-2 text-text-3">
+          <IconClock size={15} />
+          <span className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-fg"><IconSend size={13} />Reply</span>
+        </div>
+      </div>
+    ),
+  },
+  'ai-draft': {
+    title: 'Draft with AI',
+    caption: 'A reply drafted from your knowledge base — review, then send.',
+    node: (
+      <div className="max-w-[440px] rounded-lg border border-line bg-surface p-3 text-[13px]">
+        <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-medium"><IconSparkle size={13} className="text-accent" />AI draft · from knowledge base</div>
+        <p className="leading-relaxed text-text-2">Hi Lukas — you can reset your password from the sign-in page via “Forgot password”. The link stays valid for 30 minutes…</p>
+        <div className="mt-2 flex gap-2 text-[12px]">
+          <span className="rounded-md bg-accent px-2.5 py-1 font-medium text-accent-fg">Use draft</span>
+          <span className="rounded-md border border-line px-2.5 py-1 text-text-2">Discard</span>
+        </div>
+      </div>
+    ),
+  },
+  'portal-help': {
+    title: 'The customer help center',
+    caption: 'Public self-service, searchable, with your branding.',
+    node: (
+      <div className="mx-auto max-w-[420px] rounded-lg border border-line bg-surface p-4 text-center">
+        <div className="mx-auto flex size-9 items-center justify-center rounded-lg text-accent" style={{ background: 'color-mix(in oklab, var(--accent) 12%, transparent)' }}><IconBook size={18} /></div>
+        <div className="mt-2 text-[15px] font-semibold">How can we help?</div>
+        <div className="mx-auto mt-2 flex h-9 max-w-[280px] items-center gap-2 rounded-lg border border-line bg-bg px-3 text-[13px] text-text-3"><IconSearch size={14} />Search for answers…</div>
+      </div>
+    ),
+  },
+  'intake-tree': {
+    title: 'Opening a ticket',
+    caption: 'Each choice routes the ticket and can deflect with a matching article.',
+    node: (
+      <div className="max-w-[420px] text-[13px]">
+        <div className="mb-2 font-medium">What do you need help with?</div>
+        <div className="flex flex-wrap gap-2">
+          {['Billing & purchases', 'Technical issue', 'Report a bug'].map((o) => (
+            <span key={o} className="rounded-lg border border-line bg-surface px-3 py-2">{o}</span>
+          ))}
+        </div>
+        <div className="mt-3 rounded-lg border border-line p-2.5" style={{ background: 'var(--blue-bg)' }}>
+          <div className="flex items-center gap-1.5 text-[12px] font-medium text-blue"><IconBook size={13} />These might answer your question</div>
+          <div className="mt-1 text-text-2">Plans &amp; pricing explained</div>
+        </div>
+      </div>
+    ),
+  },
+  'custom-field': {
+    title: 'Ticket details',
+    caption: 'Admin-defined fields capture the extra data you need.',
+    node: (
+      <div className="max-w-[280px] space-y-2 text-[13px]">
+        <div className="flex items-baseline gap-2"><span className="w-20 shrink-0 text-[12px] font-medium text-text-3">Order #</span><span className="text-text-2">46770</span></div>
+        <div className="flex items-baseline gap-2"><span className="w-20 shrink-0 text-[12px] font-medium text-text-3">Plan</span><span className="rounded-full border border-line px-2 py-0.5 text-[12px]">Business</span></div>
+        <div className="flex items-baseline gap-2"><span className="w-20 shrink-0 text-[12px] font-medium text-text-3">Renewal</span><span className="text-text-2">Aug 14, 2026</span></div>
       </div>
     ),
   },
