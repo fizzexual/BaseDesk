@@ -260,6 +260,9 @@ export class ApiRepository implements Repository {
       jsonInit('POST', { sessionId, agentId }),
     ).then((r) => r.present);
   }
+  translate(text: string, targetLang: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }> {
+    return request('/ai/translate', jsonInit('POST', { text, targetLang }));
+  }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));
   }

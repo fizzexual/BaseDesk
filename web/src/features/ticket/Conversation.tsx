@@ -11,6 +11,60 @@ import { cx } from '../../components/util';
 import { IconBook, IconCheck, IconList, IconPaperclip, IconTrash } from '../../icons';
 import { CitationPassage } from '../kb/CitationPassage';
 import { OutsideHoursCard } from './OutsideHoursCard';
+import { aiEnabled, aiFallbackMessage } from '../ai/engine';
+
+/** Per-message on-demand translation into the agent's language, via the model. */
+function TranslateControl({ text }: { text: string }) {
+  const translate = useApp((s) => s.aiTranslate);
+  const [result, setResult] = useState<{ text: string; lang: string | null } | null>(null);
+  const [showing, setShowing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    if (result !== null) {
+      setShowing((s) => !s);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await translate(text);
+      if (r.source !== 'model') {
+        toast(aiFallbackMessage(r.reason));
+        return;
+      }
+      setResult({ text: r.text, lang: r.detectedLang });
+      setShowing(true);
+    } catch {
+      toast('Could not translate this message');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ml-1 mt-1">
+      {showing && result !== null && (
+        <div className="mb-1 w-fit max-w-full rounded-2xl bg-blue-bg px-3.5 py-2.5 text-[14px] leading-relaxed text-text">
+          {result.text}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={busy}
+        className="text-[12px] font-medium text-text-3 transition-colors hover:text-text disabled:opacity-60"
+      >
+        {busy
+          ? 'Translating…'
+          : result === null
+            ? 'Translate'
+            : showing
+              ? 'Show original'
+              : `Show translation${result.lang !== null ? ` (from ${result.lang})` : ''}`}
+      </button>
+    </div>
+  );
+}
 import { describeTicketEvent } from './eventText';
 
 /** Renders a message body, highlighting @mentions. */
@@ -222,6 +276,9 @@ function MessageRow({
             <Attachments items={message.attachments} />
           )}
         </div>
+        {message.authorKind === 'contact' && message.body.trim() !== '' && aiEnabled() && (
+          <TranslateControl text={message.body} />
+        )}
       </div>
     </div>
   );

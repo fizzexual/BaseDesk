@@ -106,6 +106,8 @@ export interface AppState {
   saveBusinessHours(settings: BusinessHours): Promise<void>;
   /** Heartbeat presence for a ticket and get back the other viewers' agent ids. */
   heartbeatPresence(ticketId: string, sessionId: string): Promise<string[]>;
+  /** Translate text into targetLang (default English) via the configured model. */
+  aiTranslate(text: string, targetLang?: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }>;
   saveAiAutomation(settings: AiAutomation): Promise<void>;
   saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
@@ -869,6 +871,10 @@ export function createAppStore(repository: Repository) {
 
     heartbeatPresence(ticketId, sessionId) {
       return repository.ticketPresence(ticketId, sessionId, get().currentAgentId);
+    },
+
+    aiTranslate(text, targetLang) {
+      return repository.translate(text, targetLang ?? 'English');
     },
 
     async saveAiAutomation(settings) {

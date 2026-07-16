@@ -720,6 +720,10 @@ export class LocalRepository implements Repository {
     return []; // no live presence in single-user local mode
   }
 
+  async translate(text: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }> {
+    return { text, detectedLang: null, source: 'rules', reason: 'off' }; // no model in local mode
+  }
+
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     this.data.aiAutomation = {
       autoSuggest: settings.autoSuggest === true,
