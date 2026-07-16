@@ -18,6 +18,7 @@ export function Shell() {
     '?': openHelp,
     'g i': () => navigate('/view/all'),
     'g c': () => navigate('/contacts'),
+    'g t': () => navigate('/team'),
     'g r': () => navigate('/reports'),
   });
 
