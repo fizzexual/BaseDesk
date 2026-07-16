@@ -93,6 +93,10 @@ export function HelpOverlay() {
               <Kbd>G</Kbd>
               <Kbd>C</Kbd>
             </Row>
+            <Row label="Go to team">
+              <Kbd>G</Kbd>
+              <Kbd>T</Kbd>
+            </Row>
             <Row label="Go to reports">
               <Kbd>G</Kbd>
               <Kbd>R</Kbd>
