@@ -4,7 +4,7 @@ import type {
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
-  ForumCategory, ForumList, ForumTopicDetail,
+  ForumCategory, ForumList, ForumTopicDetail, TicketGraph,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -351,6 +351,13 @@ export class ApiRepository implements Repository {
   }
   deleteForumReply(replyId: string): Promise<void> {
     return request(`/forum/replies/${encodeURIComponent(replyId)}`, { method: 'DELETE' });
+  }
+  getGraph(category?: string, sub?: string): Promise<TicketGraph> {
+    const p = new URLSearchParams();
+    if (category !== undefined && category !== '') p.set('category', category);
+    if (sub !== undefined && sub !== '') p.set('sub', sub);
+    const q = p.toString();
+    return request(`/graph${q ? `?${q}` : ''}`);
   }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));

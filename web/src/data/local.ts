@@ -4,9 +4,10 @@ import type {
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
   AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ScheduledMessage, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
-  ForumCategory, ForumList, ForumTopicDetail,
+  ForumCategory, ForumList, ForumTopicDetail, GraphHub, GraphLeaf, TicketGraph,
 } from './types';
 import { FORUM_CATEGORIES } from './types';
+import { classifySub } from './taxonomy';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
 import type { BootstrapData, Repository } from './repository';
 import { normalizeHighlights } from './citationHighlight';
@@ -848,6 +849,59 @@ export class LocalRepository implements Repository {
   }
   async deleteForumReply(replyId: string): Promise<void> {
     for (const t of this.forumStore()) t.replies = t.replies.filter((r) => r.id !== replyId);
+  }
+
+  async getGraph(category?: string, sub?: string): Promise<TicketGraph> {
+    const focusCat = category ?? null;
+    const focusSub = sub ?? null;
+    const active = this.data.tickets
+      .filter((t) => t.mergedIntoId == null && t.bucket !== 'spam' && t.bucket !== 'trash')
+      .slice()
+      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+    const classified = active.map((t) => ({ t, category: (t.category ?? '').trim() || 'Uncategorized', sub: classifySub((t.category ?? '').trim() || 'Uncategorized', t.subject) }));
+
+    const catCount = new Map<string, number>();
+    const subCount = new Map<string, Map<string, number>>();
+    for (const c of classified) {
+      catCount.set(c.category, (catCount.get(c.category) ?? 0) + 1);
+      let subs = subCount.get(c.category);
+      if (!subs) { subs = new Map(); subCount.set(c.category, subs); }
+      subs.set(c.sub, (subs.get(c.sub) ?? 0) + 1);
+    }
+    const taxonomy = [...catCount.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({
+      name,
+      count,
+      subs: [...(subCount.get(name) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]).map(([n, cnt]) => ({ name: n, count: cnt })),
+    }));
+    const catColor = new Map(taxonomy.map((t, i) => [t.name, i]));
+    const hubs: GraphHub[] = [];
+    const leaves: GraphLeaf[] = [];
+
+    if (focusCat === null) {
+      for (const cat of taxonomy) hubs.push({ key: `cat:${cat.name}`, label: cat.name, count: cat.count, colorKey: catColor.get(cat.name) ?? 0 });
+      for (const cat of taxonomy) for (const s of cat.subs) leaves.push({ key: `sub:${cat.name}/${s.name}`, label: `${s.name} (${s.count})`, hub: `cat:${cat.name}`, kind: 'sub', category: cat.name, sub: s.name });
+      return { taxonomy, level: 0, focus: { category: null, sub: null }, hubs, leaves, total: active.length, shown: leaves.length };
+    }
+
+    const inCat = classified.filter((c) => c.category === focusCat);
+    const subs = taxonomy.find((t) => t.name === focusCat)?.subs ?? [];
+    if (focusSub === null) {
+      subs.forEach((s, i) => hubs.push({ key: `sub:${focusCat}/${s.name}`, label: s.name, count: s.count, colorKey: i }));
+      const perSub = 16;
+      const seen = new Map<string, number>();
+      for (const c of inCat) {
+        const n = seen.get(c.sub) ?? 0;
+        if (n >= perSub) continue;
+        seen.set(c.sub, n + 1);
+        leaves.push({ key: c.t.id, label: c.t.subject, hub: `sub:${focusCat}/${c.sub}`, kind: 'ticket', category: focusCat, sub: c.sub, ticketId: c.t.id, number: c.t.number, status: c.t.status, priority: c.t.priority });
+      }
+      return { taxonomy, level: 1, focus: { category: focusCat, sub: null }, hubs, leaves, total: inCat.length, shown: leaves.length };
+    }
+
+    const inSub = inCat.filter((c) => c.sub === focusSub);
+    hubs.push({ key: `sub:${focusCat}/${focusSub}`, label: focusSub, count: inSub.length, colorKey: Math.max(0, subs.findIndex((s) => s.name === focusSub)) });
+    for (const c of inSub.slice(0, 250)) leaves.push({ key: c.t.id, label: c.t.subject, hub: `sub:${focusCat}/${focusSub}`, kind: 'ticket', category: focusCat, sub: focusSub, ticketId: c.t.id, number: c.t.number, status: c.t.status, priority: c.t.priority });
+    return { taxonomy, level: 2, focus: { category: focusCat, sub: focusSub }, hubs, leaves, total: inSub.length, shown: leaves.length };
   }
 
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {

@@ -4,7 +4,7 @@ import type {
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
-  ForumCategory, ForumList, ForumTopicDetail,
+  ForumCategory, ForumList, ForumTopicDetail, TicketGraph,
 } from './types';
 
 export interface BootstrapData {
@@ -149,6 +149,8 @@ export interface Repository {
   moderateForumTopic(id: string, flags: { pinned?: boolean; locked?: boolean; category?: ForumCategory }): Promise<ForumTopicDetail>;
   deleteForumTopic(id: string): Promise<void>;
   deleteForumReply(replyId: string): Promise<void>;
+  /** Ticket knowledge graph for the current drill level: pass a category, then a sub-category, to descend. */
+  getGraph(category?: string, sub?: string): Promise<TicketGraph>;
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation>;
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig>;
   getHandover(): Promise<HandoverNote[]>;
