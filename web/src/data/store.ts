@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, BusinessHours, ScheduledMessage, OnCallConfig, TimeRule, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, AuthStatus, BusinessHours, ScheduledMessage, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   MessageEmbed, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
 } from './types';
-import type { Repository } from './repository';
+import type { BootstrapData, Repository } from './repository';
+import { AuthRequiredError } from './api';
 import { repo } from './index';
 import { categoriesFromForm } from './local';
 import { applyAccent } from './branding';
@@ -21,6 +22,8 @@ export interface AppState {
   assignment: AssignmentSettings;
   autoAck: AutoAck;
   businessHours: BusinessHours;
+  auth: AuthStatus; // admin-auth status for the current session
+  needsLogin: boolean; // the server requires login and we don't have a valid session
   scheduled: Record<string, ScheduledMessage[]>; // pending scheduled sends, keyed by ticketId
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
@@ -53,6 +56,14 @@ export interface AppState {
   currentAgentId: string;
   theme: 'light' | 'dark' | 'system';
   init(): Promise<void>;
+  /** Admin auth (opt-in): log in / out, set your password, and manage two-factor. */
+  login(email: string, password: string, code?: string): Promise<void>;
+  logout(): Promise<void>;
+  setAdminPassword(password: string): Promise<void>;
+  setup2fa(): Promise<{ secret: string; uri: string }>;
+  enable2fa(code: string): Promise<void>;
+  disable2fa(): Promise<void>;
+  setAuthRequired(enabled: boolean): Promise<void>;
   ticketsForView(view: ViewId): Ticket[];      // sorted lastMessageAt desc
   counts(): Counts;
   loadMessages(ticketId: string): Promise<void>;
@@ -223,6 +234,8 @@ export function createAppStore(repository: Repository) {
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
     businessHours: DEFAULT_BUSINESS_HOURS,
+    auth: { enabled: false, hasPassword: false, totpEnabled: false },
+    needsLogin: false,
     scheduled: {},
     aiAutomation: DEFAULT_AI_AUTOMATION,
     onCall: DEFAULT_ON_CALL,
@@ -256,9 +269,20 @@ export function createAppStore(repository: Repository) {
     theme: initialTheme(),
 
     async init() {
-      const data = await repository.bootstrap();
+      let data: BootstrapData;
+      try {
+        data = await repository.bootstrap();
+      } catch (err) {
+        // The server requires login and we have no valid session → show the login gate.
+        if (err instanceof AuthRequiredError) {
+          set({ needsLogin: true, ready: false });
+          return;
+        }
+        throw err;
+      }
       set({
         ready: true,
+        needsLogin: false,
         tickets: Object.fromEntries(data.tickets.map((t) => [t.id, t])),
         contacts: Object.fromEntries(data.contacts.map((c) => [c.id, c])),
         agents: Object.fromEntries(data.agents.map((a) => [a.id, a])),
@@ -272,6 +296,7 @@ export function createAppStore(repository: Repository) {
         assignment: data.assignment,
         autoAck: data.autoAck,
         businessHours: data.businessHours,
+        auth: data.auth,
         aiAutomation: data.aiAutomation,
         onCall: data.onCall,
         timeRules: data.timeRules,
@@ -882,6 +907,38 @@ export function createAppStore(repository: Repository) {
 
     aiTranslate(text, targetLang) {
       return repository.translate(text, targetLang ?? 'English');
+    },
+
+    async login(email, password, code) {
+      await repository.login(email, password, code); // stores the session token
+      await get().init(); // re-bootstrap as the signed-in agent
+    },
+    async logout() {
+      await repository.logout();
+      set({ needsLogin: true, ready: false });
+    },
+    async setAdminPassword(password) {
+      await repository.setAdminPassword(password);
+      set((s) => ({ auth: { ...s.auth, hasPassword: true } }));
+    },
+    setup2fa() {
+      return repository.setup2fa();
+    },
+    async enable2fa(code) {
+      await repository.enable2fa(code);
+      set((s) => ({ auth: { ...s.auth, totpEnabled: true } }));
+    },
+    async disable2fa() {
+      await repository.disable2fa();
+      set((s) => ({ auth: { ...s.auth, totpEnabled: false } }));
+    },
+    async setAuthRequired(enabled) {
+      const on = await repository.setAuthRequired(enabled);
+      set((s) => ({ auth: { ...s.auth, enabled: on } }));
+      // Turning it on means every further request needs a token this tab doesn't
+      // have yet — send the admin straight to the sign-in screen so they don't
+      // hit a wall of 401s. Turning it off just keeps the session running.
+      if (on) set({ needsLogin: true, ready: false });
     },
 
     async scheduleMessage(ticketId, kind, body, sendAt) {
