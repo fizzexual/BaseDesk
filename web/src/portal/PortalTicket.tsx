@@ -59,7 +59,127 @@ function PortalAttachments({ items }: { items: Attachment[] }) {
   );
 }
 
-function Bubble({ message, entering = false }: { message: PortalMessage; entering?: boolean }) {
+/** A cited help-article passage shown to the customer, with any agent highlights. */
+function PortalCitation({ c }: { c: KbCitation }) {
+  return (
+    <div className="w-full max-w-[85%] overflow-hidden rounded-lg border border-line bg-surface lg:max-w-[46rem]">
+      <div className="flex items-start gap-2 px-3 py-2">
+        <IconBook size={14} className="mt-0.5 shrink-0 text-accent" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            Help article{c.category !== null ? ` · ${c.category}` : ''}
+          </span>
+          <span className="mt-0.5 block text-[13px] font-medium">{c.title}</span>
+        </span>
+      </div>
+      <blockquote className="border-t border-line px-3 py-2 text-[13px] leading-relaxed text-text-2">
+        “<CitationPassage passage={c.passage} highlights={c.highlights} />”
+      </blockquote>
+    </div>
+  );
+}
+
+/** An interactive choice prompt the customer answers by tapping a button or picking from a dropdown. */
+function PortalChoicePrompt({
+  ticketId,
+  messageId,
+  embedIndex,
+  prompt,
+  onAnswered,
+}: {
+  ticketId: string;
+  messageId: string;
+  embedIndex: number;
+  prompt: ChoicePrompt;
+  onAnswered: () => void | Promise<void>;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [selected, setSelected] = useState('');
+  const answered = prompt.answer != null;
+  const chosen = new Set(prompt.answer?.optionIds ?? []);
+  const locked = answered || submitting;
+  const qId = `choice-${messageId}-${embedIndex}`;
+
+  async function choose(optionId: string) {
+    if (locked || optionId === '') return;
+    setSubmitting(true);
+    try {
+      await portalApi.answerChoice(ticketId, messageId, embedIndex, [optionId]);
+      await onAnswered();
+    } catch {
+      toast('Could not submit your choice');
+    } finally {
+      // Always clear the in-flight flag; once answered, `locked` stays true via prompt.answer.
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="w-full max-w-[85%] rounded-lg border border-line bg-surface px-3.5 py-2.5 lg:max-w-[46rem]">
+      <div className="flex items-center gap-2">
+        <IconList size={14} className="shrink-0 text-accent" />
+        <p id={qId} className="text-[14px] font-medium">{prompt.question}</p>
+      </div>
+      {prompt.layout === 'buttons' ? (
+        <div role="group" aria-labelledby={qId} className="mt-2 flex flex-wrap gap-1.5">
+          {prompt.options.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              disabled={locked}
+              onClick={() => void choose(o.id)}
+              className={cx(
+                'rounded-md border px-3 py-1.5 text-[13px] font-medium transition-colors',
+                chosen.has(o.id)
+                  ? 'border-accent bg-accent text-accent-fg'
+                  : 'border-line hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            aria-labelledby={qId}
+            disabled={locked}
+            value={answered ? [...chosen][0] ?? '' : selected}
+            onChange={(e) => setSelected(e.target.value)}
+            className="h-9 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] outline-none disabled:opacity-60"
+          >
+            <option value="" disabled>
+              Choose…
+            </option>
+            {prompt.options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {!answered && (
+            <Button size="sm" disabled={selected === '' || submitting} onClick={() => void choose(selected)}>
+              Send
+            </Button>
+          )}
+        </div>
+      )}
+      {answered && <p className="mt-1.5 text-[12px] text-text-3">Thanks — we got your answer.</p>}
+    </div>
+  );
+}
+
+function Bubble({
+  message,
+  entering = false,
+  ticketId,
+  onAnswered,
+}: {
+  message: PortalMessage;
+  entering?: boolean;
+  ticketId: string;
+  onAnswered: () => void | Promise<void>;
+}) {
   const mine = message.authorKind === 'contact';
   // Live-arrived agent replies fade and slide in once and carry a brief highlight
   // ring; first-load and own messages render statically (entering stays false).
@@ -88,6 +208,24 @@ function Bubble({ message, entering = false }: { message: PortalMessage; enterin
             )}
           >
             {message.body}
+          </div>
+        )}
+        {message.embeds !== undefined && message.embeds.length > 0 && (
+          <div className={cx('mt-2 flex w-full flex-col gap-2', mine ? 'items-end' : 'items-start')}>
+            {message.embeds.map((e, i) =>
+              e.type === 'kb_citation' ? (
+                <PortalCitation key={`${e.articleId}-${i}`} c={e} />
+              ) : (
+                <PortalChoicePrompt
+                  key={`prompt-${i}`}
+                  ticketId={ticketId}
+                  messageId={message.id}
+                  embedIndex={i}
+                  prompt={e}
+                  onAnswered={onAnswered}
+                />
+              ),
+            )}
           </div>
         )}
         {message.attachments.length > 0 && <PortalAttachments items={message.attachments} />}
@@ -541,7 +679,7 @@ export function PortalTicket() {
 
             <div className="flex flex-col gap-4">
               {messages.map((m) => (
-                <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} />
+                <Bubble key={m.id} message={m} entering={highlightIds.has(m.id)} ticketId={id} onAnswered={load} />
               ))}
             </div>
             {/* Scroll target that keeps the newest message in view (see the effect above). */}
