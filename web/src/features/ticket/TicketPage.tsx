@@ -4,6 +4,7 @@ import { useApp } from '../../data/store';
 import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
 import { findSimilarTicket } from '../../data/similarTickets';
+import { PresenceBar } from './Presence';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { cx } from '../../components/util';
@@ -391,6 +392,7 @@ export function TicketPage() {
             </span>
           )}
           <SubjectTitle ticket={ticket} onRename={(subject) => patch({ subject })} />
+          <PresenceBar ticketId={ticket.id} />
           <div className="flex shrink-0 items-center gap-2">
             <ReplyStatusBadge ticket={ticket} />
             <SlaBadge sla={computeTicketSla(ticket, slaTargets, Date.now(), slaHours)} />

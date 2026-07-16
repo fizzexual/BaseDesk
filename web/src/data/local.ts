@@ -716,6 +716,10 @@ export class LocalRepository implements Repository {
     return { ...this.data.businessHours };
   }
 
+  async ticketPresence(): Promise<string[]> {
+    return []; // no live presence in single-user local mode
+  }
+
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     this.data.aiAutomation = {
       autoSuggest: settings.autoSuggest === true,

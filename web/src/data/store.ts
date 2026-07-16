@@ -104,6 +104,8 @@ export interface AppState {
   saveAssignment(settings: AssignmentSettings): Promise<void>;
   saveAutoAck(settings: AutoAck): Promise<void>;
   saveBusinessHours(settings: BusinessHours): Promise<void>;
+  /** Heartbeat presence for a ticket and get back the other viewers' agent ids. */
+  heartbeatPresence(ticketId: string, sessionId: string): Promise<string[]>;
   saveAiAutomation(settings: AiAutomation): Promise<void>;
   saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
@@ -863,6 +865,10 @@ export function createAppStore(repository: Repository) {
         set({ businessHours: prev });
         throw err;
       }
+    },
+
+    heartbeatPresence(ticketId, sessionId) {
+      return repository.ticketPresence(ticketId, sessionId, get().currentAgentId);
     },
 
     async saveAiAutomation(settings) {

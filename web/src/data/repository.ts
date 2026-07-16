@@ -122,6 +122,8 @@ export interface Repository {
   saveAssignment(settings: AssignmentSettings): Promise<AssignmentSettings>;
   saveAutoAck(settings: AutoAck): Promise<AutoAck>;
   saveBusinessHours(settings: BusinessHours): Promise<BusinessHours>;
+  /** Heartbeat + read presence: mark this session as viewing the ticket, get other viewers' agent ids. */
+  ticketPresence(ticketId: string, sessionId: string, agentId: string): Promise<string[]>;
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation>;
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig>;
   getHandover(): Promise<HandoverNote[]>;

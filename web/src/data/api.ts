@@ -254,6 +254,12 @@ export class ApiRepository implements Repository {
   saveBusinessHours(settings: BusinessHours): Promise<BusinessHours> {
     return request('/settings/business-hours', jsonInit('PUT', settings));
   }
+  ticketPresence(ticketId: string, sessionId: string, agentId: string): Promise<string[]> {
+    return request<{ present: string[] }>(
+      `/tickets/${encodeURIComponent(ticketId)}/presence`,
+      jsonInit('POST', { sessionId, agentId }),
+    ).then((r) => r.present);
+  }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));
   }
