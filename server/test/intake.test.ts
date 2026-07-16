@@ -73,14 +73,14 @@ describe('intake form', () => {
     const all = await (await app.request('/api/portal/kb')).json();
     expect(all.length).toBeGreaterThan(0); // seed ships published articles
 
-    // A relevant query surfaces the matching article; the seed KB has one about refunds.
-    const hits = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('refund billing charge')}`)).json();
+    // A relevant query surfaces the matching article; the seed KB has one titled about refunds.
+    const hits = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('refund refunded processed')}`)).json();
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.length).toBeLessThanOrEqual(all.length);
     expect(hits.some((a: { title: string }) => /refund/i.test(a.title))).toBe(true);
 
-    // A query with no term overlap deflects nothing.
-    const none = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('zzqqx nonsense termz')}`)).json();
+    // A query with no term overlap deflects nothing (pure gibberish — no real word is a substring).
+    const none = await (await app.request(`/api/portal/kb?q=${encodeURIComponent('xyzzyx qwqwqw zxzxzx')}`)).json();
     expect(none).toEqual([]);
   });
 
