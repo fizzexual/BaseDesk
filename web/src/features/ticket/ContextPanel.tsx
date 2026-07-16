@@ -21,6 +21,45 @@ import { DealDialog } from '../revenue/DealDialog';
 import { TicketCustomFields } from './TicketCustomFields';
 import { aiEnabled, aiFallbackMessage } from '../ai/engine';
 import { ticketSentiment, SENTIMENT_META } from '../../data/sentiment';
+import { supportTimers, formatDuration } from '../../data/supportTime';
+
+/** Live total- and agent-support clocks, ticking each second while the ticket is open. */
+function SupportTime({ ticket }: { ticket: Ticket }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const timers = supportTimers(ticket, nowMs);
+  useEffect(() => {
+    if (!timers.running) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [timers.running]);
+
+  return (
+    <section className="border-t border-line p-4">
+      <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+        <Tooltip title="Support time" label="Total counts from when the ticket was opened; Agent from your first reply. Both stop when it's solved or closed and resume if reopened.">
+          <span className="inline-flex items-center gap-1.5">
+            Support time
+            {timers.running && (
+              <span aria-hidden className="size-1.5 animate-pulse rounded-full" style={{ background: 'var(--green)' }} />
+            )}
+          </span>
+        </Tooltip>
+      </h3>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12px] text-text-3">Total</span>
+          <span className="text-[13px] font-medium tabular-nums text-text">{formatDuration(timers.totalMs)}</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12px] text-text-3">Agent</span>
+          <span className="text-[13px] font-medium tabular-nums text-text-2">
+            {timers.agentMs === null ? 'Not started' : formatDuration(timers.agentMs)}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function formatLocalTime(timezone: string): string | null {
   try {
@@ -224,6 +263,7 @@ function RevenueAwarePanel({
           </div>
         </section>
       )}
+      <SupportTime ticket={ticket} />
       <section className="border-t border-line p-4">
         <ConversationParticipants ticket={ticket} />
       </section>
