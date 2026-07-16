@@ -9,8 +9,10 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
-import { IconBook, IconCheckCircle, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+import { IconBook, IconCheckCircle, IconList, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
 import { KbQuoteDialog } from './KbQuoteDialog';
+import { CitationEditor } from './CitationEditor';
+import { ChoicePromptEditor, isChoicePromptValid, newChoicePrompt } from './ChoicePromptEditor';
 import { Link } from 'react-router';
 import { useShortcuts } from '../palette/shortcuts';
 import { aiEnabled, aiFallbackMessage } from '../ai/engine';
@@ -41,6 +43,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
   const [drafting, setDrafting] = useState(false);
   const [draftMeta, setDraftMeta] = useState<{ source: AiSource; usage: TokenUsage; reason?: string } | null>(null);
   const [pending, setPending] = useState<Attachment[]>([]);
+  const [pendingEmbeds, setPendingEmbeds] = useState<MessageEmbed[]>([]);
   const [uploading, setUploading] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -141,6 +144,8 @@ export function Composer({ ticket }: { ticket: Ticket }) {
       /* storage unavailable */
     }
     setBody(composerPrefill === null && saved ? saved : '');
+    // Citations are attached to the message, not saved with the draft — start each ticket clean.
+    setPendingEmbeds([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id]);
 
@@ -278,19 +283,30 @@ export function Composer({ ticket }: { ticket: Ticket }) {
 
   function send() {
     const text = body.trim();
-    if (text === '' && pending.length === 0) return;
+    if (text === '' && pending.length === 0 && pendingEmbeds.length === 0) return;
+    // A half-built question would be silently dropped server-side — stop and tell the agent.
+    if (pendingEmbeds.some((e) => e.type === 'choice_prompt' && !isChoicePromptValid(e))) {
+      toast('Add a question and at least two options');
+      return;
+    }
     const ids = pending.map((a) => a.id);
     const sent = pending;
+    const cited = pendingEmbeds;
     setBody('');
     setDraftMeta(null);
     setPending([]);
+    setPendingEmbeds([]);
+    // Dismiss any open @mention / "/" typeahead so it can't linger over the emptied box.
+    setMention(null);
+    setSnippet(null);
     focusTextarea();
     useApp
       .getState()
-      .sendMessage(ticket.id, mode, text, ids)
+      .sendMessage(ticket.id, mode, text, ids, cited)
       .catch(() => {
         setBody(text);
         setPending(sent);
+        setPendingEmbeds(cited);
         toast('Could not send the message');
       });
   }
@@ -355,6 +371,22 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           onChange={switchMode}
         />
       </div>
+      {mode === 'reply' && canned.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {canned.slice(0, 3).map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => applyCanned(c)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[12px] font-medium text-text-2 transition-colors hover:border-line-2 hover:text-text"
+            >
+              {c.actions ? <IconSparkle size={12} className="text-accent" /> : <IconNote size={12} className="text-text-3" />}
+              <span className="max-w-[160px] truncate">{c.title}</span>
+            </button>
+          ))}
+          <span className="ml-1 inline-flex items-center gap-1 text-[11px] text-text-3">Use “/” to insert a template</span>
+        </div>
+      )}
       <div className={cx('relative', mode === 'note' && 'rounded-md bg-amber-bg')}>
         <textarea
           ref={textareaRef}
@@ -378,7 +410,8 @@ export function Composer({ ticket }: { ticket: Ticket }) {
               if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertSnippet(snippetMatches[snippetIdx]); return; }
               if (e.key === 'Escape') { e.preventDefault(); setSnippet(null); return; }
             }
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            // Enter sends; Shift+Enter (and an in-progress IME composition) still make a newline.
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
             } else if (e.key === 'Escape') {
@@ -451,6 +484,27 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           ))}
         </div>
       )}
+      {pendingEmbeds.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5">
+          {pendingEmbeds.map((e, i) =>
+            e.type === 'kb_citation' ? (
+              <CitationEditor
+                key={`${e.articleId}-${i}`}
+                citation={e}
+                onChange={(next) => setPendingEmbeds((prev) => prev.map((x, j) => (j === i ? next : x)))}
+                onRemove={() => setPendingEmbeds((prev) => prev.filter((_, j) => j !== i))}
+              />
+            ) : (
+              <ChoicePromptEditor
+                key={`prompt-${i}`}
+                prompt={e}
+                onChange={(next) => setPendingEmbeds((prev) => prev.map((x, j) => (j === i ? next : x)))}
+                onRemove={() => setPendingEmbeds((prev) => prev.filter((_, j) => j !== i))}
+              />
+            ),
+          )}
+        </div>
+      )}
       <input
         ref={fileRef}
         type="file"
@@ -476,10 +530,16 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           <IconPaperclip size={14} />
           {uploading ? 'Uploading…' : 'Attach'}
         </Button>
-        <Tooltip title="Cite a help article" label="Pull a passage from a published knowledge-base article into your reply, quoted and attributed.">
+        <Tooltip title="Cite a help article" label="Attach a passage from a published knowledge-base article to your reply as a sourced citation.">
           <Button variant="ghost" size="sm" onClick={() => setKbOpen(true)}>
             <IconBook size={14} />
             Cite
+          </Button>
+        </Tooltip>
+        <Tooltip title="Ask a question" label="Give the customer buttons or a dropdown to pick from — their choice comes back as a reply.">
+          <Button variant="ghost" size="sm" onClick={() => setPendingEmbeds((prev) => [...prev, newChoicePrompt()])}>
+            <IconList size={14} />
+            Ask
           </Button>
         </Tooltip>
         {aiEnabled() && (
@@ -513,16 +573,18 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           </span>
         )}
         <div className="flex-1" />
-        <Button size="sm" disabled={body.trim() === '' && pending.length === 0} onClick={send}>
-          <IconSend size={14} />
-          {mode === 'reply' ? 'Reply' : 'Add note'}
-        </Button>
+        <Tooltip label="Enter to send · Shift+Enter for a new line">
+          <Button size="sm" disabled={body.trim() === '' && pending.length === 0 && pendingEmbeds.length === 0} onClick={send}>
+            <IconSend size={14} />
+            {mode === 'reply' ? 'Reply' : 'Add note'}
+          </Button>
+        </Tooltip>
       </div>
       {kbOpen && (
         <KbQuoteDialog
           onClose={() => setKbOpen(false)}
-          onInsert={(text) => {
-            insertAtCursor(text);
+          onCite={(citation) => {
+            setPendingEmbeds((prev) => [...prev, citation]);
             setKbOpen(false);
           }}
         />
