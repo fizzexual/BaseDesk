@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, ArticleCreate, ArticlePatch, ArticleStatus, AutomationCondition, AutomationRule, CannedReply,
   Attachment, Channel, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, Contact, CopilotTriage, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DealStage, DealType,
-  AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
+  AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ScheduledMessage, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
 } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
@@ -98,6 +98,7 @@ interface LocalData {
   assignmentRr: number; // round-robin cursor
   autoAck: AutoAck;
   businessHours: BusinessHours;
+  scheduled: ScheduledMessage[];
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -264,6 +265,7 @@ function seedData(): LocalData {
     assignmentRr: 0,
     autoAck: { ...DEFAULT_AUTO_ACK },
     businessHours: { ...DEFAULT_BUSINESS_HOURS },
+    scheduled: [],
     aiAutomation: { ...DEFAULT_AI_AUTOMATION },
     onCall: { ...DEFAULT_ON_CALL, rotation: [...DEFAULT_ON_CALL.rotation] },
     timeRules: DEFAULT_TIME_RULES.map((r) => ({ ...r, actions: r.actions.map((a) => ({ ...a })) })),
@@ -397,6 +399,10 @@ export class LocalRepository implements Repository {
       }
       if (this.data.businessHours === undefined) {
         this.data.businessHours = { ...DEFAULT_BUSINESS_HOURS };
+        this.persist();
+      }
+      if (this.data.scheduled === undefined) {
+        this.data.scheduled = [];
         this.persist();
       }
       if (this.data.aiAutomation === undefined) {
@@ -722,6 +728,23 @@ export class LocalRepository implements Repository {
 
   async translate(text: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }> {
     return { text, detectedLang: null, source: 'rules', reason: 'off' }; // no model in local mode
+  }
+
+  async scheduleMessage(ticketId: string, kind: 'reply' | 'note', body: string, sendAt: string): Promise<ScheduledMessage> {
+    const row: ScheduledMessage = {
+      id: nextId(this.data.scheduled, 'sm_', 5), ticketId, authorId: CURRENT_AGENT_ID, kind, body, sendAt,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.scheduled.push(row);
+    this.persist();
+    return { ...row };
+  }
+  async listScheduled(ticketId: string): Promise<ScheduledMessage[]> {
+    return this.data.scheduled.filter((s) => s.ticketId === ticketId).map((s) => ({ ...s }));
+  }
+  async cancelScheduled(scheduledId: string): Promise<void> {
+    this.data.scheduled = this.data.scheduled.filter((s) => s.id !== scheduledId);
+    this.persist();
   }
 
   async saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {

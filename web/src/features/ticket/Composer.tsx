@@ -9,7 +9,24 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { toast } from '../../components/Toast';
 import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
-import { IconBook, IconCheckCircle, IconList, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+import { IconBook, IconCheckCircle, IconClock, IconList, IconNote, IconPaperclip, IconReply, IconSend, IconSparkle, IconX } from '../../icons';
+
+/** A local Date `daysAhead` days from now, at the given hour (minutes 0). */
+function atHour(daysAhead: number, hour: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(hour, 0, 0, 0);
+  return d;
+}
+/** The next occurrence of a weekday (0=Sun) at `hour`, always in the future. */
+function nextWeekday(targetDow: number, hour: number): Date {
+  const d = new Date();
+  d.setHours(hour, 0, 0, 0);
+  let add = (targetDow - d.getDay() + 7) % 7;
+  if (add === 0) add = 7; // skip today → next week
+  d.setDate(d.getDate() + add);
+  return d;
+}
 import { KbQuoteDialog } from './KbQuoteDialog';
 import { CitationEditor } from './CitationEditor';
 import { ChoicePromptEditor, isChoicePromptValid, newChoicePrompt } from './ChoicePromptEditor';
@@ -311,6 +328,29 @@ export function Composer({ ticket }: { ticket: Ticket }) {
       });
   }
 
+  function scheduleSend(when: Date) {
+    const text = body.trim();
+    if (text === '') {
+      toast('Write a message first, then schedule it');
+      return;
+    }
+    if (pending.length > 0 || pendingEmbeds.length > 0) {
+      toast('Scheduled sends are text only — remove attachments/cards first');
+      return;
+    }
+    setBody('');
+    setMention(null);
+    setSnippet(null);
+    useApp
+      .getState()
+      .scheduleMessage(ticket.id, mode, text, when.toISOString())
+      .then(() => toast(`Scheduled for ${when.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`))
+      .catch(() => {
+        setBody(text);
+        toast('Could not schedule the message');
+      });
+  }
+
   const cannedItems: MenuItem[] =
     canned.length > 0
       ? canned.map((c) => ({
@@ -573,6 +613,20 @@ export function Composer({ ticket }: { ticket: Ticket }) {
           </span>
         )}
         <div className="flex-1" />
+        <Tooltip label="Send later">
+          <Menu
+            align="end"
+            triggerLabel="Send later"
+            triggerClassName="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+            trigger={<IconClock size={15} />}
+            items={[
+              { label: 'In 1 hour', onSelect: () => scheduleSend(new Date(Date.now() + 3_600_000)) },
+              { label: 'In 3 hours', onSelect: () => scheduleSend(new Date(Date.now() + 3 * 3_600_000)) },
+              { label: 'Tomorrow, 9:00 AM', onSelect: () => scheduleSend(atHour(1, 9)) },
+              { label: 'Monday, 9:00 AM', onSelect: () => scheduleSend(nextWeekday(1, 9)) },
+            ]}
+          />
+        </Tooltip>
         <Tooltip label="Enter to send · Shift+Enter for a new line">
           <Button size="sm" disabled={body.trim() === '' && pending.length === 0 && pendingEmbeds.length === 0} onClick={send}>
             <IconSend size={14} />

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, BusinessHours, OnCallConfig, TimeRule, ModelCache,
+  AccountHealth, AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiAutomation, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AssignmentSettings, AutoAck, BusinessHours, ScheduledMessage, OnCallConfig, TimeRule, ModelCache,
   AgentInvite, AgentPatch, ArticleCreate, ArticlePatch, Attachment, AutomationRule, CannedReply, TicketTemplate, CustomReport, Announcement, Branding, ChannelConn, ChannelCreate,
   ChannelPatch, ChannelTestResult, Contact, CopilotTriage, Counts, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketLink, TicketLinkType, SavedView, SavedViewCreate, Deal, DealCreate, DealPatch, DraftResult, KbArticle, Message,
   MessageEmbed, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, SummaryResult, Ticket, TicketPatch, TicketPriority, TokenUsage, ViewId,
@@ -21,6 +21,7 @@ export interface AppState {
   assignment: AssignmentSettings;
   autoAck: AutoAck;
   businessHours: BusinessHours;
+  scheduled: Record<string, ScheduledMessage[]>; // pending scheduled sends, keyed by ticketId
   aiAutomation: AiAutomation;
   onCall: OnCallConfig;
   timeRules: TimeRule[];
@@ -108,6 +109,9 @@ export interface AppState {
   heartbeatPresence(ticketId: string, sessionId: string): Promise<string[]>;
   /** Translate text into targetLang (default English) via the configured model. */
   aiTranslate(text: string, targetLang?: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }>;
+  /** Queue a reply/note to post to a ticket at a future ISO time. */
+  scheduleMessage(ticketId: string, kind: 'reply' | 'note', body: string, sendAt: string): Promise<void>;
+  cancelScheduled(ticketId: string, scheduledId: string): Promise<void>;
   saveAiAutomation(settings: AiAutomation): Promise<void>;
   saveOnCall(config: OnCallConfig): Promise<void>;
   saveTimeRules(rules: TimeRule[]): Promise<void>;
@@ -219,6 +223,7 @@ export function createAppStore(repository: Repository) {
     assignment: { enabled: false, strategy: 'round_robin' },
     autoAck: DEFAULT_AUTO_ACK,
     businessHours: DEFAULT_BUSINESS_HOURS,
+    scheduled: {},
     aiAutomation: DEFAULT_AI_AUTOMATION,
     onCall: DEFAULT_ON_CALL,
     timeRules: DEFAULT_TIME_RULES,
@@ -338,7 +343,7 @@ export function createAppStore(repository: Repository) {
       ]);
       // Fetch read receipts after messages resolve — opening the thread records
       // the current agent as having seen it, and we want that reflected.
-      const [seen, intake, followers, tasks, links, approvals, sideConvos] = await Promise.all([
+      const [seen, intake, followers, tasks, links, approvals, sideConvos, sched] = await Promise.all([
         repository.getTicketSeen(ticketId).catch(() => [] as TicketSeen[]),
         repository.getTicketIntake(ticketId).catch(() => [] as IntakeAnswer[]),
         repository.getFollowers(ticketId).catch(() => [] as TicketFollower[]),
@@ -346,9 +351,11 @@ export function createAppStore(repository: Repository) {
         repository.getLinks(ticketId).catch(() => [] as TicketLink[]),
         repository.getApprovals(ticketId).catch(() => [] as TicketApproval[]),
         repository.getSideConversations(ticketId).catch(() => [] as SideConversation[]),
+        repository.listScheduled(ticketId).catch(() => [] as ScheduledMessage[]),
       ]);
       set((s) => ({
         messages: { ...s.messages, [ticketId]: msgs },
+        scheduled: { ...s.scheduled, [ticketId]: sched },
         ticketEvents: { ...s.ticketEvents, [ticketId]: events },
         ticketSeen: { ...s.ticketSeen, [ticketId]: seen },
         ticketIntake: { ...s.ticketIntake, [ticketId]: intake },
@@ -875,6 +882,22 @@ export function createAppStore(repository: Repository) {
 
     aiTranslate(text, targetLang) {
       return repository.translate(text, targetLang ?? 'English');
+    },
+
+    async scheduleMessage(ticketId, kind, body, sendAt) {
+      const row = await repository.scheduleMessage(ticketId, kind, body, sendAt);
+      set((s) => ({
+        scheduled: {
+          ...s.scheduled,
+          [ticketId]: [...(s.scheduled[ticketId] ?? []), row].sort((a, b) => a.sendAt.localeCompare(b.sendAt)),
+        },
+      }));
+    },
+    async cancelScheduled(ticketId, scheduledId) {
+      await repository.cancelScheduled(scheduledId);
+      set((s) => ({
+        scheduled: { ...s.scheduled, [ticketId]: (s.scheduled[ticketId] ?? []).filter((x) => x.id !== scheduledId) },
+      }));
     },
 
     async saveAiAutomation(settings) {

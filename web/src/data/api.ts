@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
-  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, ScheduledMessage, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -262,6 +262,15 @@ export class ApiRepository implements Repository {
   }
   translate(text: string, targetLang: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }> {
     return request('/ai/translate', jsonInit('POST', { text, targetLang }));
+  }
+  scheduleMessage(ticketId: string, kind: 'reply' | 'note', body: string, sendAt: string): Promise<ScheduledMessage> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/schedule`, jsonInit('POST', { kind, body, sendAt }));
+  }
+  listScheduled(ticketId: string): Promise<ScheduledMessage[]> {
+    return request(`/tickets/${encodeURIComponent(ticketId)}/scheduled`);
+  }
+  cancelScheduled(scheduledId: string): Promise<void> {
+    return request<{ ok: true }>(`/scheduled/${encodeURIComponent(scheduledId)}`, { method: 'DELETE' }).then(() => undefined);
   }
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation> {
     return request('/settings/ai-automation', jsonInit('PUT', settings));

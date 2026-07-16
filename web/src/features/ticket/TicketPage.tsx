@@ -5,6 +5,7 @@ import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/
 import { computeTicketSla } from '../../data/sla';
 import { findSimilarTicket } from '../../data/similarTickets';
 import { PresenceBar } from './Presence';
+import { ScheduledList } from './ScheduledList';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { cx } from '../../components/util';
@@ -481,6 +482,7 @@ export function TicketPage() {
         ) : (
           <>
             <DraftBanner ticket={ticket} />
+            <ScheduledList ticketId={ticket.id} />
             <Composer ticket={ticket} />
           </>
         )}

@@ -1,6 +1,6 @@
 import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, AiUsage, Agent, AgentInvite, Attachment, ModelCache,
-  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
+  AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, BusinessHours, ScheduledMessage, HandoverNote, OnCallConfig, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
@@ -126,6 +126,10 @@ export interface Repository {
   ticketPresence(ticketId: string, sessionId: string, agentId: string): Promise<string[]>;
   /** Translate arbitrary text into `targetLang` via the configured model (falls back to the original). */
   translate(text: string, targetLang: string): Promise<{ text: string; detectedLang: string | null; source: 'model' | 'rules'; reason?: string }>;
+  /** Queue a reply/note to post to a ticket at a future time; list a ticket's pending ones; cancel one. */
+  scheduleMessage(ticketId: string, kind: 'reply' | 'note', body: string, sendAt: string): Promise<ScheduledMessage>;
+  listScheduled(ticketId: string): Promise<ScheduledMessage[]>;
+  cancelScheduled(scheduledId: string): Promise<void>;
   saveAiAutomation(settings: AiAutomation): Promise<AiAutomation>;
   saveOnCall(config: OnCallConfig): Promise<OnCallConfig>;
   getHandover(): Promise<HandoverNote[]>;
