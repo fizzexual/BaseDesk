@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useApp } from '../../data/store';
 import type { ChannelConn, Ticket, TicketPatch, TicketStatus } from '../../data/types';
 import { computeTicketSla } from '../../data/sla';
+import { findSimilarTicket } from '../../data/similarTickets';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { cx } from '../../components/util';
@@ -230,6 +231,35 @@ function TagsRow({ ticket, onPatch }: { ticket: Ticket; onPatch: (patch: TicketP
   );
 }
 
+/** Slim "possible duplicate" banner: surfaces the closest-looking existing ticket. */
+function SimilarTicketHint({ ticket }: { ticket: Ticket }) {
+  const tickets = useApp((s) => s.tickets);
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => setDismissed(false), [ticket.id]); // re-evaluate when switching tickets
+  const match = useMemo(() => findSimilarTicket(ticket, Object.values(tickets)), [ticket, tickets]);
+  if (ticket.mergedIntoId !== null || match === null || dismissed) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-line bg-blue-bg px-4 py-2 text-[13px]">
+      <IconMerge size={14} className="shrink-0 text-blue" />
+      <span className="min-w-0 flex-1 truncate text-text-2">
+        This ticket looks like{' '}
+        <Link to={`/ticket/${match.ticket.id}`} className="font-medium text-accent hover:underline">
+          #{match.ticket.number} “{match.ticket.subject}”
+        </Link>
+        {match.sameRequester ? ' — same contact' : ''}
+      </span>
+      <button
+        type="button"
+        aria-label="Dismiss duplicate hint"
+        className="shrink-0 rounded-sm p-0.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
+        onClick={() => setDismissed(true)}
+      >
+        <IconX size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function TicketPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
@@ -429,6 +459,7 @@ export function TicketPage() {
         </header>
         <TagsRow ticket={ticket} onPatch={patch} />
         <TriageBar key={ticket.id} ticket={ticket} />
+        <SimilarTicketHint ticket={ticket} />
         <Conversation ticket={ticket} />
         {ticket.mergedIntoId !== null ? (
           <div className="shrink-0 border-t border-line p-3">
