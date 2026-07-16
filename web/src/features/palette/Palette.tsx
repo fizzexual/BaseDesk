@@ -179,6 +179,7 @@ export function Palette() {
     { kind: 'action', id: 'go-reports', label: 'Go to Reports', icon: IconChart, run: () => navigate('/reports') },
     { kind: 'action', id: 'go-wallboard', label: 'Open wallboard (TV dashboard)', icon: IconChart, run: () => navigate('/wallboard') },
     { kind: 'action', id: 'go-kb', label: 'Go to Knowledge base', icon: IconBook, run: () => navigate('/kb') },
+    { kind: 'action', id: 'go-docs', label: 'Open the System Guide', icon: IconBook, run: () => navigate('/docs') },
     { kind: 'action', id: 'go-channels', label: 'Go to Channels', icon: IconChannels, run: () => navigate('/channels') },
     { kind: 'action', id: 'go-contacts', label: 'Go to Contacts', icon: IconContacts, run: () => navigate('/contacts') },
     { kind: 'action', id: 'go-team', label: 'Go to Team', icon: IconTeam, run: () => navigate('/team') },

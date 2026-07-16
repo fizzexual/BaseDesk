@@ -23,6 +23,7 @@ import { ResolvedPage } from '../features/ai/ResolvedPage';
 import { KbPage } from '../features/kb/KbPage';
 import { ChannelsPage } from '../features/channels/ChannelsPage';
 import { WallboardPage } from '../features/wallboard/WallboardPage';
+import { DocsPage } from '../features/docs/DocsPage';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -69,6 +70,8 @@ function AgentApp() {
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/contacts/:id" element={<ContactPage />} />
           <Route path="/team" element={<TeamPage />} />
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/docs/:slug" element={<DocsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/reports/builder" element={<ReportBuilderPage />} />
           <Route path="/status" element={<StatusPage />} />

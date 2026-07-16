@@ -1,0 +1,402 @@
+// The System Guide: built-in, read-only documentation for every BaseDesk feature.
+// This ships with the app (not stored in the database), so it is never editable —
+// it always describes the running version. Bodies are Markdown, rendered by the
+// shared Markdown component. Keep entries accurate to what the app actually does.
+
+export interface DocArticle {
+  category: string;
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+}
+
+/** Categories in reading order (a "getting started"-style one stays first). */
+export const DOC_CATEGORIES: string[] = [
+  'Getting around',
+  'Working tickets',
+  'Replying to customers',
+  'AI copilot',
+  'Automation & routing',
+  'Customer-facing',
+  'Team & insight',
+  'Channels & setup',
+];
+
+export const DOCS: DocArticle[] = [
+  {
+    category: 'Getting around',
+    slug: 'overview',
+    title: 'What BaseDesk is',
+    summary: 'The shape of the app and how the pieces fit together.',
+    body: [
+      'BaseDesk is a self-hostable helpdesk. Customers reach you through channels (email, chat, and more), each message becomes a **ticket**, and your team works those tickets from a shared inbox — with an AI copilot, a knowledge base, a customer portal, automation, reporting, and a light CRM alongside.',
+      '',
+      '## The layout',
+      '- **Left rail** — top-level navigation: Inbox, Channels, Contacts, Team, Revenue, AI agents, Reports, and this Guide.',
+      '- **Inbox** — the list of tickets for the selected view.',
+      '- **Ticket view** — the conversation in the middle, with a details panel on the right (contact, support time, CSAT, custom fields, linked deals, and more).',
+      '- **Command palette** — press **⌘K** (or **Ctrl-K**) to jump anywhere or run an action.',
+      '',
+      'Everything is one SQLite database and a dependency-light React front-end, so it runs anywhere Node runs.',
+    ].join('\n'),
+  },
+  {
+    category: 'Getting around',
+    slug: 'inbox-and-views',
+    title: 'Inbox & views',
+    summary: 'The built-in queues, sorting, and saved views.',
+    body: [
+      'The inbox shows one **view** at a time. Built-in views include **All**, **Unassigned**, **Mine**, **Awaiting reply** (the customer is waiting on you), and per-status views (**Open**, **Pending**, **On hold**, **Solved**, **Closed**), plus **Snoozed**, **Archive**, and **Spam**.',
+      '',
+      'Tickets sort by most-recent activity. Large views are paginated for speed — the newest matches render first. You can also save your own filtered **saved views**.',
+      '',
+      '**Awaiting reply** is the queue that matters most day-to-day: it lists tickets where the customer sent the last public message and no one has answered yet.',
+    ].join('\n'),
+  },
+  {
+    category: 'Getting around',
+    slug: 'palette-and-shortcuts',
+    title: 'Command palette & shortcuts',
+    summary: 'Move fast without the mouse.',
+    body: [
+      'Press **⌘K** / **Ctrl-K** to open the command palette. From there you can jump to any view, open a ticket by number or subject, or run actions like **New ticket**, **New contact**, **Toggle theme**, and **Open wallboard**.',
+      '',
+      '## Handy shortcuts',
+      '| Keys | Action |',
+      '| --- | --- |',
+      '| **⌘K** | Command palette |',
+      '| **G** then **T** | Go to Team |',
+      '| **Enter** (in composer) | Send · **Shift+Enter** for a new line |',
+      '',
+      'The full shortcut list is in the palette under **Keyboard shortcuts**.',
+    ].join('\n'),
+  },
+  {
+    category: 'Getting around',
+    slug: 'notifications-mentions',
+    title: 'Notifications & @mentions',
+    summary: 'Stay in the loop on the tickets you care about.',
+    body: [
+      'The **bell** in the top bar collects your notifications — replies on tickets you follow, assignments, and @mentions.',
+      '',
+      'In an **internal note**, type **@** and a teammate’s name to mention them. They get a notification linking back to the ticket. Mentions work with non-ASCII names too. You start **following** a ticket automatically when you act on it, so later activity reaches you.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Working tickets',
+    slug: 'ticket-lifecycle',
+    title: 'Ticket lifecycle',
+    summary: 'Statuses, priority, snooze, and reopening.',
+    body: [
+      '## Statuses',
+      '- **Open** — needs attention.',
+      '- **Pending** — you replied; waiting on the customer.',
+      '- **On hold** — parked, waiting on something internal.',
+      '- **Solved** / **Closed** — resolved. A closed ticket is locked; reopen it to reply.',
+      '',
+      '## Priority',
+      'Every ticket has a priority (**Urgent / High / Medium / Low**). The AI can suggest one, automation can set one, and you can change it from the header.',
+      '',
+      '## Snooze',
+      'Snooze hides a ticket from your queues until a chosen time, then it reopens automatically — good for "check back tomorrow" follow-ups.',
+    ].join('\n'),
+  },
+  {
+    category: 'Working tickets',
+    slug: 'assignment-routing',
+    title: 'Assignment & routing',
+    summary: 'Who gets the ticket — by hand or automatically.',
+    body: [
+      'Assign a ticket to a teammate from the header, or let **auto-assignment** do it (Settings → assignment). Two strategies:',
+      '- **Round-robin** — cycle through eligible agents in turn.',
+      '- **Least busy** — pick whoever has the fewest active tickets.',
+      '',
+      '## Skills & language routing',
+      'Auto-assignment respects **skills** and **language**:',
+      '1. If the ticket has a category and any agent **covers** that category (Settings → Team → *Handles categories*), the pool narrows to those coverers.',
+      '2. Within that pool, if the opening message is detected to be in a specific non-English language and an agent **speaks** it (Settings → Team → *Speaks*), it routes to a speaker.',
+      '',
+      'Both are soft preferences — if no one matches, the ticket still gets assigned rather than stranded.',
+    ].join('\n'),
+  },
+  {
+    category: 'Working tickets',
+    slug: 'merge-split',
+    title: 'Merge & split',
+    summary: 'Combine duplicates or break one ticket into two.',
+    body: [
+      '## Merge (mark as duplicate)',
+      'From a ticket’s **⋯ → Merge into…**, pick the ticket this one duplicates. GitHub-style: the source **keeps its own conversation**, is closed as a read-only pointer to the target, and the target gets a cross-reference note. Nothing is moved or deleted, and you stay on the source (which now shows a "merged into #N" banner with a button to open the target).',
+      '',
+      '## Split',
+      '**⋯ → Split…** moves selected messages out of a ticket into a new, related ticket — the inverse of merge — for when one thread is really two issues.',
+      '',
+      'BaseDesk also surfaces a **"This ticket looks like #N"** hint at the top of a ticket when it finds a close match by subject (boosted when it’s from the same contact), so you can spot duplicates before you reply.',
+    ].join('\n'),
+  },
+  {
+    category: 'Working tickets',
+    slug: 'time-tracking',
+    title: 'Time tracking',
+    summary: 'Two live clocks per ticket.',
+    body: [
+      'The ticket details panel shows **Support time** with two clocks that tick live while the ticket is open:',
+      '- **Total** — counts from when the ticket was opened.',
+      '- **Agent** — counts from your first reply (shows "Not started" until then).',
+      '',
+      'Both **freeze** the moment the ticket is solved or closed, and resume if it’s reopened. They’re derived from the ticket’s own timestamps, so there’s nothing to start or stop manually.',
+    ].join('\n'),
+  },
+  {
+    category: 'Working tickets',
+    slug: 'collision-detection',
+    title: 'Collision detection',
+    summary: 'See who else is on a ticket before you reply.',
+    body: [
+      'When more than one person has the same ticket open, an **"Also viewing"** indicator with their avatars appears in the ticket header. Hover it to see who — a nudge to coordinate before two people reply at once.',
+      '',
+      'Presence is live (each tab checks in every few seconds) and ephemeral — it’s never stored, and someone drops off a few seconds after they navigate away.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Replying to customers',
+    slug: 'the-composer',
+    title: 'The composer',
+    summary: 'Replies, internal notes, attachments, and sending.',
+    body: [
+      'At the bottom of a ticket, switch between **Reply** (goes to the customer) and **Note** (internal, team-only). **Enter** sends; **Shift+Enter** adds a new line. Attach files with the paperclip.',
+      '',
+      'A **reply** notifies the customer over their channel (email, etc.) and moves the ticket to *Pending*. A **note** never reaches the customer and can @mention teammates.',
+    ].join('\n'),
+  },
+  {
+    category: 'Replying to customers',
+    slug: 'canned-replies-macros',
+    title: 'Canned replies & macros',
+    summary: 'Reusable responses that can also change the ticket.',
+    body: [
+      'Save common responses as **canned replies** (Settings → Canned replies). Insert one in the composer by typing **/** and picking from the list, or via the quick-reply chips.',
+      '',
+      'A canned reply can also carry **macro actions** — applying it can set the status, priority, or a tag and add the text in one move. Canned replies marked with a spark do more than paste text.',
+    ].join('\n'),
+  },
+  {
+    category: 'Replying to customers',
+    slug: 'citations-and-choices',
+    title: 'KB citations & choice prompts',
+    summary: 'Structured cards you attach to a reply.',
+    body: [
+      '## KB citations',
+      'From the composer you can **cite** a knowledge-base article: it attaches a structured card quoting the relevant passage. Before sending, you can **highlight** words or sentences in the passage in a colour to draw the eye. Customers see an attributed quote; agents see the card.',
+      '',
+      '## Choice prompts',
+      'Ask the customer to pick from options rendered as **buttons** or a **dropdown**. When they tap a choice in the portal, their answer is recorded and posted back into the conversation — handy for "which plan are you on?"-style questions.',
+    ].join('\n'),
+  },
+  {
+    category: 'Replying to customers',
+    slug: 'translation',
+    title: 'Translation',
+    summary: 'Read a customer’s message in your language.',
+    body: [
+      'On a customer message, click **Translate** to render it in your language using the configured AI model. It shows the detected source language and a toggle back to the original.',
+      '',
+      'Translation is precise (it uses whatever model you’ve set up, including a local one) and degrades gracefully — with no provider configured, the Translate control simply isn’t offered. See **AI copilot → Setting up a model**.',
+    ].join('\n'),
+  },
+  {
+    category: 'Replying to customers',
+    slug: 'scheduled-send',
+    title: 'Scheduled send',
+    summary: 'Queue a reply or note to post later.',
+    body: [
+      'Next to the Send button is a **🕐 Send later** menu. Write your message, pick a time (in 1 hour, in 3 hours, tomorrow morning, Monday morning), and it’s queued.',
+      '',
+      'Pending scheduled sends appear above the composer with a **Cancel** button. They fire automatically at their time (skipping tickets that were closed or merged in the meantime), reusing the normal reply path — so SLA and follow state update just as if you’d sent it live.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'AI copilot',
+    slug: 'ai-setup',
+    title: 'Setting up a model',
+    summary: 'Connect an AI provider — and what happens without one.',
+    body: [
+      'BaseDesk’s AI features call an **OpenAI-compatible** provider you configure in **Settings → AI** (base URL, API key, model). This can be a hosted API or a **local** model — the key never leaves your server.',
+      '',
+      'Everything degrades gracefully: with no provider, AI features fall back to deterministic rule-based behaviour or simply don’t appear (like the Translate control). AI is also **manual by default** — nothing runs on its own until you opt in.',
+    ].join('\n'),
+  },
+  {
+    category: 'AI copilot',
+    slug: 'ai-features',
+    title: 'What the copilot does',
+    summary: 'Drafts, triage, sentiment, summaries, and auto-resolve.',
+    body: [
+      '- **Draft a reply** — grounded in your knowledge base, from the composer.',
+      '- **Triage** — suggest a priority and tags for a new ticket (raise-only; it never lowers what you set).',
+      '- **Sentiment** — a quick read of the customer’s tone, shown in the details panel.',
+      '- **Summarise thread** — condense a long conversation for a fast hand-off.',
+      '- **Auto-resolve** (opt-in) — let an agent send a KB-backed reply and close a ticket on its own, only when it’s confident.',
+      '',
+      'Each automatic behaviour is a separate switch in **Settings → AI** — off until you turn it on. Reports also flag **knowledge gaps**: recurring questions your KB doesn’t answer yet.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Automation & routing',
+    slug: 'automation-rules',
+    title: 'Automation rules',
+    summary: 'When X, do Y — applied as tickets arrive.',
+    body: [
+      'In **Settings → Automation**, build rules that run when a ticket is created. Each rule is a set of **conditions** (subject contains, message contains, sender contains, priority is, channel is) and **actions** (set priority, set status, set category, add tag, assign to).',
+      '',
+      'Rules run in order, so a Spam rule can tag and archive junk before anything else touches it, and a VIP rule can raise priority for known senders.',
+    ].join('\n'),
+  },
+  {
+    category: 'Automation & routing',
+    slug: 'business-hours',
+    title: 'Business hours',
+    summary: 'Auto-reply with a reopen countdown when you’re closed.',
+    body: [
+      'In **Settings → Business hours**, set your **time zone** and a per-day open/close schedule, then turn on the outside-hours auto-reply and edit its message.',
+      '',
+      'When a customer opens a ticket **outside** those hours, BaseDesk automatically posts an editable reply — with a **live countdown** to when you reopen, shown in the customer’s own local time. It doesn’t count as your first human response, so SLA still measures a real reply. Placeholders **{{name}}** and **{{number}}** are supported in the message.',
+    ].join('\n'),
+  },
+  {
+    category: 'Automation & routing',
+    slug: 'sla-time-rules',
+    title: 'SLA & time-based rules',
+    summary: 'Response/resolution targets and escalations.',
+    body: [
+      '**SLA targets** (Settings → SLA) define how quickly tickets should get a first response and a resolution, by priority. Each ticket shows an SLA badge that turns urgent as a target approaches or is missed.',
+      '',
+      '**Time rules** act on age — for example, escalate a ticket that hasn’t had a first response in N hours, or clean up stale tickets. They’re evaluated on a schedule.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Customer-facing',
+    slug: 'customer-portal',
+    title: 'The customer portal',
+    summary: 'Where customers self-serve and track tickets.',
+    body: [
+      'The **portal** is the customer-facing side, served separately from the admin app. It has a public **help center**, a guided **new-ticket** flow, and a signed-in area where customers track their tickets and reply.',
+      '',
+      'The help center is public (no login needed to read docs). Opening or tracking a ticket uses a customer account (register / sign in). When you host BaseDesk publicly, expose only the portal — the admin app has no login and is meant to stay on your network.',
+    ].join('\n'),
+  },
+  {
+    category: 'Customer-facing',
+    slug: 'knowledge-base',
+    title: 'Knowledge base',
+    summary: 'Customer-facing help articles, written in Markdown.',
+    body: [
+      'The **knowledge base** (rail → Knowledge base) holds customer-facing articles. Write them in **Markdown** — headings, bold/italic, lists, links, tables, code blocks — with a Write/Preview toggle. Draft stays private; **Published** makes it live in the help center and available to the AI for drafting and deflection.',
+      '',
+      'This is different from **this Guide**: the KB is your editable customer content; the Guide is built-in, read-only documentation of BaseDesk itself.',
+    ].join('\n'),
+  },
+  {
+    category: 'Customer-facing',
+    slug: 'intake-and-deflection',
+    title: 'Intake form & deflection',
+    summary: 'A guided form that routes and deflects.',
+    body: [
+      'The **intake form** (Settings → Ticket form) is a decision tree the customer walks when opening a ticket. Each choice can set the ticket’s **category** and add **tags**, so tickets arrive pre-routed. The captured questions/answers show in the ticket’s details panel.',
+      '',
+      'As the customer types, matching KB articles are surfaced to **deflect** — answering the question before a ticket is even created.',
+    ].join('\n'),
+  },
+  {
+    category: 'Customer-facing',
+    slug: 'csat-status-branding',
+    title: 'CSAT, status page & branding',
+    summary: 'Satisfaction ratings, incident comms, and white-labeling.',
+    body: [
+      '## CSAT',
+      'After a ticket is solved or closed, the customer can leave a **1–5 satisfaction rating** with a comment. It shows in the ticket’s details panel and rolls up into Reports and the wallboard.',
+      '',
+      '## Status page & announcements',
+      'Publish a public **status page** with component health and **incidents**, and show in-portal **announcement** banners (info / warning / critical).',
+      '',
+      '## Branding',
+      'Set your product name and accent colour (Settings → Appearance / branding) to white-label the portal.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Team & insight',
+    slug: 'team-page',
+    title: 'Team page',
+    summary: 'Everyone and what they’re carrying.',
+    body: [
+      'The **Team** page (rail → Team) lists every member with their current **workload** and their **assigned tickets**, so you can rebalance at a glance. Reassign from a member’s card, assign to yourself, or unassign.',
+      '',
+      'A **"Needs reassignment"** bucket collects tickets assigned to people who are no longer active. Manage each teammate’s **categories** (skills) and **languages** in Settings → Team — these drive auto-assignment.',
+    ].join('\n'),
+  },
+  {
+    category: 'Team & insight',
+    slug: 'wallboard',
+    title: 'Wallboard (TV dashboard)',
+    summary: 'Live team metrics on a big screen.',
+    body: [
+      'The **wallboard** is a full-screen, chrome-less dashboard meant to live on a TV or second monitor. Open it at **/wallboard** or via the command palette → **Open wallboard**.',
+      '',
+      'It auto-refreshes and shows: open tickets, unassigned, awaiting reply, oldest wait, solved today, CSAT today, and an **"On it now"** per-agent load list — plus a live clock.',
+    ].join('\n'),
+  },
+  {
+    category: 'Team & insight',
+    slug: 'reports-and-revenue',
+    title: 'Reports & Revenue',
+    summary: 'Analytics, the leaderboard, and the light CRM.',
+    body: [
+      '## Reports',
+      '**Reports** cover volume, resolution time, and CSAT, with a per-agent productivity **leaderboard** and a **knowledge-gap** finder (recurring questions your KB misses). Build custom cuts in the **report builder**.',
+      '',
+      '## Revenue',
+      'BaseDesk includes a light CRM: log **deals / opportunities** against a contact (right from a ticket’s details panel), track stage (open / won / lost) and value, and see revenue context while you support that customer.',
+    ].join('\n'),
+  },
+  {
+    category: 'Team & insight',
+    slug: 'audit-handover',
+    title: 'Audit log & handover',
+    summary: 'A record of changes and shift hand-offs.',
+    body: [
+      'The **audit log** records who changed what and when across the workspace — useful for accountability and debugging "who closed this?".',
+      '',
+      '**Handover** is a shared notes space for passing context between shifts, so the next person on knows where things stand.',
+    ].join('\n'),
+  },
+
+  {
+    category: 'Channels & setup',
+    slug: 'channels',
+    title: 'Channels',
+    summary: 'Where tickets come from.',
+    body: [
+      'Connect the places customers reach you in **Channels** (rail → Channels). Supported types include **Email**, **Web chat**, **Discord**, **Slack**, **WhatsApp**, and generic **Webhook**. Inbound messages become tickets; replies go back out over the same channel.',
+      '',
+      'Each ticket shows its **source channel** in the header, so you know where a conversation is happening.',
+    ].join('\n'),
+  },
+  {
+    category: 'Channels & setup',
+    slug: 'custom-fields',
+    title: 'Custom fields & templates',
+    summary: 'Capture the extra data you need.',
+    body: [
+      '**Custom fields** (Settings → Ticket fields) add structured metadata to tickets — text, number, select, checkbox, or date — shown and editable in the details panel.',
+      '',
+      '**Ticket templates** pre-fill common ticket setups, and **auto-acknowledgement** (Settings) can send an instant "we got your message" reply on every new ticket (separate from the outside-hours auto-reply).',
+    ].join('\n'),
+  },
+];

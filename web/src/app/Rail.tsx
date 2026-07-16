@@ -12,6 +12,7 @@ import {
   IconContacts,
   IconHistory,
   IconInbox,
+  IconList,
   IconLogo,
   IconLogOut,
   IconRevenue,
@@ -36,6 +37,7 @@ const NAV = [
   { to: '/handover', label: 'Handover', icon: IconClipboard, matches: ['/handover'] },
   { to: '/status', label: 'Status', icon: IconActivity, matches: ['/status'] },
   { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
+  { to: '/docs', label: 'Guide', icon: IconList, matches: ['/docs'] },
 ];
 
 function RailButton({
