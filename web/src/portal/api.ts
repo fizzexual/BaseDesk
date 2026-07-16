@@ -2,7 +2,7 @@
 // from the agent-side Repository/store: a customer is a different principal, sees
 // only their own data, and authenticates with a bearer token kept in localStorage.
 
-import type { Announcement, Attachment, Branding, Contact, IntakeAnswer, IntakeForm, KbArticle, Ticket, TicketPriority } from '../data/types';
+import type { Announcement, Attachment, Branding, Contact, IntakeAnswer, IntakeForm, KbArticle, MessageEmbed, Ticket, TicketPriority } from '../data/types';
 
 const TOKEN_KEY = 'basedesk-portal-token';
 
@@ -14,6 +14,8 @@ export interface PortalMessage {
   body: string;
   at: string;
   attachments: Attachment[];
+  /** Structured cards (e.g. KB citations, with any agent highlights) shown beneath the body. */
+  embeds?: MessageEmbed[];
 }
 
 /** A support agent on the thread + when they last viewed it (a read receipt for the customer). */
@@ -106,6 +108,13 @@ export const portalApi = {
   },
   reply(id: string, message: string, attachmentIds?: string[]) {
     return req<{ ticket: Ticket }>(`/tickets/${encodeURIComponent(id)}/messages`, body({ body: message, attachmentIds }));
+  },
+  /** Answer a choice prompt on an agent message: records the pick and posts it as a reply. */
+  answerChoice(ticketId: string, messageId: string, embedIndex: number, optionIds: string[]) {
+    return req<{ ok: true }>(
+      `/tickets/${encodeURIComponent(ticketId)}/messages/${encodeURIComponent(messageId)}/answer`,
+      body({ embedIndex, optionIds }),
+    );
   },
   /** Upload a file (unlinked until a message references it via attachmentIds). */
   async uploadAttachment(file: File): Promise<Attachment> {
