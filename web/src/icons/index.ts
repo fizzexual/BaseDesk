@@ -7,6 +7,7 @@ export { IconImport } from './IconImport';
 export { IconInbox } from './IconInbox';
 export { IconTicket } from './IconTicket';
 export { IconContacts } from './IconContacts';
+export { IconTeam } from './IconTeam';
 export { IconUser } from './IconUser';
 export { IconUserPlus } from './IconUserPlus';
 export { IconPlay } from './IconPlay';
