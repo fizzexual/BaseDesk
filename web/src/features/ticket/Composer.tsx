@@ -494,14 +494,14 @@ export function Composer({ ticket }: { ticket: Ticket }) {
                 onChange={(next) => setPendingEmbeds((prev) => prev.map((x, j) => (j === i ? next : x)))}
                 onRemove={() => setPendingEmbeds((prev) => prev.filter((_, j) => j !== i))}
               />
-            ) : (
+            ) : e.type === 'choice_prompt' ? (
               <ChoicePromptEditor
                 key={`prompt-${i}`}
                 prompt={e}
                 onChange={(next) => setPendingEmbeds((prev) => prev.map((x, j) => (j === i ? next : x)))}
                 onRemove={() => setPendingEmbeds((prev) => prev.filter((_, j) => j !== i))}
               />
-            ),
+            ) : null,
           )}
         </div>
       )}

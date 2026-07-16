@@ -10,6 +10,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TimeAgo } from '../components/TimeAgo';
 import { toast } from '../components/Toast';
 import { cx } from '../components/util';
+import { OutsideHoursCard } from '../features/ticket/OutsideHoursCard';
 import { attachmentUrl, formatBytes, isImage } from '../data/attachments';
 import type { Attachment, ChoicePrompt, KbCitation, Ticket } from '../data/types';
 import { CitationPassage } from '../features/kb/CitationPassage';
@@ -215,7 +216,7 @@ function Bubble({
             {message.embeds.map((e, i) =>
               e.type === 'kb_citation' ? (
                 <PortalCitation key={`${e.articleId}-${i}`} c={e} />
-              ) : (
+              ) : e.type === 'choice_prompt' ? (
                 <PortalChoicePrompt
                   key={`prompt-${i}`}
                   ticketId={ticketId}
@@ -224,6 +225,8 @@ function Bubble({
                   prompt={e}
                   onAnswered={onAnswered}
                 />
+              ) : (
+                <OutsideHoursCard key={`oh-${i}`} e={e} />
               ),
             )}
           </div>

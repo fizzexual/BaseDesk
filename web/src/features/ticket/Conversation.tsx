@@ -10,6 +10,7 @@ import { Tooltip } from '../../components/Tooltip';
 import { cx } from '../../components/util';
 import { IconBook, IconCheck, IconList, IconPaperclip, IconTrash } from '../../icons';
 import { CitationPassage } from '../kb/CitationPassage';
+import { OutsideHoursCard } from './OutsideHoursCard';
 import { describeTicketEvent } from './eventText';
 
 /** Renders a message body, highlighting @mentions. */
@@ -123,7 +124,13 @@ function Embeds({ items }: { items: MessageEmbed[] }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
       {items.map((e, i) =>
-        e.type === 'kb_citation' ? <Citation key={`${e.articleId}-${i}`} c={e} /> : <ChoicePromptCard key={`prompt-${i}`} p={e} />,
+        e.type === 'kb_citation' ? (
+          <Citation key={`${e.articleId}-${i}`} c={e} />
+        ) : e.type === 'choice_prompt' ? (
+          <ChoicePromptCard key={`prompt-${i}`} p={e} />
+        ) : (
+          <OutsideHoursCard key={`oh-${i}`} e={e} />
+        ),
       )}
     </div>
   );
