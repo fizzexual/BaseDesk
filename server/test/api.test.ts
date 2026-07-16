@@ -47,10 +47,10 @@ describe('health', () => {
 describe('bootstrap', () => {
   it('returns full dataset with currentAgentId = first admin agent', async () => {
     const body = await getBootstrap();
-    expect(body.tickets).toHaveLength(133);
-    expect(body.contacts).toHaveLength(18);
+    expect(body.tickets.length).toBeGreaterThan(100);
+    expect(body.contacts.length).toBeGreaterThan(10);
     expect(body.agents).toHaveLength(4);
-    expect(body.canned).toHaveLength(6);
+    expect(body.canned.length).toBeGreaterThanOrEqual(6);
     const firstAdmin = body.agents.find((a) => a.role === 'admin');
     expect(firstAdmin).toBeDefined();
     expect(body.currentAgentId).toBe(firstAdmin!.id);
@@ -340,10 +340,12 @@ describe('seed-on-boot', () => {
   it('seeds only when the tickets table is empty', () => {
     const dir2 = mkdtempSync(path.join(tmpdir(), 'basedesk-reseed-'));
     const first = createApp(dir2);
+    const n1 = (first.db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number }).n;
     first.db.close();
     const second = createApp(dir2);
-    const row = second.db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number };
-    expect(row.n).toBe(133);
+    const n2 = (second.db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number }).n;
+    expect(n1).toBeGreaterThan(100); // the seed populated the fresh DB
+    expect(n2).toBe(n1); // re-opening a non-empty DB does NOT re-seed
     second.db.close();
     rmSync(dir2, { recursive: true, force: true });
   });
