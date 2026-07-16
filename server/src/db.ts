@@ -40,7 +40,8 @@ export function openDb(dataDir: string): DatabaseSync {
       status TEXT NOT NULL DEFAULT 'active',
       inviteToken TEXT,
       signature TEXT NOT NULL DEFAULT '',
-      categories TEXT NOT NULL DEFAULT '[]'
+      categories TEXT NOT NULL DEFAULT '[]',
+      languages TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS contacts (
       id TEXT PRIMARY KEY,
@@ -397,6 +398,7 @@ export function openDb(dataDir: string): DatabaseSync {
   // categories they cover.
   if (!ticketCols.some((c) => c.name === 'category')) db.exec('ALTER TABLE tickets ADD COLUMN category TEXT');
   if (!agentCols.some((c) => c.name === 'categories')) db.exec("ALTER TABLE agents ADD COLUMN categories TEXT NOT NULL DEFAULT '[]'");
+  if (!agentCols.some((c) => c.name === 'languages')) db.exec("ALTER TABLE agents ADD COLUMN languages TEXT NOT NULL DEFAULT '[]'");
   const aiAgentCols = db.prepare('PRAGMA table_info(ai_agents)').all() as { name: string }[];
   if (!aiAgentCols.some((c) => c.name === 'scopeCategories')) db.exec("ALTER TABLE ai_agents ADD COLUMN scopeCategories TEXT NOT NULL DEFAULT '[]'");
 
@@ -1112,10 +1114,14 @@ export function rowToAiAgent(row: AiAgentRow): AiAgent {
   };
 }
 
-/** Agents store their covered categories as a JSON column. */
-type AgentRow = Omit<Agent, 'categories'> & { categories: string };
+/** Agents store their covered categories and spoken languages as JSON columns. */
+type AgentRow = Omit<Agent, 'categories' | 'languages'> & { categories: string; languages: string };
 export function rowToAgent(row: AgentRow): Agent {
-  return { ...row, categories: JSON.parse(row.categories ?? '[]') as string[] };
+  return {
+    ...row,
+    categories: JSON.parse(row.categories ?? '[]') as string[],
+    languages: JSON.parse(row.languages ?? '[]') as string[],
+  };
 }
 export function getAgents(db: DatabaseSync): Agent[] {
   return (db.prepare('SELECT * FROM agents ORDER BY rowid').all() as unknown as AgentRow[]).map(rowToAgent);

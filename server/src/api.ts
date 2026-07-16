@@ -30,6 +30,7 @@ import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { isOpenNow, nextOpenIso, normalizeBusinessHours } from './business-hours.js';
+import { detectLanguage } from './detect-language.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI, translateAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
@@ -484,14 +485,21 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
    * is narrowed to those coverers so tickets route to the right team; otherwise every
    * active agent is eligible (generalists with no categories set).
    */
-  const pickAssignee = (strategy: AssignmentSettings['strategy'], category: string | null): string | null => {
+  const pickAssignee = (strategy: AssignmentSettings['strategy'], category: string | null, language: string | null = null): string | null => {
     const active = getAgents(db).filter((a) => a.status === 'active');
     if (active.length === 0) return null;
-    let pool = active.map((a) => ({ id: a.id }));
+    let candidates = active;
+    // Skill routing: prefer agents who cover the ticket's category.
     if (category !== null) {
-      const coverers = active.filter((a) => a.categories.includes(category));
-      if (coverers.length > 0) pool = coverers.map((a) => ({ id: a.id }));
+      const coverers = candidates.filter((a) => a.categories.includes(category));
+      if (coverers.length > 0) candidates = coverers;
     }
+    // Language routing: within that pool, prefer a speaker of the detected language.
+    if (language !== null) {
+      const speakers = candidates.filter((a) => a.languages.some((l) => l.toLowerCase() === language.toLowerCase()));
+      if (speakers.length > 0) candidates = speakers;
+    }
+    const pool = candidates.map((a) => ({ id: a.id }));
     if (strategy === 'least_busy') {
       let best = pool[0].id;
       let bestCount = Infinity;
@@ -551,7 +559,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     if (currentAssignee !== null) return currentAssignee;
     const cfg = assignmentSettings();
     if (!cfg.enabled) return null;
-    const pick = pickAssignee(cfg.strategy, category);
+    // Detect the opening message's language to route to a speaker when we have one.
+    const opening = getMessages(db, ticketId).find((m) => m.authorKind === 'contact');
+    const language = opening !== undefined ? detectLanguage(opening.body) : null;
+    const pick = pickAssignee(cfg.strategy, category, language);
     if (pick !== null) {
       const now = new Date().toISOString();
       db.prepare('UPDATE tickets SET assigneeId = ? WHERE id = ?').run(pick, ticketId);
@@ -2662,10 +2673,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const agent: Agent = {
       id: newId('a_'), name: name.trim(), email: email.trim(), avatarHue: djb2(email.trim()) % 360,
       role: role === 'admin' ? 'admin' : 'agent', status: 'invited',
-      inviteToken: `inv_${randomUUID().replace(/-/g, '').slice(0, 16)}`, signature: '', categories: [],
+      inviteToken: `inv_${randomUUID().replace(/-/g, '').slice(0, 16)}`, signature: '', categories: [], languages: [],
     };
-    db.prepare('INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(agent.id, agent.name, agent.email, agent.avatarHue, agent.role, agent.status, agent.inviteToken, agent.signature, JSON.stringify(agent.categories));
+    db.prepare('INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature, categories, languages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(agent.id, agent.name, agent.email, agent.avatarHue, agent.role, agent.status, agent.inviteToken, agent.signature, JSON.stringify(agent.categories), JSON.stringify(agent.languages));
     return c.json(agent);
   });
 
@@ -2673,7 +2684,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const id = c.req.param('id');
     const existing = getAgent(db, id);
     if (existing === null) return c.json({ error: `agent not found: ${id}` }, 404);
-    let patch: { name?: unknown; role?: unknown; signature?: unknown; categories?: unknown };
+    let patch: { name?: unknown; role?: unknown; signature?: unknown; categories?: unknown; languages?: unknown };
     try {
       patch = await c.req.json();
     } catch {
@@ -2700,6 +2711,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
       if (!Array.isArray(patch.categories)) return c.json({ error: 'invalid categories' }, 400);
       sets.push('categories = ?');
       params.push(JSON.stringify(patch.categories.filter((x): x is string => typeof x === 'string')));
+    }
+    if ('languages' in patch) {
+      if (!Array.isArray(patch.languages)) return c.json({ error: 'invalid languages' }, 400);
+      sets.push('languages = ?');
+      params.push(JSON.stringify(patch.languages.filter((x): x is string => typeof x === 'string')));
     }
     if (sets.length === 0) return c.json(existing);
     db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);

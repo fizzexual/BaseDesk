@@ -280,6 +280,8 @@ export interface Agent {
   status: AgentStatus; inviteToken: string | null; signature: string;
   /** Ticket categories this agent handles; new tickets in these route to them. Empty = all. */
   categories: string[];
+  /** Languages this agent speaks; a ticket detected in one routes to a speaker when possible. */
+  languages: string[];
 }
 /**
  * Optional ticket mutations a canned reply applies when inserted, turning it
