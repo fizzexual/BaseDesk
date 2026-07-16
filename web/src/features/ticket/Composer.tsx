@@ -205,6 +205,19 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     });
   }
 
+  /** Expand saved-reply variables ({{name}}, {{first_name}}, {{number}}, {{agent}},
+   *  {{agent_first}}) with the ticket's contact, number, and the current agent. */
+  function fillPlaceholders(text: string): string {
+    const first = (n: string) => n.trim().split(/\s+/)[0] || n;
+    const agentName = agentsMap[currentAgentId]?.name ?? '';
+    return text
+      .replaceAll('{{name}}', contact?.name ?? 'there')
+      .replaceAll('{{first_name}}', firstName(contact))
+      .replaceAll('{{number}}', String(ticket.number))
+      .replaceAll('{{agent}}', agentName)
+      .replaceAll('{{agent_first}}', first(agentName));
+  }
+
   // A macro's ticket actions (status/priority/assignee/tags), applied in one shot —
   // skipping any change that's already true so the toast stays honest.
   function applyCannedActions(c: CannedReply) {
@@ -241,7 +254,7 @@ export function Composer({ ticket }: { ticket: Ticket }) {
 
   /** From the Canned menu: insert the body at the cursor, then apply any actions. */
   function applyCanned(c: CannedReply) {
-    insertAtCursor(c.body);
+    insertAtCursor(fillPlaceholders(c.body));
     applyCannedActions(c);
   }
 
@@ -250,10 +263,11 @@ export function Composer({ ticket }: { ticket: Ticket }) {
     const el = textareaRef.current;
     const caret = el?.selectionStart ?? body.length;
     const start = snippet?.start ?? caret;
-    const next = body.slice(0, start) + c.body + body.slice(caret);
+    const filled = fillPlaceholders(c.body);
+    const next = body.slice(0, start) + filled + body.slice(caret);
     setBody(next);
     setSnippet(null);
-    const pos = start + c.body.length;
+    const pos = start + filled.length;
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(pos, pos);

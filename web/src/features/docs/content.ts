@@ -202,6 +202,8 @@ export const DOCS: DocArticle[] = [
     body: [
       'Save common responses as **canned replies** (Settings → Canned replies). Insert one in the composer by typing **/** and picking from the list, or via the quick-reply chips.',
       '',
+      'Bodies can include **variables** — **{{name}}**, **{{first_name}}**, **{{number}}**, **{{agent}}**, **{{agent_first}}** — filled with the ticket’s contact, number, and you the moment the reply is inserted.',
+      '',
       '{{example:canned-macro}}',
       '',
       'A canned reply can also carry **macro actions** — applying it can set the status, priority, or a tag and add the text in one move. Canned replies marked with a spark do more than paste text.',

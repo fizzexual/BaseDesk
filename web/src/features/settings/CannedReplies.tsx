@@ -199,6 +199,12 @@ export function CannedReplies() {
               className="mt-1.5 w-full resize-y rounded-sm border border-line bg-surface px-3 py-2 text-[14px] placeholder:text-text-3"
               onChange={(e) => setEditor({ ...editor, body: e.target.value })}
             />
+            <p className="mt-1.5 text-[12px] text-text-3">
+              Variables get filled in on insert: <code className="rounded bg-surface-2 px-1 font-mono">{'{{first_name}}'}</code>,{' '}
+              <code className="rounded bg-surface-2 px-1 font-mono">{'{{name}}'}</code>,{' '}
+              <code className="rounded bg-surface-2 px-1 font-mono">{'{{number}}'}</code>,{' '}
+              <code className="rounded bg-surface-2 px-1 font-mono">{'{{agent}}'}</code>.
+            </p>
 
             <div className="mt-5 border-t border-line pt-4">
               <div className="text-[13px] font-medium">When inserted, also…</div>
