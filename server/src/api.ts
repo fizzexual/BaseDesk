@@ -28,13 +28,14 @@ import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
-import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
+import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
+import { isOpenNow, nextOpenIso, normalizeBusinessHours } from './business-hours.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
-  AiAction, AiAutomation, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
+  AiAction, AiAutomation, AiProviderConfig, Agent, ArticleStatus, AssignmentSettings, AutoAck, BusinessHours, OutsideHours, Attachment, AutomationAction, AutomationCondition, AutomationRule, TimeRule, TicketLink, TicketLinkType,
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   ChoiceOption, CitationHighlight, CustomFieldType, Deal, DealStage, DealType, HighlightColor, IntakeForm, IntakeNode, KbArticle, MacroActions, Message, MessageEmbed,
   SavedView, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
@@ -222,7 +223,9 @@ function embedsText(embeds: MessageEmbed[]): string {
     .map((e) =>
       e.type === 'kb_citation'
         ? `From our help article “${e.title}”:\n\n“${e.passage}”`
-        : `${e.question}\n${e.options.map((o) => `- ${o.label}`).join('\n')}`,
+        : e.type === 'choice_prompt'
+          ? `${e.question}\n${e.options.map((o) => `- ${o.label}`).join('\n')}`
+          : e.message,
     )
     .filter((s) => s.trim() !== '')
     .join('\n\n');
@@ -230,7 +233,11 @@ function embedsText(embeds: MessageEmbed[]): string {
 
 /** Short inbox/preview label for a message that carries an embed but no body text. */
 function embedPreview(e: MessageEmbed): string {
-  return e.type === 'kb_citation' ? `Cited “${e.title}”` : `Asked “${e.question}”`;
+  return e.type === 'kb_citation'
+    ? `Cited “${e.title}”`
+    : e.type === 'choice_prompt'
+      ? `Asked “${e.question}”`
+      : 'Outside working hours';
 }
 
 const HL_COLORS = new Set<HighlightColor>(['yellow', 'green', 'blue', 'pink']);
@@ -411,6 +418,13 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       return { enabled: raw.enabled === true, message: typeof raw.message === 'string' ? raw.message : DEFAULT_AUTO_ACK.message };
     } catch {
       return DEFAULT_AUTO_ACK;
+    }
+  };
+  const businessHours = (): BusinessHours => {
+    try {
+      return normalizeBusinessHours(JSON.parse(getSetting(db, 'business_hours') ?? ''), DEFAULT_BUSINESS_HOURS);
+    } catch {
+      return DEFAULT_BUSINESS_HOURS;
     }
   };
   const aiAutomation = (): AiAutomation => {
@@ -709,6 +723,32 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     deliverReply(ticket, body);
   };
 
+  /** When hours are on and we're currently closed, post an editable "outside working
+   *  hours" reply carrying the next opening instant (for a live countdown). Like the
+   *  auto-ack, it does NOT stamp firstRespondedAt — a human still owes a real reply. */
+  const sendOutsideHours = (ticketId: string, contactName: string): void => {
+    const bh = businessHours();
+    const nowMs = Date.now();
+    if (!bh.enabled || isOpenNow(bh, nowMs)) return;
+    const ticket = getTicket(db, ticketId);
+    if (ticket === null) return;
+    const author =
+      ticket.assigneeId ??
+      getAgents(db).find((a) => a.status === 'active' && a.role === 'admin')?.id ??
+      getAgents(db).find((a) => a.status === 'active')?.id ??
+      null;
+    if (author === null) return;
+    const now = new Date(nowMs).toISOString();
+    const first = contactName.trim().split(/\s+/)[0] || 'there';
+    const message = bh.message.replaceAll('{{number}}', String(ticket.number)).replaceAll('{{name}}', first);
+    const embed: OutsideHours = { type: 'outside_hours', message, nextOpenAt: nextOpenIso(bh, nowMs) };
+    db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at, embeds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(newId('m_'), ticketId, 'agent', author, 'reply', message, now, JSON.stringify([embed]));
+    db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+      .run(now, now, preview(message), ticketId);
+    deliverReply(ticket, message);
+  };
+
   // ---- Time-based rules: escalations + stale-ticket cleanup -------------------
   const applyTimeRule = (t: Ticket, rule: TimeRule, nowIso: string): void => {
     let priority = t.priority;
@@ -899,6 +939,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
       notifications: getNotifications(db, currentAgentId()),
       assignment: assignmentSettings(),
       autoAck: autoAck(),
+      businessHours: businessHours(),
       aiAutomation: aiAutomation(),
       onCall: onCall(),
       timeRules: timeRules(),
@@ -2414,6 +2455,18 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     return c.json(value);
   });
 
+  app.put('/api/settings/business-hours', async (c) => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const value = normalizeBusinessHours(input, DEFAULT_BUSINESS_HOURS);
+    setSetting(db, 'business_hours', JSON.stringify(value));
+    return c.json(value);
+  });
+
   app.put('/api/settings/ai-automation', async (c) => {
     let input: Record<string, unknown>;
     try {
@@ -3190,6 +3243,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, null, ticket.category);
     sendAutoAck(ticket.id, contact.name);
+    sendOutsideHours(ticket.id, contact.name);
     return c.json({ ticket: getTicket(db, ticket.id) });
   });
 
@@ -3525,6 +3579,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     await runAgentsOnTicket(ticket, body);
     autoAssign(ticket.id, null, ticket.category);
     sendAutoAck(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
+    sendOutsideHours(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
     return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
   });
 

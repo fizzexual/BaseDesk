@@ -1,4 +1,4 @@
-import type { AiAutomation, AiProviderConfig, AutoAck, AutomationRule, Branding, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
+import type { AiAutomation, AiProviderConfig, AutoAck, AutomationRule, Branding, BusinessHours, IntakeForm, OnCallConfig, SlaHours, SlaTargets, SmtpConfig, StatusComponent, TicketTemplate, TimeRule } from './types.js';
 
 /** Default branding: the product name shown to customers, no custom accent (uses the theme). */
 export const DEFAULT_BRANDING: Branding = { productName: 'BaseDesk', accentColor: '' };
@@ -106,6 +106,23 @@ export const DEFAULT_AUTO_ACK: AutoAck = {
   enabled: false,
   message:
     "Thanks for reaching out! We've received your request (ticket #{{number}}) and a member of our team will get back to you shortly.",
+};
+
+/** Off by default; a Mon–Fri 9–5 template so enabling it is one toggle away. */
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
+  enabled: false,
+  timezone: 'UTC',
+  message:
+    "Thanks for reaching out! You've caught us outside our working hours, so a reply may take a little longer. We'll be back and answering {{name}} as soon as we reopen.",
+  days: [
+    null, // Sunday
+    { open: '09:00', close: '17:00' }, // Monday
+    { open: '09:00', close: '17:00' }, // Tuesday
+    { open: '09:00', close: '17:00' }, // Wednesday
+    { open: '09:00', close: '17:00' }, // Thursday
+    { open: '09:00', close: '17:00' }, // Friday
+    null, // Saturday
+  ],
 };
 
 /** AI does nothing on its own out of the box — every switch is opt-in. */
