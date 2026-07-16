@@ -39,6 +39,8 @@ export const DOCS: DocArticle[] = [
       '- **Command palette** — press **⌘K** (or **Ctrl-K**) to jump anywhere or run an action.',
       '',
       'Everything is one SQLite database and a dependency-light React front-end, so it runs anywhere Node runs.',
+      '',
+      '> **Tip:** Press **⌘K** anywhere to jump to a ticket or run an action — it’s the fastest way around.',
     ].join('\n'),
   },
   {
@@ -134,6 +136,8 @@ export const DOCS: DocArticle[] = [
       '**⋯ → Split…** moves selected messages out of a ticket into a new, related ticket — the inverse of merge — for when one thread is really two issues.',
       '',
       'BaseDesk also surfaces a **"This ticket looks like #N"** hint at the top of a ticket when it finds a close match by subject (boosted when it’s from the same contact), so you can spot duplicates before you reply.',
+      '',
+      '{{example:duplicate-hint}}',
     ].join('\n'),
   },
   {
@@ -146,6 +150,8 @@ export const DOCS: DocArticle[] = [
       '- **Total** — counts from when the ticket was opened.',
       '- **Agent** — counts from your first reply (shows "Not started" until then).',
       '',
+      '{{example:support-time}}',
+      '',
       'Both **freeze** the moment the ticket is solved or closed, and resume if it’s reopened. They’re derived from the ticket’s own timestamps, so there’s nothing to start or stop manually.',
     ].join('\n'),
   },
@@ -156,6 +162,8 @@ export const DOCS: DocArticle[] = [
     summary: 'See who else is on a ticket before you reply.',
     body: [
       'When more than one person has the same ticket open, an **"Also viewing"** indicator with their avatars appears in the ticket header. Hover it to see who — a nudge to coordinate before two people reply at once.',
+      '',
+      '{{example:presence}}',
       '',
       'Presence is live (each tab checks in every few seconds) and ephemeral — it’s never stored, and someone drops off a few seconds after they navigate away.',
     ].join('\n'),
@@ -192,8 +200,12 @@ export const DOCS: DocArticle[] = [
       '## KB citations',
       'From the composer you can **cite** a knowledge-base article: it attaches a structured card quoting the relevant passage. Before sending, you can **highlight** words or sentences in the passage in a colour to draw the eye. Customers see an attributed quote; agents see the card.',
       '',
+      '{{example:citation}}',
+      '',
       '## Choice prompts',
       'Ask the customer to pick from options rendered as **buttons** or a **dropdown**. When they tap a choice in the portal, their answer is recorded and posted back into the conversation — handy for "which plan are you on?"-style questions.',
+      '',
+      '{{example:choice-prompt}}',
     ].join('\n'),
   },
   {
@@ -214,6 +226,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Queue a reply or note to post later.',
     body: [
       'Next to the Send button is a **🕐 Send later** menu. Write your message, pick a time (in 1 hour, in 3 hours, tomorrow morning, Monday morning), and it’s queued.',
+      '',
+      '{{example:scheduled}}',
       '',
       'Pending scheduled sends appear above the composer with a **Cancel** button. They fire automatically at their time (skipping tickets that were closed or merged in the meantime), reusing the normal reply path — so SLA and follow state update just as if you’d sent it live.',
     ].join('\n'),
@@ -264,6 +278,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Auto-reply with a reopen countdown when you’re closed.',
     body: [
       'In **Settings → Business hours**, set your **time zone** and a per-day open/close schedule, then turn on the outside-hours auto-reply and edit its message.',
+      '',
+      '{{example:outside-hours}}',
       '',
       'When a customer opens a ticket **outside** those hours, BaseDesk automatically posts an editable reply — with a **live countdown** to when you reopen, shown in the customer’s own local time. It doesn’t count as your first human response, so SLA still measures a real reply. Placeholders **{{name}}** and **{{number}}** are supported in the message.',
     ].join('\n'),
@@ -348,6 +364,8 @@ export const DOCS: DocArticle[] = [
     summary: 'Live team metrics on a big screen.',
     body: [
       'The **wallboard** is a full-screen, chrome-less dashboard meant to live on a TV or second monitor. Open it at **/wallboard** or via the command palette → **Open wallboard**.',
+      '',
+      '{{example:wallboard-tiles}}',
       '',
       'It auto-refreshes and shows: open tickets, unassigned, awaiting reply, oldest wait, solved today, CSAT today, and an **"On it now"** per-agent load list — plus a live clock.',
     ].join('\n'),

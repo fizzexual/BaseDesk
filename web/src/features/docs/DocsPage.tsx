@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { DOCS, DOC_CATEGORIES, type DocArticle } from './content';
-import { Markdown } from '../kb/Markdown';
+import { DocBody } from './examples';
 import { cx } from '../../components/util';
 import { IconBook, IconChevronLeft, IconChevronRight, IconSearch } from '../../icons';
 
@@ -157,7 +157,7 @@ function Article({ article }: { article: DocArticle }) {
       <h1 className="mt-3 text-[26px] font-semibold leading-tight tracking-tight">{article.title}</h1>
       <p className="mt-1.5 text-[14px] text-text-3">{article.summary}</p>
       <article className="mt-6">
-        <Markdown text={article.body} />
+        <DocBody text={article.body} />
       </article>
       {(prev || next) && (
         <div className="mt-10 grid gap-3 sm:grid-cols-2">
