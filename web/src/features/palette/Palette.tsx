@@ -177,6 +177,7 @@ export function Palette() {
     },
     { kind: 'action', id: 'go-revenue', label: 'Go to Revenue', icon: IconRevenue, run: () => navigate('/revenue') },
     { kind: 'action', id: 'go-reports', label: 'Go to Reports', icon: IconChart, run: () => navigate('/reports') },
+    { kind: 'action', id: 'go-wallboard', label: 'Open wallboard (TV dashboard)', icon: IconChart, run: () => navigate('/wallboard') },
     { kind: 'action', id: 'go-kb', label: 'Go to Knowledge base', icon: IconBook, run: () => navigate('/kb') },
     { kind: 'action', id: 'go-channels', label: 'Go to Channels', icon: IconChannels, run: () => navigate('/channels') },
     { kind: 'action', id: 'go-contacts', label: 'Go to Contacts', icon: IconContacts, run: () => navigate('/contacts') },

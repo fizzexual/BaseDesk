@@ -22,6 +22,7 @@ import { DraftsPage } from '../features/ai/DraftsPage';
 import { ResolvedPage } from '../features/ai/ResolvedPage';
 import { KbPage } from '../features/kb/KbPage';
 import { ChannelsPage } from '../features/channels/ChannelsPage';
+import { WallboardPage } from '../features/wallboard/WallboardPage';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -59,6 +60,8 @@ function AgentApp() {
   return (
     <Boot>
       <Routes>
+        {/* Full-screen, chrome-less — meant to live on a TV/second monitor. */}
+        <Route path="/wallboard" element={<WallboardPage />} />
         <Route element={<Shell />}>
           <Route index element={<Navigate to="/view/all" replace />} />
           <Route path="/view/:viewId" element={<InboxPage />} />
