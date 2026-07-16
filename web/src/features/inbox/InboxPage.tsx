@@ -113,6 +113,8 @@ export function InboxPage() {
   const createSavedView = useApp((s) => s.createSavedView);
   const [searchParams] = useSearchParams();
   const svId = searchParams.get('sv');
+  // A direct ?assignee=<agentId> deep-link (e.g. from the Team page) pre-filters to that agent.
+  const assigneeParam = searchParams.get('assignee');
 
   const [query, setQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | null>(null);
@@ -139,7 +141,7 @@ export function InboxPage() {
     [agents],
   );
 
-  const visible = useMemo(() => {
+  const matched = useMemo(() => {
     const q = query.trim().toLowerCase();
     return ticketsInView.filter((t) => {
       if (priorityFilter !== null && t.priority !== priorityFilter) return false;
@@ -154,6 +156,11 @@ export function InboxPage() {
       );
     });
   }, [ticketsInView, contacts, query, priorityFilter, assigneeFilter, tagFilter]);
+
+  // Render at most a page of rows — a busy instance can have thousands in a view, and the
+  // list isn't virtualized. Refine with search / status views / filters to reach the rest.
+  const PAGE = 200;
+  const visible = useMemo(() => (matched.length > PAGE ? matched.slice(0, PAGE) : matched), [matched]);
 
   const selected: Ticket | undefined = selectedIndex >= 0 ? visible[selectedIndex] : undefined;
 
@@ -204,10 +211,11 @@ export function InboxPage() {
   useEffect(() => {
     const sv = svId ? savedViews.find((v) => v.id === svId) : undefined;
     setPriorityFilter(sv ? sv.priority : null);
-    setAssigneeFilter(sv ? sv.assigneeId : null);
+    // A saved view wins; otherwise honor an ?assignee= deep-link.
+    setAssigneeFilter(sv ? sv.assigneeId : assigneeParam);
     setTagFilter(sv ? sv.tag : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [svId, view, savedViews]);
+  }, [svId, assigneeParam, view, savedViews]);
 
   // Keep the selection inside the list when it shrinks (solve, filter, …).
   useEffect(() => {
@@ -415,10 +423,13 @@ export function InboxPage() {
   }
 
   const total = ticketsInView.length;
-  const countLabel =
-    visible.length === total
-      ? `${total.toLocaleString('en-US')} ${total === 1 ? 'ticket' : 'tickets'}`
-      : `${visible.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} tickets`;
+  const countLabel = (() => {
+    const base =
+      matched.length === total
+        ? `${total.toLocaleString('en-US')} ${total === 1 ? 'ticket' : 'tickets'}`
+        : `${matched.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} tickets`;
+    return matched.length > visible.length ? `${base} · showing first ${visible.length}` : base;
+  })();
   const empty = emptyFor(view);
 
   return (
