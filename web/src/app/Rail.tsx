@@ -9,6 +9,7 @@ import {
   IconChannels,
   IconChart,
   IconClipboard,
+  IconCommunity,
   IconContacts,
   IconHistory,
   IconInbox,
@@ -37,6 +38,7 @@ const NAV = [
   { to: '/handover', label: 'Handover', icon: IconClipboard, matches: ['/handover'] },
   { to: '/status', label: 'Status', icon: IconActivity, matches: ['/status'] },
   { to: '/kb', label: 'Knowledge', icon: IconBook, matches: ['/kb'] },
+  { to: '/community', label: 'Community', icon: IconCommunity, matches: ['/community'] },
   { to: '/docs', label: 'Guide', icon: IconList, matches: ['/docs'] },
 ];
 
