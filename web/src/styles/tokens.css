@@ -24,9 +24,15 @@
   --blue: #175cd3;
   --blue-bg: #eaf1fd;
   --gray-dot: #98a2a0;
-  --focus: #0f7050;
+  --focus: #2563eb;
   --frame-a: #dff3e7;
   --frame-b: #c9ead6;
+
+  /* Highlighter colors for cited passages — bright pastels; text stays --text (dark). */
+  --hl-yellow: #fde68a;
+  --hl-green: #b6f0cf;
+  --hl-blue: #bcdcff;
+  --hl-pink: #fbcfe8;
 
   --r-sm: 8px;
   --r-md: 12px;
@@ -38,30 +44,37 @@
 }
 
 [data-theme='dark'] {
-  --bg: #0e1110;
-  --surface: #161a18;
-  --surface-2: #1d2220;
-  --surface-3: #242a27;
-  --text: #f0f3f1;
-  --text-2: #a7b0ac;
-  --text-3: #7e8883;
-  --line: #242a27;
-  --line-2: #2e3532;
-  --accent: #f0f3f1;
-  --accent-fg: #141816;
+  /* Cool near-black surfaces with a blue accent (calley-style dark UI). */
+  --bg: #0a0b0d;
+  --surface: #131519;
+  --surface-2: #1b1e24;
+  --surface-3: #262a32;
+  --text: #f3f5f8;
+  --text-2: #9ca3af;
+  --text-3: #6b7280;
+  --line: #23262d;
+  --line-2: #2f333c;
+  --accent: #3b82f6;
+  --accent-fg: #ffffff;
   --green: #4ade97;
   --green-bg: #10301f;
-  --red: #f97066;
-  --red-bg: #3a1b18;
-  --amber: #f5a860;
-  --amber-bg: #3a2712;
-  --blue: #7ab1ff;
-  --blue-bg: #14263f;
-  --gray-dot: #6e7873;
-  --focus: #4ade97;
-  --frame-a: #14231b;
-  --frame-b: #0f1a14;
+  --red: #f87171;
+  --red-bg: #3a1c1c;
+  --amber: #fbbf24;
+  --amber-bg: #3a2c10;
+  --blue: #60a5fa;
+  --blue-bg: #17233c;
+  --gray-dot: #6b7280;
+  --focus: #3b82f6;
+  --frame-a: #17233c;
+  --frame-b: #0f1a2e;
 
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+  /* Deeper, saturated highlighter fills so text (--text, light) stays readable in dark mode. */
+  --hl-yellow: #7a5a12;
+  --hl-green: #14512f;
+  --hl-blue: #1c3a76;
+  --hl-pink: #7d1f49;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 8px 24px rgb(0 0 0 / 0.6), 0 1px 3px rgb(0 0 0 / 0.5);
 }
