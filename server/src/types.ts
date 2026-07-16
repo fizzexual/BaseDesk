@@ -71,6 +71,44 @@ export interface ScheduledMessage {
   createdAt: string;
 }
 
+/** Community forum: customer-facing discussion topics with agent moderation. */
+export const FORUM_CATEGORIES = ['general', 'how-to', 'tips', 'bugs', 'feature-requests'] as const;
+export type ForumCategory = (typeof FORUM_CATEGORIES)[number];
+
+export interface ForumReply {
+  id: string;
+  topicId: string;
+  authorId: string;
+  authorName: string;
+  authorIsAgent: boolean;
+  body: string;
+  accepted: boolean;
+  createdAt: string;
+}
+
+export interface ForumTopic {
+  id: string;
+  category: ForumCategory;
+  title: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  authorIsAgent: boolean;
+  pinned: boolean;
+  locked: boolean;
+  /** Derived: the topic has an accepted answer. */
+  solved: boolean;
+  /** Derived: number of replies. */
+  replyCount: number;
+  views: number;
+  createdAt: string;
+  lastActivityAt: string;
+}
+
+export interface ForumTopicDetail extends ForumTopic {
+  replies: ForumReply[];
+}
+
 /** Aggregate customer-satisfaction figures over rated tickets. */
 export interface CsatStats {
   count: number;

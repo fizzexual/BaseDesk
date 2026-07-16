@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { DEFAULT_AI_PROVIDER, DEFAULT_SMTP } from './defaults.js';
-import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, Announcement, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, MessageEmbed, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
+import type { Agent, ApprovalStatus, Attachment, AiAction, AiAgent, AiProvider, AiProviderConfig, AuditEvent, CannedReply, Announcement, ChannelConn, Contact, CustomFieldDef, CustomReport, Deal, ForumCategory, ForumReply, ForumTopic, ForumTopicDetail, HandoverNote, IncidentUpdate, IntakeAnswer, IntakeForm, KbArticle, MacroActions, Message, MessageEmbed, ModelCache, Notification, PublicChannel, SavedView, SideConversation, SideMessage, SmtpConfig, SmtpSettings, StatusComponent, StatusIncident, Ticket, TicketApproval, TicketEvent, TicketPriority, TicketSeen, TicketTask, TicketTemplate } from './types.js';
 import { DEFAULT_INTAKE_FORM } from './defaults.js';
 
 /** Ticket as stored: tags and customFields are JSON string columns. */
@@ -265,6 +265,30 @@ export function openDb(dataDir: string): DatabaseSync {
       passwordHash TEXT,
       totpSecret TEXT,
       totpEnabled INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS forum_topics (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      authorId TEXT NOT NULL,
+      authorName TEXT NOT NULL,
+      authorIsAgent INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      locked INTEGER NOT NULL DEFAULT 0,
+      views INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL,
+      lastActivityAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS forum_replies (
+      id TEXT PRIMARY KEY,
+      topicId TEXT NOT NULL,
+      authorId TEXT NOT NULL,
+      authorName TEXT NOT NULL,
+      authorIsAgent INTEGER NOT NULL DEFAULT 0,
+      body TEXT NOT NULL,
+      accepted INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
@@ -1250,4 +1274,98 @@ export function getCustomFields(db: DatabaseSync): CustomFieldDef[] {
 export function getCustomField(db: DatabaseSync, id: string): CustomFieldDef | null {
   const row = db.prepare('SELECT * FROM custom_fields WHERE id = ?').get(id) as CustomFieldRow | undefined;
   return row ? rowToCustomField(row) : null;
+}
+
+// --- Community forum ---
+
+/** A topic row joined with its derived reply count and accepted-answer flag. */
+type ForumTopicRow = {
+  id: string; category: string; title: string; body: string;
+  authorId: string; authorName: string; authorIsAgent: number;
+  pinned: number; locked: number; views: number; createdAt: string; lastActivityAt: string;
+  replyCount: number; solved: number;
+};
+function rowToForumTopic(row: ForumTopicRow): ForumTopic {
+  return {
+    id: row.id, category: row.category as ForumCategory, title: row.title, body: row.body,
+    authorId: row.authorId, authorName: row.authorName, authorIsAgent: row.authorIsAgent === 1,
+    pinned: row.pinned === 1, locked: row.locked === 1, solved: row.solved === 1,
+    replyCount: row.replyCount, views: row.views, createdAt: row.createdAt, lastActivityAt: row.lastActivityAt,
+  };
+}
+type ForumReplyRow = Omit<ForumReply, 'authorIsAgent' | 'accepted'> & { authorIsAgent: number; accepted: number };
+function rowToForumReply(row: ForumReplyRow): ForumReply {
+  return { ...row, authorIsAgent: row.authorIsAgent === 1, accepted: row.accepted === 1 };
+}
+
+// Pinned topics float to the top; otherwise most-recently-active first.
+const TOPIC_SELECT = `
+  SELECT t.*,
+    (SELECT COUNT(*) FROM forum_replies r WHERE r.topicId = t.id) AS replyCount,
+    (SELECT COUNT(*) FROM forum_replies r WHERE r.topicId = t.id AND r.accepted = 1) AS solved
+  FROM forum_topics t`;
+
+export function listForumTopics(db: DatabaseSync, category?: string): ForumTopic[] {
+  const hasCat = category !== undefined && category !== '';
+  const sql = `${TOPIC_SELECT}${hasCat ? ' WHERE t.category = ?' : ''} ORDER BY t.pinned DESC, t.lastActivityAt DESC`;
+  const args: string[] = hasCat ? [category as string] : [];
+  const rows = db.prepare(sql).all(...args) as unknown as ForumTopicRow[];
+  return rows.map(rowToForumTopic);
+}
+
+export function getForumTopic(db: DatabaseSync, id: string): ForumTopic | null {
+  const row = db.prepare(`${TOPIC_SELECT} WHERE t.id = ?`).get(id) as ForumTopicRow | undefined;
+  return row ? rowToForumTopic(row) : null;
+}
+
+export function getForumReplies(db: DatabaseSync, topicId: string): ForumReply[] {
+  return (db.prepare('SELECT * FROM forum_replies WHERE topicId = ? ORDER BY accepted DESC, createdAt ASC').all(topicId) as unknown as ForumReplyRow[]).map(rowToForumReply);
+}
+
+export function getForumTopicDetail(db: DatabaseSync, id: string): ForumTopicDetail | null {
+  const topic = getForumTopic(db, id);
+  return topic === null ? null : { ...topic, replies: getForumReplies(db, id) };
+}
+
+export function insertForumTopic(db: DatabaseSync, t: Omit<ForumTopic, 'solved' | 'replyCount'>): void {
+  db.prepare(
+    `INSERT INTO forum_topics (id, category, title, body, authorId, authorName, authorIsAgent, pinned, locked, views, createdAt, lastActivityAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(t.id, t.category, t.title, t.body, t.authorId, t.authorName, t.authorIsAgent ? 1 : 0, t.pinned ? 1 : 0, t.locked ? 1 : 0, t.views, t.createdAt, t.lastActivityAt);
+}
+
+export function insertForumReply(db: DatabaseSync, r: ForumReply): void {
+  db.prepare('INSERT INTO forum_replies (id, topicId, authorId, authorName, authorIsAgent, body, accepted, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(r.id, r.topicId, r.authorId, r.authorName, r.authorIsAgent ? 1 : 0, r.body, r.accepted ? 1 : 0, r.createdAt);
+  db.prepare('UPDATE forum_topics SET lastActivityAt = ? WHERE id = ?').run(r.createdAt, r.topicId);
+}
+
+export function bumpForumViews(db: DatabaseSync, id: string): void {
+  db.prepare('UPDATE forum_topics SET views = views + 1 WHERE id = ?').run(id);
+}
+
+/** Mark exactly one reply as the accepted answer (clearing any prior pick on the topic). */
+export function acceptForumReply(db: DatabaseSync, topicId: string, replyId: string): void {
+  db.prepare('UPDATE forum_replies SET accepted = 0 WHERE topicId = ?').run(topicId);
+  db.prepare('UPDATE forum_replies SET accepted = 1 WHERE id = ? AND topicId = ?').run(replyId, topicId);
+}
+
+export function setForumTopicFlags(db: DatabaseSync, id: string, flags: { pinned?: boolean; locked?: boolean; category?: string }): void {
+  const sets: string[] = [];
+  const args: (string | number)[] = [];
+  if (flags.pinned !== undefined) { sets.push('pinned = ?'); args.push(flags.pinned ? 1 : 0); }
+  if (flags.locked !== undefined) { sets.push('locked = ?'); args.push(flags.locked ? 1 : 0); }
+  if (flags.category !== undefined) { sets.push('category = ?'); args.push(flags.category); }
+  if (sets.length === 0) return;
+  args.push(id);
+  db.prepare(`UPDATE forum_topics SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+}
+
+export function deleteForumTopic(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM forum_replies WHERE topicId = ?').run(id);
+  db.prepare('DELETE FROM forum_topics WHERE id = ?').run(id);
+}
+
+export function deleteForumReply(db: DatabaseSync, id: string): void {
+  db.prepare('DELETE FROM forum_replies WHERE id = ?').run(id);
 }

@@ -20,6 +20,7 @@ import {
   getApprovals, getApproval, insertApproval, decideApproval,
   getSideConversations, getSideConversation, insertSideConversation, insertSideMessage,
   getHandoverNotes, insertHandoverNote, deleteHandoverNote,
+  listForumTopics, getForumTopic, getForumTopicDetail, insertForumTopic, insertForumReply, bumpForumViews, acceptForumReply, setForumTopicFlags, deleteForumTopic, deleteForumReply,
 } from './db.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hashPassword, randomTotpSecret, signSession, totpUri, verifyPassword, verifySession, verifyTotp } from './auth.js';
@@ -41,7 +42,9 @@ import type {
   BootstrapData, CannedReply, TicketTemplate, CustomReport, Announcement, AnnouncementLevel, Branding, ComponentStatus, IncidentImpact, IncidentStatus, IncidentUpdate, StatusComponent, StatusIncident, OnCallConfig, Channel, ChannelConn, ChannelType, Contact, CustomFieldDef, CustomFieldEntity,
   ChoiceOption, CitationHighlight, CustomFieldType, Deal, DealStage, DealType, HighlightColor, IntakeForm, IntakeNode, KbArticle, MacroActions, Message, MessageEmbed,
   SavedView, ScheduledMessage, SlaHours, SlaTargets, Ticket, TicketEvent, TicketPatch, TicketPriority, TicketStatus, ViewId,
+  ForumCategory, ForumReply,
 } from './types.js';
+import { FORUM_CATEGORIES } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
 const AUTONOMIES: Autonomy[] = ['suggest', 'draft', 'resolve'];
@@ -1879,6 +1882,84 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     return c.json({ ok: true });
   });
 
+  // --- Community forum: agents read every topic and moderate. Customers post via /api/portal/forum. ---
+  const isForumCategory = (v: unknown): v is ForumCategory =>
+    typeof v === 'string' && (FORUM_CATEGORIES as readonly string[]).includes(v);
+
+  app.get('/api/forum/topics', (c) =>
+    c.json({ topics: listForumTopics(db, c.req.query('category')), categories: FORUM_CATEGORIES }));
+
+  app.get('/api/forum/topics/:id', (c) => {
+    const detail = getForumTopicDetail(db, c.req.param('id'));
+    return detail === null ? c.json({ error: 'topic not found' }, 404) : c.json(detail);
+  });
+
+  app.post('/api/forum/topics', async (c) => {
+    let input: { title?: unknown; body?: unknown; category?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    const title = typeof input.title === 'string' ? input.title.trim() : '';
+    if (title === '') return c.json({ error: 'A title is required' }, 400);
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+    const category: ForumCategory = isForumCategory(input.category) ? input.category : 'general';
+    const now = new Date().toISOString();
+    const id = newId('ft_');
+    insertForumTopic(db, {
+      id, category, title: title.slice(0, 200), body: body.slice(0, 5000),
+      authorId: currentAgentId(), authorName: getAgent(db, currentAgentId())?.name ?? 'Support', authorIsAgent: true,
+      pinned: false, locked: false, views: 0, createdAt: now, lastActivityAt: now,
+    });
+    return c.json(getForumTopicDetail(db, id));
+  });
+
+  app.post('/api/forum/topics/:id/replies', async (c) => {
+    const topic = getForumTopic(db, c.req.param('id'));
+    if (topic === null) return c.json({ error: 'topic not found' }, 404);
+    if (topic.locked) return c.json({ error: 'This topic is locked' }, 409);
+    let input: { body?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+    if (body === '') return c.json({ error: 'A reply is required' }, 400);
+    const reply: ForumReply = {
+      id: newId('fr_'), topicId: topic.id, authorId: currentAgentId(), authorName: getAgent(db, currentAgentId())?.name ?? 'Support',
+      authorIsAgent: true, body: body.slice(0, 5000), accepted: false, createdAt: new Date().toISOString(),
+    };
+    insertForumReply(db, reply);
+    return c.json(getForumTopicDetail(db, topic.id));
+  });
+
+  app.post('/api/forum/topics/:id/accept', async (c) => {
+    const topic = getForumTopic(db, c.req.param('id'));
+    if (topic === null) return c.json({ error: 'topic not found' }, 404);
+    let input: { replyId?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    if (typeof input.replyId !== 'string') return c.json({ error: 'replyId is required' }, 400);
+    acceptForumReply(db, topic.id, input.replyId);
+    return c.json(getForumTopicDetail(db, topic.id));
+  });
+
+  app.patch('/api/forum/topics/:id', async (c) => {
+    const topic = getForumTopic(db, c.req.param('id'));
+    if (topic === null) return c.json({ error: 'topic not found' }, 404);
+    let input: { pinned?: unknown; locked?: unknown; category?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    setForumTopicFlags(db, topic.id, {
+      pinned: typeof input.pinned === 'boolean' ? input.pinned : undefined,
+      locked: typeof input.locked === 'boolean' ? input.locked : undefined,
+      category: isForumCategory(input.category) ? input.category : undefined,
+    });
+    return c.json(getForumTopicDetail(db, topic.id));
+  });
+
+  app.delete('/api/forum/topics/:id', (c) => {
+    deleteForumTopic(db, c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  app.delete('/api/forum/replies/:rid', (c) => {
+    deleteForumReply(db, c.req.param('rid'));
+    return c.json({ ok: true });
+  });
+
   // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
   app.post('/api/tickets/:id/split', async (c) => {
     const id = c.req.param('id');
@@ -3651,6 +3732,70 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     // used to deflect a ticket at the end of the intake form.
     const q = c.req.query('q');
     return c.json(q !== undefined && q.trim() !== '' ? rankKb(q, rows, 4) : rows);
+  });
+
+  // --- Community forum, customer side: signed-in contacts browse, post, and accept an answer on their own topics. ---
+  app.get('/api/portal/forum/topics', (c) => {
+    if (contactFromAuth(c.req.header('Authorization')) === null) return c.json({ error: 'not signed in' }, 401);
+    return c.json({ topics: listForumTopics(db, c.req.query('category')), categories: FORUM_CATEGORIES });
+  });
+
+  app.get('/api/portal/forum/topics/:id', (c) => {
+    if (contactFromAuth(c.req.header('Authorization')) === null) return c.json({ error: 'not signed in' }, 401);
+    const detail = getForumTopicDetail(db, c.req.param('id'));
+    if (detail === null) return c.json({ error: 'topic not found' }, 404);
+    bumpForumViews(db, detail.id);
+    return c.json(detail);
+  });
+
+  app.post('/api/portal/forum/topics', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    let input: { title?: unknown; body?: unknown; category?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    const title = typeof input.title === 'string' ? input.title.trim() : '';
+    if (title === '') return c.json({ error: 'A title is required' }, 400);
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+    const category: ForumCategory = typeof input.category === 'string' && (FORUM_CATEGORIES as readonly string[]).includes(input.category) ? (input.category as ForumCategory) : 'general';
+    const now = new Date().toISOString();
+    const id = newId('ft_');
+    insertForumTopic(db, {
+      id, category, title: title.slice(0, 200), body: body.slice(0, 5000),
+      authorId: contact.id, authorName: contact.name, authorIsAgent: false,
+      pinned: false, locked: false, views: 0, createdAt: now, lastActivityAt: now,
+    });
+    return c.json(getForumTopicDetail(db, id));
+  });
+
+  app.post('/api/portal/forum/topics/:id/replies', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const topic = getForumTopic(db, c.req.param('id'));
+    if (topic === null) return c.json({ error: 'topic not found' }, 404);
+    if (topic.locked) return c.json({ error: 'This topic is locked' }, 409);
+    let input: { body?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+    if (body === '') return c.json({ error: 'A reply is required' }, 400);
+    insertForumReply(db, {
+      id: newId('fr_'), topicId: topic.id, authorId: contact.id, authorName: contact.name,
+      authorIsAgent: false, body: body.slice(0, 5000), accepted: false, createdAt: new Date().toISOString(),
+    });
+    return c.json(getForumTopicDetail(db, topic.id));
+  });
+
+  app.post('/api/portal/forum/topics/:id/accept', async (c) => {
+    const contact = contactFromAuth(c.req.header('Authorization'));
+    if (contact === null) return c.json({ error: 'not signed in' }, 401);
+    const topic = getForumTopic(db, c.req.param('id'));
+    if (topic === null) return c.json({ error: 'topic not found' }, 404);
+    // Only the asker can accept the answer to their own question.
+    if (topic.authorIsAgent || topic.authorId !== contact.id) return c.json({ error: 'Only the topic author can accept an answer' }, 403);
+    let input: { replyId?: unknown };
+    try { input = await c.req.json(); } catch { return c.json({ error: 'invalid JSON body' }, 400); }
+    if (typeof input.replyId !== 'string') return c.json({ error: 'replyId is required' }, 400);
+    acceptForumReply(db, topic.id, input.replyId);
+    return c.json(getForumTopicDetail(db, topic.id));
   });
 
   app.post('/api/channels', async (c) => {

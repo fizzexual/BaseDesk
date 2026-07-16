@@ -25,6 +25,48 @@ interface SeedData {
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
+/** A handful of showcase community-forum topics so the Community tab isn't empty. */
+function seedForum(db: DatabaseSync, agents: Agent[], contacts: Contact[], hoursAgo: (h: number) => string): void {
+  const agent = agents[0];
+  const c = (i: number): Contact => contacts[i] ?? contacts[0];
+  const insTopic = db.prepare(
+    `INSERT INTO forum_topics (id, category, title, body, authorId, authorName, authorIsAgent, pinned, locked, views, createdAt, lastActivityAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insReply = db.prepare(
+    'INSERT INTO forum_replies (id, topicId, authorId, authorName, authorIsAgent, body, accepted, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  );
+
+  // topic: [id, category, title, body, authorId, authorName, isAgent, pinned, locked, views, createdAt, lastActivityAt]
+  insTopic.run('ft_welcome', 'general', 'Welcome to the BaseDesk community 👋',
+    'This is the place to ask questions, share tips, and suggest features. Be kind, search before posting, and mark the answer that helped you.',
+    agent.id, agent.name, 1, 1, 0, 342, hoursAgo(240), hoursAgo(6));
+  insReply.run('fr_w1', 'ft_welcome', c(0).id, c(0).name, 0, 'Loving BaseDesk so far — the portal is so much cleaner than what we had before.', 0, hoursAgo(200));
+  insReply.run('fr_w2', 'ft_welcome', agent.id, agent.name, 1, 'Thanks for the kind words! Keep the feedback coming.', 0, hoursAgo(6));
+
+  insTopic.run('ft_forward', 'how-to', 'How do I forward my support email into BaseDesk?',
+    'We have a shared inbox at help@ our domain and want replies to land in BaseDesk. What is the cleanest way to set that up?',
+    c(1).id, c(1).name, 0, 0, 0, 128, hoursAgo(72), hoursAgo(70));
+  insReply.run('fr_f1', 'ft_forward', agent.id, agent.name, 1,
+    'Add an Email channel under Settings → Channels, then set a forwarding rule at your mail provider to the inbound address it gives you. New mail becomes a ticket automatically.',
+    1, hoursAgo(70));
+
+  insTopic.run('ft_darkmode', 'feature-requests', 'Add a dark mode to the customer portal',
+    'The agent workspace has a lovely dark theme — would love the same for the customer-facing portal.',
+    c(2).id, c(2).name, 0, 0, 0, 210, hoursAgo(120), hoursAgo(20));
+  insReply.run('fr_d1', 'ft_darkmode', c(3).id, c(3).name, 0, '+1, my eyes would thank you during late-night tickets.', 0, hoursAgo(90));
+  insReply.run('fr_d2', 'ft_darkmode', agent.id, agent.name, 1, 'Great idea — this is on our roadmap. Following this topic for updates.', 0, hoursAgo(20));
+
+  insTopic.run('ft_safari', 'bugs', 'Attachment preview not loading on Safari 17',
+    'When I open a ticket with an image attachment in Safari, the preview stays blank. Works fine in Chrome.',
+    c(3).id, c(3).name, 0, 0, 0, 64, hoursAgo(30), hoursAgo(28));
+  insReply.run('fr_s1', 'ft_safari', agent.id, agent.name, 1, 'Thanks for the report — what file type is the attachment? We are trying to reproduce.', 0, hoursAgo(28));
+
+  insTopic.run('ft_tips', 'tips', 'Tip: canned replies + keyboard shortcuts save me hours',
+    'Press Ctrl-K to jump anywhere, and set up canned replies for your top 10 answers. My handle time dropped a ton.',
+    c(0).id, c(0).name, 0, 0, 0, 156, hoursAgo(15), hoursAgo(15));
+}
+
 /** Imports shared/seed.json into the database if the tickets table is empty. */
 export function seedIfEmpty(db: DatabaseSync): void {
   const row = db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number };
@@ -136,6 +178,9 @@ export function seedIfEmpty(db: DatabaseSync): void {
     ];
     db.prepare('INSERT INTO status_incidents (id, title, impact, status, createdAt, resolvedAt, updates) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run('si_seed', 'Elevated email delivery latency', 'minor', 'resolved', hoursAgo(50), hoursAgo(47), JSON.stringify(incidentUpdates));
+
+    seedForum(db, seed.agents, seed.contacts, hoursAgo);
+
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
