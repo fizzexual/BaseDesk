@@ -25,6 +25,7 @@ import { ChannelsPage } from '../features/channels/ChannelsPage';
 import { WallboardPage } from '../features/wallboard/WallboardPage';
 import { DocsPage } from '../features/docs/DocsPage';
 import { ForumPage } from '../features/forum/ForumPage';
+import { GraphPage } from '../features/graph/GraphPage';
 import { LoginScreen } from './LoginScreen';
 
 function Boot({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,7 @@ function AgentApp() {
           <Route path="/team" element={<TeamPage />} />
           <Route path="/community" element={<ForumPage />} />
           <Route path="/community/:id" element={<ForumPage />} />
+          <Route path="/graph" element={<GraphPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/docs/:slug" element={<DocsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
