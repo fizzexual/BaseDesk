@@ -8,9 +8,10 @@ const media =
     : null;
 
 export function readThemePref(): ThemePref {
-  if (typeof localStorage === 'undefined') return 'system';
+  // Dark-first brand: default to dark until the user explicitly picks a theme.
+  if (typeof localStorage === 'undefined') return 'dark';
   const raw = localStorage.getItem(THEME_KEY);
-  return raw === 'dark' || raw === 'light' || raw === 'system' ? raw : 'system';
+  return raw === 'dark' || raw === 'light' || raw === 'system' ? raw : 'dark';
 }
 
 export function applyTheme(pref: ThemePref) {
