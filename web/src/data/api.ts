@@ -2,7 +2,7 @@ import type {
   AiAction, AiAgent, AiAgentCreate, AiAgentPatch, AiProvider, AiProviderSave, AiTestResult, Agent, AgentInvite,
   AgentPatch, AiAutomation, ArticleCreate, ArticlePatch, AssignmentSettings, AutoAck, HandoverNote, OnCallConfig, Attachment, AutomationRule, CannedReply, ChannelConn, ChannelCreate, ChannelPatch, ChannelTestResult, TimeRule,
   Announcement, Branding, AuditEvent, CustomFieldCreate, CustomFieldDef, CustomFieldPatch, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, Notification, SideConversation, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, SavedView, SavedViewCreate,
-  Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, SlaHours,
+  Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
@@ -57,7 +57,7 @@ export class ApiRepository implements Repository {
     return updated;
   }
 
-  addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[] }): Promise<{ message: Message; ticket: Ticket }> {
+  addMessage(ticketId: string, input: { kind: 'reply' | 'note'; body: string; attachmentIds?: string[]; embeds?: MessageEmbed[] }): Promise<{ message: Message; ticket: Ticket }> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/messages`, jsonInit('POST', input));
   }
   async deleteMessage(ticketId: string, messageId: string): Promise<Message> {
