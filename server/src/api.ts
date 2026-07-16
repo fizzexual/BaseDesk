@@ -31,7 +31,7 @@ import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { isOpenNow, nextOpenIso, normalizeBusinessHours } from './business-hours.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
-import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI } from './ai-llm.js';
+import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI, translateAI } from './ai-llm.js';
 import { ping, type LlmConfig } from './llm.js';
 import type { ThreadMsg } from './ai-prompts.js';
 import type {
@@ -3028,6 +3028,20 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync } {
     const contactName = contact?.name ?? 'there';
     const fallback = summarizeThread({ contactName, messages: getMessages(db, ticket.id) });
     const result = await summarizeThreadAI(getAiProviderConfig(db), { contactName, thread: threadOf(ticket.id) }, fallback);
+    recordUsage('summary', result.usage);
+    return c.json(result);
+  });
+
+  app.post('/api/ai/translate', async (c) => {
+    let input: { text?: unknown; targetLang?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    if (typeof input.text !== 'string' || input.text.trim() === '') return c.json({ error: 'text is required' }, 400);
+    const targetLang = typeof input.targetLang === 'string' && input.targetLang.trim() !== '' ? input.targetLang.trim() : 'English';
+    const result = await translateAI(getAiProviderConfig(db), input.text.slice(0, 8000), targetLang);
     recordUsage('summary', result.usage);
     return c.json(result);
   });

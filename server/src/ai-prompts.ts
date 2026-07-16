@@ -151,6 +151,22 @@ export function summaryMessages(ctx: SummaryCtx): ChatMessage[] {
   ];
 }
 
+/** Precise, commentary-free translation into `targetLang`, returned as JSON so we
+ *  also get the detected source language. */
+export function translateMessages(text: string, targetLang: string): ChatMessage[] {
+  const system = [
+    `You are a precise translation engine inside a customer-support tool.`,
+    `Detect the language of the message and translate it into ${targetLang}.`,
+    `Preserve meaning, tone, names, numbers, URLs and line breaks. Add no notes or commentary.`,
+    `If the text is already in ${targetLang}, return it unchanged.`,
+    `Respond ONLY with a JSON object: {"sourceLanguage": "<detected language, in English>", "translation": "<the translated text>"}.`,
+  ].join('\n');
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: text },
+  ];
+}
+
 /**
  * Autonomous auto-resolve. The model may ONLY answer from the knowledge base; if
  * the KB does not clearly resolve the ticket it must abstain, and we fall back to

@@ -4,7 +4,7 @@
 // missing key, a provider outage, or a malformed completion degrades gracefully.
 
 import { chat, type LlmConfig, type TokenUsage } from './llm.js';
-import { draftMessages, resolveMessages, summaryMessages, triageMessages, type DraftCtx, type SummaryCtx, type TriageCtx } from './ai-prompts.js';
+import { draftMessages, resolveMessages, summaryMessages, translateMessages, triageMessages, type DraftCtx, type SummaryCtx, type TriageCtx } from './ai-prompts.js';
 import type { AiProviderConfig, TicketPriority } from './types.js';
 
 export type AiSource = 'model' | 'rules';
@@ -109,6 +109,31 @@ export async function draftReplyAI(cfg: AiProviderConfig, ctx: DraftCtx, fallbac
     return { body, source: 'model', usage };
   } catch (err) {
     return { body: fallback, source: 'rules', usage: ZERO_USAGE, reason: failReason(err) };
+  }
+}
+
+export interface TranslateResult {
+  text: string;
+  detectedLang: string | null;
+  source: AiSource;
+  usage: TokenUsage;
+  reason?: string;
+}
+
+/** Model-backed translation into `targetLang`. Free & precise: uses whatever
+ *  provider is configured (including a local model). Falls back to the original
+ *  text when no provider is set up or the call fails. */
+export async function translateAI(cfg: AiProviderConfig, text: string, targetLang: string): Promise<TranslateResult> {
+  if (!providerReady(cfg)) return { text, detectedLang: null, source: 'rules', usage: ZERO_USAGE, reason: NOT_CONFIGURED };
+  try {
+    const cap = cfg.reasoning ? 3000 : Math.min(2400, Math.max(400, Math.ceil(text.length / 2) + 300));
+    const { text: raw, usage } = await chat(toLlm(cfg), translateMessages(text, targetLang), { json: true, maxTokens: cap, temperature: 0 });
+    const obj = extractJson(raw) as { translation?: unknown; sourceLanguage?: unknown };
+    const translated = typeof obj.translation === 'string' && obj.translation.trim() !== '' ? obj.translation : text;
+    const detectedLang = typeof obj.sourceLanguage === 'string' && obj.sourceLanguage.trim() !== '' ? obj.sourceLanguage.trim() : null;
+    return { text: translated, detectedLang, source: 'model', usage };
+  } catch (err) {
+    return { text, detectedLang: null, source: 'rules', usage: ZERO_USAGE, reason: failReason(err) };
   }
 }
 
