@@ -59,6 +59,76 @@ function Attachments({ items }: { items: Attachment[] }) {
   );
 }
 
+/** A cited knowledge-base passage, rendered as a sourced card that links back to the article. */
+function Citation({ c }: { c: KbCitation }) {
+  return (
+    <div className="overflow-hidden rounded-md border border-line bg-surface">
+      <Link to={`/kb/${c.articleId}`} className="flex items-start gap-2 px-3 py-2 transition-colors hover:bg-surface-2">
+        <IconBook size={14} className="mt-0.5 shrink-0 text-accent" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            Help article{c.category !== null ? ` · ${c.category}` : ''}
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] font-medium text-accent">{c.title}</span>
+        </span>
+      </Link>
+      <blockquote className="border-t border-line px-3 py-2 text-[13px] leading-relaxed text-text-2">
+        “<CitationPassage passage={c.passage} highlights={c.highlights} />”
+      </blockquote>
+    </div>
+  );
+}
+
+/** An agent's choice prompt as seen in the thread: read-only, with the customer's pick once answered. */
+function ChoicePromptCard({ p }: { p: ChoicePrompt }) {
+  const chosen = new Set(p.answer?.optionIds ?? []);
+  const answered = p.answer != null;
+  return (
+    <div className="rounded-md border border-line bg-surface px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <IconList size={14} className="shrink-0 text-accent" />
+        <span className="text-[13px] font-medium">{p.question}</span>
+      </div>
+      <div className={cx('mt-2', p.layout === 'buttons' ? 'flex flex-wrap gap-1.5' : 'flex flex-col gap-1')}>
+        {p.options.map((o) => {
+          const isChosen = chosen.has(o.id);
+          return (
+            <span
+              key={o.id}
+              className={cx(
+                'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[13px]',
+                p.layout === 'dropdown' && 'w-full',
+                isChosen ? 'border-green bg-green-bg font-medium text-text' : 'border-line text-text-2',
+              )}
+            >
+              {isChosen && <IconCheck size={12} className="shrink-0 text-green" />}
+              {o.label}
+            </span>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11px] text-text-3">
+        {answered
+          ? 'Customer answered'
+          : p.layout === 'dropdown'
+            ? 'Customer picks from a dropdown'
+            : 'Customer taps a button to answer'}
+      </p>
+    </div>
+  );
+}
+
+/** Structured cards attached to a message: KB citations and choice prompts. */
+function Embeds({ items }: { items: MessageEmbed[] }) {
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {items.map((e, i) =>
+        e.type === 'kb_citation' ? <Citation key={`${e.articleId}-${i}`} c={e} /> : <ChoicePromptCard key={`prompt-${i}`} p={e} />,
+      )}
+    </div>
+  );
+}
+
 function EventRow({ event }: { event: TicketEvent }) {
   const agents = useApp((s) => s.agents);
   const actor = event.actorName ?? (event.actorId !== null ? agents[event.actorId]?.name : null) ?? 'Automation';
@@ -106,33 +176,45 @@ function MessageRow({
   }
 
   return (
-    <div className={cx('flex items-start gap-3', mine && 'flex-row-reverse')}>
-      <Avatar name={name} hue={hue} size={28} className="mt-0.5" />
-      <div
-        onContextMenu={(e) => onContextMenu(e, message)}
-        className={cx(
-          'min-w-0 max-w-[85%] rounded-lg px-3.5 py-2.5',
-          mine ? 'rounded-tr-sm' : 'rounded-tl-sm',
-          // Position is the primary sender cue; a light hue difference reinforces it
-          // while keeping default (readable) text on every bubble.
-          isNote ? 'bg-amber-bg' : mine ? 'bg-blue-bg' : 'bg-surface-2',
-        )}
-      >
-        <div className={cx('mb-1 flex items-baseline gap-2', mine && 'flex-row-reverse')}>
-          <span className="text-[13px] font-medium">{name}</span>
+    <div className={cx('flex items-start gap-2.5', mine && 'flex-row-reverse')}>
+      <Avatar name={name} hue={hue} size={30} className="mt-0.5 shrink-0" />
+      <div className={cx('flex min-w-0 max-w-[82%] flex-col', mine ? 'items-end' : 'items-start')}>
+        {/* Sender + time sit on a line above the bubble (customer left, agent right). */}
+        <div className="mb-1 flex items-center gap-1.5 px-0.5 text-[12px]">
+          {mine ? (
+            <>
+              <TimeAgo iso={message.at} className="text-text-3" />
+              <span className="text-text-3">·</span>
+              <span className="font-medium text-text-2">{name}</span>
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-text-2">{name}</span>
+              <span className="text-text-3">·</span>
+              <TimeAgo iso={message.at} className="text-text-3" />
+            </>
+          )}
           {isNote && (
             <Tooltip title="Internal note" label="Only your team can see this — the customer is never notified.">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-amber">
-                Internal note
-              </span>
+              <span className="ml-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber">Internal note</span>
             </Tooltip>
           )}
-          <TimeAgo iso={message.at} />
         </div>
-        {message.body.trim() !== '' && <Body text={message.body} />}
-        {message.attachments !== undefined && message.attachments.length > 0 && (
-          <Attachments items={message.attachments} />
-        )}
+        {/* Neutral dark bubble on both sides — position + avatar signal the sender. */}
+        <div
+          onContextMenu={(e) => onContextMenu(e, message)}
+          className={cx(
+            'w-fit max-w-full rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed',
+            mine ? 'rounded-tr-md' : 'rounded-tl-md',
+            isNote ? 'bg-amber-bg' : 'bg-surface-2',
+          )}
+        >
+          {message.body.trim() !== '' && <Body text={message.body} />}
+          {message.embeds !== undefined && message.embeds.length > 0 && <Embeds items={message.embeds} />}
+          {message.attachments !== undefined && message.attachments.length > 0 && (
+            <Attachments items={message.attachments} />
+          )}
+        </div>
       </div>
     </div>
   );
