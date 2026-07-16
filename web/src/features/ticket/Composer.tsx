@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../../data/store';
-import type { Agent, AiSource, Attachment, CannedReply, Contact, Ticket, TicketPatch, TokenUsage } from '../../data/types';
+import type { Agent, AiSource, Attachment, CannedReply, Contact, MessageEmbed, Ticket, TicketPatch, TokenUsage } from '../../data/types';
 import { formatBytes } from '../../data/attachments';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
