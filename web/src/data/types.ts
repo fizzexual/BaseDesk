@@ -209,47 +209,6 @@ export interface ForumList {
   categories: readonly ForumCategory[];
 }
 
-/** Ticket knowledge graph: a category → sub-category → ticket hierarchy. */
-export interface GraphSub {
-  name: string;
-  count: number;
-}
-export interface GraphTaxonomyNode {
-  name: string;
-  count: number;
-  subs: GraphSub[];
-}
-export interface GraphHub {
-  key: string;
-  label: string;
-  count: number;
-  /** Index into the colour palette. */
-  colorKey: number;
-}
-export interface GraphLeaf {
-  key: string;
-  label: string;
-  /** Key of the hub this leaf hangs off. */
-  hub: string;
-  kind: 'sub' | 'ticket';
-  category: string;
-  sub: string;
-  ticketId?: string;
-  number?: number;
-  status?: TicketStatus;
-  priority?: TicketPriority;
-}
-export interface TicketGraph {
-  /** The full two-level tree, for the tabs — present at every drill level. */
-  taxonomy: GraphTaxonomyNode[];
-  level: 0 | 1 | 2;
-  focus: { category: string | null; sub: string | null };
-  hubs: GraphHub[];
-  leaves: GraphLeaf[];
-  total: number;
-  shown: number;
-}
-
 /** Model-provider status as seen by the client — never carries the API key. */
 export interface AiProvider {
   enabled: boolean;
