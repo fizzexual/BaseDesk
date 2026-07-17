@@ -33,6 +33,7 @@ import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
 import { isOpenNow, nextOpenIso, normalizeBusinessHours } from './business-hours.js';
 import { classifySub } from './taxonomy.js';
+import { findRelated, type RelatedRow } from './related.js';
 import { detectLanguage } from './detect-language.js';
 import { draftReply, rankKb, runAgent, suggestTriage, summarizeThread, type AgentContext, type Autonomy } from './ai-engine.js';
 import { draftReplyAI, providerReady, resolveAI, suggestTriageAI, summarizeThreadAI, translateAI } from './ai-llm.js';
@@ -2053,6 +2054,44 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
       leaves.push({ key: t.id, label: t.subject, hub: `sub:${focusCat}/${focusSub}`, kind: 'ticket', category: focusCat, sub: focusSub, ticketId: t.id, number: t.number, status: t.status, priority: t.priority });
     }
     return c.json({ taxonomy, level: 2, focus: { category: focusCat, sub: focusSub }, hubs, leaves, total: inSub.length, shown: leaves.length });
+  });
+
+  /**
+   * Related tickets for one ticket — the AI's lookup tool. It walks the graph to
+   * the ticket's own category → sub-category branch and only compares inside it,
+   * so answering "what does this look like?" costs a couple of hundred
+   * comparisons instead of a full sweep, and returns titles rather than bodies.
+   */
+  app.get('/api/tickets/:id/related', (c) => {
+    const ticket = getTicket(db, c.req.param('id'));
+    if (ticket === null) return c.json({ error: 'ticket not found' }, 404);
+    const pool = db.prepare(
+      `SELECT id, number, subject, status, requesterId, COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category
+       FROM tickets
+       WHERE mergedIntoId IS NULL AND bucket = 'inbox'`,
+    ).all() as unknown as RelatedRow[];
+    const self: RelatedRow = {
+      id: ticket.id, number: ticket.number, subject: ticket.subject, status: ticket.status,
+      requesterId: ticket.requesterId, category: (ticket.category ?? '').trim() || 'Uncategorized',
+    };
+    const found = findRelated(self, pool, Math.min(Math.max(Number(c.req.query('limit')) || 5, 1), 20));
+    const branch = `${self.category} → ${found.sub}`;
+
+    if (c.req.query('format') === 'outline') {
+      const lines = [
+        `#${self.number} ${self.subject} — ${branch}`,
+        `Searched ${found.compared} tickets in that ${found.scope === 'sub' ? 'sub-category' : 'category (sub-category was too small)'} — ${pool.length} active in total.`,
+      ];
+      if (found.matches.length === 0) lines.push('No related tickets in this branch.');
+      else for (const m of found.matches) lines.push(`- #${m.number} ${m.title} [${m.status}] · ${m.score}${m.sameRequester ? ' · same customer' : ''}`);
+      return c.text(lines.join('\n'));
+    }
+
+    return c.json({
+      ticket: { id: self.id, number: self.number, title: self.subject, category: self.category, sub: found.sub },
+      scope: { branch, searched: found.scope, compared: found.compared, totalActive: pool.length },
+      related: found.matches,
+    });
   });
 
   // Split selected messages out of a ticket into a new, related ticket — the inverse of merge.
