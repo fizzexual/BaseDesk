@@ -35,7 +35,7 @@ describe('ticket knowledge graph', () => {
     // Each sub contributes at most the per-sub sample cap.
     const perSub = new Map<string, number>();
     for (const l of g.leaves) perSub.set(l.sub, (perSub.get(l.sub) ?? 0) + 1);
-    for (const n of perSub.values()) expect(n).toBeLessThanOrEqual(16);
+    for (const n of perSub.values()) expect(n).toBeLessThanOrEqual(40);
   });
 
   it('level 2 — drilling into a sub-category yields only that sub-category’s tickets', async () => {

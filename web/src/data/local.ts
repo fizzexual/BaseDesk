@@ -887,7 +887,7 @@ export class LocalRepository implements Repository {
     const subs = taxonomy.find((t) => t.name === focusCat)?.subs ?? [];
     if (focusSub === null) {
       subs.forEach((s, i) => hubs.push({ key: `sub:${focusCat}/${s.name}`, label: s.name, count: s.count, colorKey: i }));
-      const perSub = 16;
+      const perSub = 40;
       const seen = new Map<string, number>();
       for (const c of inCat) {
         const n = seen.get(c.sub) ?? 0;

@@ -2035,7 +2035,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     if (!focusSub) {
       // Level 1 — sub-categories are hubs, a sample of their tickets are the leaves.
       subs.forEach((s, i) => hubs.push({ key: `sub:${focusCat}/${s.name}`, label: s.name, count: s.count, colorKey: i }));
-      const perSub = 16;
+      const perSub = 40;
       const seen = new Map<string, number>();
       for (const t of inCat) {
         const n = seen.get(t.sub) ?? 0;

@@ -7,52 +7,136 @@ import { IconChevronRight, IconGraph } from '../../icons';
 
 const HUES = [210, 150, 32, 275, 0, 190, 305, 95, 50, 255];
 const hueOf = (k: number) => HUES[((k % HUES.length) + HUES.length) % HUES.length];
-const hubFill = (h: number) => `hsl(${h} 58% 50%)`;
-const dotFill = (h: number) => `hsl(${h} 52% 62%)`;
-const edgeStroke = (h: number) => `hsl(${h} 45% 58%)`;
-const PRIORITY_R: Record<string, number> = { urgent: 6.5, high: 5.5, medium: 4.5, low: 4 };
+// Muted rather than full-saturation — a wall of vivid dots is hard to look at.
+const hubFill = (h: number) => `hsl(${h} 44% 55%)`;
+const dotFill = (h: number) => `hsl(${h} 36% 64%)`;
+const EDGE = 'rgb(138 138 152)'; // neutral links, like Obsidian's
+const PRIORITY_R: Record<string, number> = { urgent: 6, high: 5.2, medium: 4.4, low: 4 };
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-const W = 1600;
-const H = 1000;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 interface SimNode { key: string; kind: 'hub' | 'leaf'; label: string; hue: number; x: number; y: number; r: number; count?: number; leaf?: GraphLeaf }
 
-/** Deterministic cluster layout: hubs on a ring, their leaves in a sunflower disc. */
-function layout(hubs: GraphHub[], leaves: GraphLeaf[]): { nodes: SimNode[]; edges: [number, number][] } {
-  const shown = new Map<string, number>();
-  for (const l of leaves) shown.set(l.hub, (shown.get(l.hub) ?? 0) + 1);
-  const clusterR = (n: number) => Math.min(330, 52 + Math.sqrt(n) * 30);
-  const circ = hubs.reduce((s, h) => s + 2 * clusterR(shown.get(h.key) ?? 1) + 90, 0);
-  const ringR = hubs.length <= 1 ? 0 : Math.max(330, circ / (2 * Math.PI));
-  const cx = W / 2;
-  const cy = H / 2;
+/**
+ * Force-directed layout, the same shape of simulation Obsidian's graph uses:
+ * charge repulsion + spring links + collision, cooled over a fixed number of
+ * ticks. A gravity force is essential here because the graph is a *forest* of
+ * category stars with no links between them — without it the clusters drift
+ * apart forever instead of settling into one organic mass.
+ */
+function simulate(nodes: SimNode[], links: [number, number][]): void {
+  const N = nodes.length;
+  if (N === 0) return;
+  const vx = new Float64Array(N);
+  const vy = new Float64Array(N);
+  // Phyllotaxis seeding (deterministic, evenly spread — no random start).
+  for (let i = 0; i < N; i += 1) {
+    const r = 12 * Math.sqrt(0.5 + i);
+    const a = i * GOLDEN;
+    nodes[i].x = r * Math.cos(a);
+    nodes[i].y = r * Math.sin(a);
+  }
+  const deg = new Int32Array(N);
+  for (const [s, t] of links) { deg[s] += 1; deg[t] += 1; }
+  // A link moves its lighter end most, so heavily-linked hubs stay put.
+  const bias = links.map(([s, t]) => deg[s] / (deg[s] + deg[t]));
+  const strength = links.map(([s, t]) => 1 / Math.min(deg[s] || 1, deg[t] || 1));
 
+  // Repulsion vs. gravity sets how far the star-clusters spread; links set how
+  // tightly each star packs. Absolute scale doesn't matter — the view auto-fits.
+  const LINK_DIST = 40;
+  const CHARGE = -90;
+  const GRAVITY = 0.05;
+  const DECAY = 0.4;
+  const TICKS = 320;
+  // Every leaf hangs off one hub, so a single link distance would settle them
+  // into a thin ring. Spreading the distances (golden-ratio, deterministic)
+  // fills each cluster into an organic mass instead.
+  const linkDist = links.map((_, k) => LINK_DIST * (0.45 + 1.15 * (((k + 1) * 0.6180339887498949) % 1)));
+  const alphaDecay = 1 - Math.pow(0.001, 1 / TICKS);
+  let alpha = 1;
+
+  for (let tick = 0; tick < TICKS; tick += 1) {
+    alpha += (0 - alpha) * alphaDecay;
+
+    for (let i = 0; i < N; i += 1) {
+      for (let j = i + 1; j < N; j += 1) {
+        let dx = nodes[j].x - nodes[i].x;
+        let dy = nodes[j].y - nodes[i].y;
+        let l = dx * dx + dy * dy;
+        if (l < 1e-6) { dx = (i - j) * 1e-3 || 1e-3; dy = 1e-3; l = dx * dx + dy * dy; }
+        const w = (CHARGE * alpha) / l;
+        vx[i] += dx * w; vy[i] += dy * w;
+        vx[j] -= dx * w; vy[j] -= dy * w;
+      }
+    }
+
+    for (let k = 0; k < links.length; k += 1) {
+      const [si, ti] = links[k];
+      let dx = nodes[ti].x + vx[ti] - nodes[si].x - vx[si];
+      let dy = nodes[ti].y + vy[ti] - nodes[si].y - vy[si];
+      let l = Math.sqrt(dx * dx + dy * dy);
+      if (l < 1e-6) { dx = 1e-3; dy = 1e-3; l = Math.sqrt(dx * dx + dy * dy); }
+      const f = ((l - linkDist[k]) / l) * alpha * strength[k];
+      dx *= f; dy *= f;
+      const b = bias[k];
+      vx[ti] -= dx * b; vy[ti] -= dy * b;
+      vx[si] += dx * (1 - b); vy[si] += dy * (1 - b);
+    }
+
+    for (let i = 0; i < N; i += 1) {
+      vx[i] -= nodes[i].x * GRAVITY * alpha;
+      vy[i] -= nodes[i].y * GRAVITY * alpha;
+    }
+
+    // Collision — keeps dots from stacking, which is what gives the mass its texture.
+    for (let i = 0; i < N; i += 1) {
+      for (let j = i + 1; j < N; j += 1) {
+        const ri = nodes[i].r + 2.5;
+        const rj = nodes[j].r + 2.5;
+        const min = ri + rj;
+        const dx = (nodes[j].x + vx[j]) - (nodes[i].x + vx[i]);
+        const dy = (nodes[j].y + vy[j]) - (nodes[i].y + vy[i]);
+        const l2 = dx * dx + dy * dy;
+        if (l2 >= min * min || l2 < 1e-9) continue;
+        const l = Math.sqrt(l2);
+        const push = ((min - l) / l) * 0.6;
+        const wi = rj / (ri + rj);
+        const wj = ri / (ri + rj);
+        vx[j] += dx * push * wj; vy[j] += dy * push * wj;
+        vx[i] -= dx * push * wi; vy[i] -= dy * push * wi;
+      }
+    }
+
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0; i < N; i += 1) {
+      vx[i] *= 1 - DECAY; vy[i] *= 1 - DECAY;
+      nodes[i].x += vx[i]; nodes[i].y += vy[i];
+      cx += nodes[i].x; cy += nodes[i].y;
+    }
+    cx /= N; cy /= N;
+    for (let i = 0; i < N; i += 1) { nodes[i].x -= cx; nodes[i].y -= cy; }
+  }
+}
+
+function layout(hubs: GraphHub[], leaves: GraphLeaf[]): { nodes: SimNode[]; edges: [number, number][] } {
   const nodes: SimNode[] = [];
   const hubIndex = new Map<string, number>();
-  hubs.forEach((h, i) => {
-    const a = (i / hubs.length) * Math.PI * 2 - Math.PI / 2;
+  hubs.forEach((h) => {
     hubIndex.set(h.key, nodes.length);
-    nodes.push({ key: h.key, kind: 'hub', label: h.label, hue: hueOf(h.colorKey), count: h.count, r: 12 + Math.sqrt(h.count) * 0.8, x: cx + Math.cos(a) * ringR, y: cy + Math.sin(a) * ringR });
+    nodes.push({ key: h.key, kind: 'hub', label: h.label, hue: hueOf(h.colorKey), count: h.count, r: 10 + Math.sqrt(h.count) * 0.75, x: 0, y: 0 });
   });
-
   const edges: [number, number][] = [];
-  const seq = new Map<string, number>();
   for (const l of leaves) {
     const hi = hubIndex.get(l.hub);
     if (hi === undefined) continue;
-    const hub = nodes[hi];
-    const total = shown.get(l.hub) ?? 1;
-    const j = seq.get(l.hub) ?? 0;
-    seq.set(l.hub, j + 1);
-    const rr = clusterR(total) * Math.sqrt((j + 0.6) / total);
-    const ang = j * GOLDEN;
-    const r = l.kind === 'sub' ? 7 : (PRIORITY_R[l.priority ?? ''] ?? 4.5);
-    const idx = nodes.length;
-    nodes.push({ key: l.key, kind: 'leaf', label: l.label, hue: hub.hue, r, leaf: l, x: hub.x + Math.cos(ang) * rr, y: hub.y + Math.sin(ang) * rr });
-    edges.push([idx, hi]);
+    const r = l.kind === 'sub' ? 6.5 : (PRIORITY_R[l.priority ?? ''] ?? 4.4);
+    edges.push([nodes.length, hi]); // source = leaf (light end), target = hub
+    nodes.push({ key: l.key, kind: 'leaf', label: l.label, hue: nodes[hi].hue, r, leaf: l, x: 0, y: 0 });
   }
+  simulate(nodes, edges);
   return { nodes, edges };
 }
 
@@ -218,9 +302,9 @@ export function GraphPage() {
           >
             <g transform={`translate(${view.tx} ${view.ty}) scale(${view.s})`}>
               {edges.map(([u, v], i) => {
-                const a = nodes[u];
-                const dim = activeSet !== null && !(activeSet.has(u) && activeSet.has(v));
-                return <line key={i} x1={a.x} y1={a.y} x2={nodes[v].x} y2={nodes[v].y} stroke={edgeStroke(a.hue)} strokeWidth={0.6} opacity={dim ? 0.04 : 0.26} />;
+                const lit = activeSet !== null && activeSet.has(u) && activeSet.has(v);
+                const opacity = activeSet === null ? 0.22 : lit ? 0.65 : 0.1;
+                return <line key={i} x1={nodes[u].x} y1={nodes[u].y} x2={nodes[v].x} y2={nodes[v].y} stroke={EDGE} strokeWidth={lit ? 1 : 0.7} opacity={opacity} />;
               })}
               {nodes.map((n, i) => {
                 const dim = activeSet !== null && !activeSet.has(i);
@@ -228,7 +312,7 @@ export function GraphPage() {
                 const isSub = n.leaf?.kind === 'sub';
                 const showLabel = isHub || isSub || showTicketLabels || (activeSet !== null && activeSet.has(i));
                 return (
-                  <g key={n.key} opacity={dim ? 0.16 : 1} style={{ cursor: 'pointer' }}
+                  <g key={n.key} opacity={dim ? 0.55 : 1} style={{ cursor: 'pointer' }}
                     onPointerDown={(e) => e.stopPropagation()}
                     onPointerEnter={() => setHover(i)}
                     onPointerLeave={() => setHover((h) => (h === i ? null : h))}
