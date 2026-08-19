@@ -26,8 +26,26 @@ export function alertSla(sla: TicketSla | null): TicketSla | null {
     : null;
 }
 
-const GRID_FULL = 'grid-cols-[minmax(220px,1.2fr)_minmax(0,2.4fr)_150px_128px]';
+/**
+ * Column templates.
+ *
+ * The customer column carries a hard min width while subject is `minmax(0, …)`, so
+ * subject absorbs every pixel of shortfall and collapses to zero first: at a 607px pane
+ * the grid resolved to `34px 200px 0px 150px 128px`, leaving the subject unreadable and
+ * its header label painting across Priority. Below the breakpoint we drop the customer
+ * column instead — the requester still reads from the row avatar and subject gets the room.
+ *
+ * These are *container* queries, not viewport ones: the list pane narrows again when a
+ * ticket is open, so a viewport breakpoint would miss the case that actually hurts.
+ */
+// Written out in full rather than composed from a variable: Tailwind scans source text
+// for class names and cannot see one that is assembled at runtime.
+const GRID_FULL =
+  'grid-cols-[minmax(0,2.4fr)_150px_128px] @[640px]:grid-cols-[minmax(220px,1.2fr)_minmax(0,2.4fr)_150px_128px]';
 const GRID_NO_CUSTOMER = 'grid-cols-[minmax(0,2.4fr)_150px_128px]';
+const GRID_FULL_SELECTABLE =
+  'grid-cols-[34px_minmax(0,2.4fr)_150px_128px] @[640px]:grid-cols-[34px_minmax(200px,1.2fr)_minmax(0,2.4fr)_150px_128px]';
+const GRID_NO_CUSTOMER_SELECTABLE = 'grid-cols-[34px_minmax(0,2.4fr)_150px_128px]';
 
 export function TicketTable({
   tickets,
@@ -67,8 +85,8 @@ export function TicketTable({
   const selectable = onToggleSelect !== undefined;
   const grid = selectable
     ? hideCustomer
-      ? 'grid-cols-[34px_minmax(0,2.4fr)_150px_128px]'
-      : 'grid-cols-[34px_minmax(200px,1.2fr)_minmax(0,2.4fr)_150px_128px]'
+      ? GRID_NO_CUSTOMER_SELECTABLE
+      : GRID_FULL_SELECTABLE
     : hideCustomer
       ? GRID_NO_CUSTOMER
       : GRID_FULL;
@@ -79,7 +97,8 @@ export function TicketTable({
   }
 
   return (
-    <div>
+    // `@container` makes the column rules above respond to this pane's own width.
+    <div className="@container">
       <div
         className={cx(
           'sticky top-0 z-10 grid h-9 items-center gap-4 border-b border-line bg-surface px-4 text-[13px] text-text-3',
@@ -97,9 +116,9 @@ export function TicketTable({
             />
           </div>
         )}
-        {!hideCustomer && <div>Customer</div>}
-        <div>Subject</div>
-        <div>Priority</div>
+        {!hideCustomer && <div className="hidden truncate @[640px]:block">Customer</div>}
+        <div className="truncate">Subject</div>
+        <div className="truncate">Priority</div>
         <div />
       </div>
       {tickets.map((t) => {
@@ -157,7 +176,7 @@ export function TicketTable({
               </div>
             )}
             {!hideCustomer && (
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="hidden min-w-0 items-center gap-3 @[640px]:flex">
                 <Avatar name={contact?.name ?? '?'} hue={contact?.avatarHue ?? 0} size={32} />
                 <div className="min-w-0">
                   <div className="truncate text-[14px] font-medium">

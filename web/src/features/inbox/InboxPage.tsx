@@ -433,12 +433,18 @@ export function InboxPage() {
   const empty = emptyFor(view);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // `@container` so the toolbar below reacts to this pane's width, not the viewport's.
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      {/* The row is a fixed 52px, so anything that wraps spills out of it. The title
+          never wraps; the count is secondary and steps aside on a narrow pane rather
+          than folding into three lines across the search field. */}
       <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-line px-4">
-        <h1 className="text-[15px] font-semibold">{VIEW_TITLES[view]}</h1>
-        <span className="tabular-nums text-[13px] text-text-3">{countLabel}</span>
+        <h1 className="shrink-0 whitespace-nowrap text-[15px] font-semibold">{VIEW_TITLES[view]}</h1>
+        <span className="hidden whitespace-nowrap tabular-nums text-[13px] text-text-3 @[700px]:inline">
+          {countLabel}
+        </span>
         <div className="flex-1" />
-        <div className="relative">
+        <div className="relative min-w-0 shrink">
           <IconSearch
             size={15}
             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3"
@@ -447,7 +453,7 @@ export function InboxPage() {
             value={query}
             aria-label="Search tickets in this view"
             placeholder="Search tickets"
-            className="h-8 w-56 rounded-md border border-line bg-bg pl-8 pr-2.5 text-[13px] transition-colors focus:border-line-2"
+            className="h-8 w-36 min-w-0 rounded-md border border-line bg-bg pl-8 pr-2.5 text-[13px] transition-colors focus:border-line-2 @[700px]:w-56"
             onChange={(e) => {
               setQuery(e.target.value);
               setSelectedIndex(-1);
