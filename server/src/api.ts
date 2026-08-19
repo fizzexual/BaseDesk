@@ -206,8 +206,14 @@ function normalizeMacroActions(raw: unknown): MacroActions | null {
 }
 const PATCH_KEYS = ['status', 'priority', 'assigneeId', 'tags', 'bucket', 'snoozedUntil', 'subject', 'customFields'] as const;
 
+/**
+ * Ids are TEXT PRIMARY KEYs, so a collision is an insert failure, not a curiosity.
+ * Eight hex chars is 32 bits — by the birthday bound a table reaches even odds of a
+ * collision around 77k rows, which a busy install passes inside a year. Use the whole
+ * UUID. Attachment ids also appear in unauthenticated URLs, where guessability matters.
+ */
 function newId(prefix: string): string {
-  return `${prefix}${randomUUID().slice(0, 8)}`;
+  return `${prefix}${randomUUID().replace(/-/g, '')}`;
 }
 
 /** Simple djb2 string hash, used for contact avatar hues. */
@@ -1000,16 +1006,23 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   const app = new Hono();
 
   // Admin authentication gate. A no-op passthrough when auth is off (the default), so
-  // existing installs are unchanged. When on, admin /api routes require a valid session;
-  // the SPA, portal, auth, health, branding, uploads and channel webhooks stay open.
+  // existing installs are unchanged. When on, admin /api routes require a valid session.
+  //
+  // Only what a signed-out browser genuinely needs stays open, and no more. In
+  // particular /api/auth/* is NOT blanket-public: password reset and 2FA changes act on
+  // `currentAgentId()`, which falls back to the first admin, so exposing them would let
+  // anyone take that account over. Sign-in is the one open auth route.
+  const CHANNEL_PUBLIC_RE = /^\/api\/channels\/[^/]+\/(inbound|command|thread)$/;
   const isPublicPath = (p: string): boolean =>
     !p.startsWith('/api/') ||
-    p.startsWith('/api/auth/') ||
+    p === '/api/auth/login' ||
     p.startsWith('/api/portal/') ||
     p === '/api/health' ||
-    p === '/api/branding' ||
-    p.startsWith('/api/uploads') ||
-    p.includes('/inbound');
+    // The customer portal and the chat widget run without an admin session and cannot
+    // render a thread without these two.
+    p === '/api/uploads' ||
+    p.startsWith('/api/attachments/') ||
+    CHANNEL_PUBLIC_RE.test(p);
   app.use('*', async (c, next) => {
     if (!authEnabled()) return next();
     const agentId = sessionAgentId(bearerToken(c.req.header('Authorization')));
@@ -4042,6 +4055,20 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     return null;
   };
 
+  // A web-chat channel's inbound token ships inside a <script> tag on the customer's
+  // public site, so it identifies the *channel*, never a person. After a visitor sends
+  // their first message we hand back a signed token scoped to that one conversation;
+  // reading the thread requires it. The `visitor:` prefix keeps these tokens from being
+  // interchangeable with portal sessions, which are signed with the same secret.
+  const signVisitor = (channelId: string, contactId: string): string =>
+    signSession(psecret(), `visitor:${channelId}:${contactId}`);
+  const visitorContactId = (channelId: string, token: string | undefined): string | null => {
+    if (token === undefined || token === '') return null;
+    const subject = verifySession(psecret(), token);
+    const prefix = `visitor:${channelId}:`;
+    return subject !== null && subject.startsWith(prefix) ? subject.slice(prefix.length) : null;
+  };
+
   const insertMessageRow = (m: Message): void => {
     db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(m.id, m.ticketId, m.authorKind, m.authorId, m.kind, m.body, m.at);
@@ -4082,7 +4109,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
         : email !== '' ? email : `${channel.name} user`;
     const now = new Date().toISOString();
 
-    let contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(identity) as Contact | undefined;
+    // Case-insensitive, to match how the portal and agent app resolve contacts —
+    // otherwise "Bob@x.com" from a channel becomes a second contact with a split thread.
+    let contact = getContactByEmail(db, identity) ?? undefined;
     if (contact === undefined) {
       contact = {
         id: newId('c_'), name: displayName, email: identity, company: null, avatarHue: djb2(identity) % 360,
@@ -4114,7 +4143,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
         throw err;
       }
       notifyCustomerReply({ ticket: existing, message, contactName: contact.name });
-      return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true });
+      return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true, visitorToken: signVisitor(channel.id, contact.id) });
     }
 
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
@@ -4140,7 +4169,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     autoAssign(ticket.id, null, ticket.category);
     sendAutoAck(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
     sendOutsideHours(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
-    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false });
+    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false, visitorToken: signVisitor(channel.id, contact.id) });
   });
 
   // Manage a ticket from the channel side (e.g. a Discord slash command relayed
@@ -4150,6 +4179,12 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const id = c.req.param('id');
     const channel = getChannel(db, id);
     if (channel === null) return c.json({ error: 'channel not found' }, 404);
+    // A web-chat channel's token is published in the browser, so it must never be able
+    // to speak as an agent or change ticket state. Bot-relayed channels keep their
+    // token server-side and stay eligible.
+    if (channel.type === 'webchat') {
+      return c.json({ error: 'commands are not available on a web-chat channel — its token is public' }, 403);
+    }
     const raw = await c.req.text();
     const bad = checkInbound(c, channel, raw);
     if (bad !== null) return bad;
@@ -4310,16 +4345,19 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     return c.json({ ok: true });
   });
 
-  // Public thread read for the web widget: latest ticket for this contact on this channel.
+  // Public thread read for the web widget: the conversation belonging to the visitor
+  // token issued when they opened it. The channel token alone is not enough — it is
+  // public, so accepting `?contact=<email>` here would let anyone read any customer's
+  // chat by guessing their address.
   app.get('/api/channels/:id/thread', (c) => {
     const id = c.req.param('id');
     const channel = getChannel(db, id);
     if (channel === null) return c.json({ error: 'channel not found' }, 404);
     if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
-    const email = c.req.query('contact');
-    if (email === undefined || email === '') return c.json([]);
-    const contact = db.prepare('SELECT * FROM contacts WHERE email = ?').get(email) as Contact | undefined;
-    if (contact === undefined) return c.json([]);
+    const contactId = visitorContactId(channel.id, c.req.query('visitor'));
+    if (contactId === null) return c.json({ error: 'invalid visitor token' }, 401);
+    const contact = getContact(db, contactId);
+    if (contact === null) return c.json([]);
     const ticket = db
       .prepare('SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? ORDER BY createdAt DESC LIMIT 1')
       .get(channel.id, contact.id) as TicketRow | undefined;
@@ -4337,13 +4375,16 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   app.get('/api/search', (c) => {
     const q = c.req.query('q');
     if (q === undefined || q.trim() === '') return c.json({ ticketIds: [] });
-    const like = `%${q.trim()}%`;
+    // Escape the LIKE metacharacters so a query of "%" or "_" searches for that
+    // character instead of silently matching every ticket.
+    const like = `%${q.trim().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
     const rows = db
       .prepare(
         `SELECT DISTINCT t.id, t.lastMessageAt FROM tickets t
          LEFT JOIN messages m ON m.ticketId = t.id
          LEFT JOIN contacts c ON c.id = t.requesterId
-         WHERE t.subject LIKE ? OR m.body LIKE ? OR c.name LIKE ? OR c.email LIKE ?
+         WHERE t.subject LIKE ? ESCAPE '\\' OR m.body LIKE ? ESCAPE '\\'
+            OR c.name LIKE ? ESCAPE '\\' OR c.email LIKE ? ESCAPE '\\'
          ORDER BY t.lastMessageAt DESC
          LIMIT 30`,
       )

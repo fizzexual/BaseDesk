@@ -47,10 +47,12 @@ it('serves the widget thread for a contact', async () => {
   const app = makeApp();
   const boot = await (await app.request('/api/bootstrap')).json();
   const ch = boot.channels.find((c: { type: string }) => c.type === 'webchat');
-  await app.request(`/api/channels/${ch.id}/inbound?token=${ch.inboundToken}`, json('POST', {
+  const opened = await (await app.request(`/api/channels/${ch.id}/inbound?token=${ch.inboundToken}`, json('POST', {
     from: { email: 'threaduser@example.com' }, body: 'first message',
-  }));
-  const thread = await (await app.request(`/api/channels/${ch.id}/thread?token=${ch.inboundToken}&contact=threaduser@example.com`)).json();
+  }))).json();
+  // The thread is read with the per-conversation visitor token handed back by inbound —
+  // the channel token is public and identifies nobody.
+  const thread = await (await app.request(`/api/channels/${ch.id}/thread?token=${ch.inboundToken}&visitor=${encodeURIComponent(opened.visitorToken)}`)).json();
   expect(Array.isArray(thread)).toBe(true);
   expect(thread.length).toBeGreaterThanOrEqual(1);
 });
