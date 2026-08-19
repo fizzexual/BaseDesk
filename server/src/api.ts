@@ -25,6 +25,7 @@ import {
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hashPassword, randomTotpSecret, signSession, totpUri, verifyPassword, verifySession, verifyTotp } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
+import { RateLimiter } from './rate-limit.js';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty, seedForumIfEmpty } from './seed-load.js';
@@ -605,6 +606,28 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const s = agentCtx.getStore();
     return s !== undefined && s !== '' ? s : firstAdminId();
   };
+  // Credential endpoints are the one place an anonymous caller can make us burn CPU on
+  // demand: every attempt runs scrypt, which is deliberately slow. Unthrottled that is
+  // both a credential-stuffing oracle and a way to starve the single event loop, so the
+  // limit protects availability as much as it protects passwords.
+  const loginLimiter = new RateLimiter(10, 5 * 60_000); // 10 attempts / 5 min
+  const signupLimiter = new RateLimiter(5, 60 * 60_000); // 5 new accounts / hour
+  /**
+   * Rate-limit bucket for a request. Keyed per route so a burst against sign-in cannot
+   * spend the signup budget for the same address.
+   *
+   * The address comes from the proxy headers, which a direct caller can forge — so this
+   * raises the cost of an attack rather than making it impossible. Anything stronger
+   * needs a trusted-proxy configuration, which this deployment model does not have.
+   */
+  const rateKey = (c: Context, route: string): string => {
+    const fwd = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const ip = fwd !== undefined && fwd !== '' ? fwd : (c.req.header('x-real-ip') ?? 'local');
+    return `${route}:${ip}`;
+  };
+  const tooMany = (c: Context, retryAfter: number): Response =>
+    c.json({ error: 'Too many attempts — please wait and try again.' }, 429, { 'Retry-After': String(retryAfter) });
+
   const authEnabled = (): boolean => getSetting(db, 'auth_enabled') === '1';
   const authSecret = (): string => {
     let s = getSetting(db, 'auth_secret');
@@ -1034,6 +1057,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
 
   // --- Admin authentication (opt-in). Set a password while auth is off, then enable it. ---
   app.post('/api/auth/login', async (c) => {
+    const key = rateKey(c, 'auth-login');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { email?: unknown; password?: unknown; code?: unknown };
     try {
       input = await c.req.json();
@@ -1053,6 +1079,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
         return c.json({ error: 'A valid two-factor code is required', needs2fa: true }, 401);
       }
     }
+    loginLimiter.reset(key); // a correct sign-in clears the slate; typos should not accumulate
     return c.json({ token: signSession(authSecret(), agent.id), agent });
   });
 
@@ -3559,6 +3586,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   };
 
   app.post('/api/portal/register', async (c) => {
+    // Signup is also an account-enumeration surface: it answers differently for an
+    // address that already has a portal account than for one that does not.
+    const gate = signupLimiter.check(rateKey(c, 'portal-register'), Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { name?: unknown; email?: unknown; password?: unknown };
     try {
       input = await c.req.json();
@@ -3588,6 +3619,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   });
 
   app.post('/api/portal/login', async (c) => {
+    const key = rateKey(c, 'portal-login');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { email?: unknown; password?: unknown };
     try {
       input = await c.req.json();
@@ -3601,6 +3635,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     if (contact === null || hash === null || !verifyPassword(password, hash)) {
       return c.json({ error: 'Wrong email or password' }, 401);
     }
+    loginLimiter.reset(key);
     return c.json({ token: signSession(psecret(), contact.id), contact });
   });
 
