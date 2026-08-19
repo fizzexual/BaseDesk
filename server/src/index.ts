@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp, refreshModelCache } from './api.js';
+import { isStaticAssetPath } from './spa.js';
 
 const dataDir = process.env.DATA_DIR ?? './data';
 mkdirSync(dataDir, { recursive: true });
@@ -45,9 +46,21 @@ if (hasDist) {
     '</head>',
     `<script>window.__PORTAL_PORT__=${JSON.stringify(String(portalPort))}</script></head>`,
   );
-  app.get('/', (c) => c.html(indexHtml));
+  // index.html is the map to the content-hashed asset filenames, so a cached copy goes
+  // stale the moment we redeploy and points at files that no longer exist. The hashed
+  // assets themselves are immutable and stay cacheable; only this document must not be.
+  const INDEX_HEADERS = { 'Cache-Control': 'no-cache, must-revalidate' };
+
+  app.get('/', (c) => c.html(indexHtml, 200, INDEX_HEADERS));
   app.get('*', serveStatic({ root }));
-  app.get('*', (c) => (c.req.path.startsWith('/api/') ? c.json({ error: 'not found' }, 404) : c.html(indexHtml)));
+  app.get('*', (c) => {
+    const p = c.req.path;
+    // A missing build artefact must 404, never fall through to the SPA shell: handing
+    // back HTML for a .js request makes the browser execute markup as JavaScript and
+    // white-screen with nothing in the console. See isStaticAssetPath.
+    if (p.startsWith('/api/') || isStaticAssetPath(p)) return c.json({ error: 'not found' }, 404);
+    return c.html(indexHtml, 200, INDEX_HEADERS);
+  });
 
   serve({ fetch: app.fetch, port: adminPort }, log('admin'));
   if (portalPort !== adminPort) serve({ fetch: app.fetch, port: portalPort }, log('portal'));
