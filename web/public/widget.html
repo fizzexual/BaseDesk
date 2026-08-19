@@ -165,6 +165,9 @@
       if (embed) document.body.classList.add('embed');
 
       var email = '';
+      // Issued by the server on our first inbound message; scoped to this one
+      // conversation. The channel token above is public, so it cannot read a thread.
+      var visitorToken = '';
       var seen = 0;
       var visible = !embed; // in embed mode we learn "opened" from the parent
 
@@ -212,7 +215,9 @@
 
       async function poll() {
         try {
-          var res = await fetch(base + '/api/channels/' + channel + '/thread?token=' + encodeURIComponent(token) + '&contact=' + encodeURIComponent(email));
+          if (!visitorToken) return; // no conversation opened yet — nothing to read
+          var query = new URLSearchParams({ token: token, visitor: visitorToken });
+          var res = await fetch(base + '/api/channels/' + channel + '/thread?' + query);
           if (!res.ok) return;
           var msgs = await res.json();
           for (var i = seen; i < msgs.length; i++) {
@@ -230,9 +235,13 @@
         var payload = { from: { email: email }, body: body };
         if (name) payload.from.name = name;
         if (attachmentIds && attachmentIds.length) payload.attachmentIds = attachmentIds;
-        await fetch(base + '/api/channels/' + channel + '/inbound?token=' + encodeURIComponent(token), {
+        var res = await fetch(base + '/api/channels/' + channel + '/inbound?token=' + encodeURIComponent(token), {
           method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
         });
+        if (res.ok) {
+          var out = await res.json();
+          if (out.visitorToken) visitorToken = out.visitorToken;
+        }
       }
 
       // Files uploaded but not yet attached to a sent message.

@@ -87,7 +87,7 @@ describe('widget / channel-inbound attachments', () => {
     // An agent adds an internal note — it must not surface to the widget.
     await app.request(`/api/tickets/${res.ticketId}/messages`, json('POST', { kind: 'note', body: 'secret internal note' }));
 
-    const thread = await (await app.request(`/api/channels/${chat.id}/thread?token=${token}&contact=wc2@example.com`)).json();
+    const thread = await (await app.request(`/api/channels/${chat.id}/thread?token=${token}&visitor=${encodeURIComponent(res.visitorToken)}`)).json();
     expect(thread.every((m: { body: string }) => m.body !== 'secret internal note')).toBe(true);
     expect(thread.every((m: { attachments: unknown }) => Array.isArray(m.attachments))).toBe(true);
   });
