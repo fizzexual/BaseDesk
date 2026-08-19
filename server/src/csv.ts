@@ -41,9 +41,16 @@ function parseRecords(text: string): string[][] {
   return rows;
 }
 
-/** Quote a single CSV cell when it contains a comma, quote, or newline. */
+/**
+ * Quote a single CSV cell when it contains a comma, quote, or newline — and defuse
+ * spreadsheet formula injection. Ticket subjects and contact names come from customers,
+ * so a value starting with = + - @ (or a leading tab/CR) would run as a live formula
+ * when an agent opens the export in Excel or Sheets. A leading apostrophe makes the
+ * cell literal text; every major spreadsheet honours it and hides it on display.
+ */
 function csvCell(value: string | number | null): string {
-  const s = value === null ? '' : String(value);
+  let s = value === null ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
