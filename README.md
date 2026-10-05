@@ -11,6 +11,10 @@
 
 ---
 
+## About
+
+BaseDesk is a customer-support helpdesk you host yourself: shared inbox and tickets, a customer portal, a knowledge base and reporting, all in one Node process backed by one SQLite file. It is for small and mid-size support teams that want a fast, keyboard-first tool without per-seat pricing or a heavy self-hosted stack. Status: working product with Docker and from-source setup, MIT-licensed.
+
 ## Why BaseDesk
 
 We researched what people actually complain about in helpdesk software — Reddit, Hacker News, G2, review sites — and three themes came up over and over:
