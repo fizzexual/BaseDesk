@@ -2,7 +2,7 @@
   <img src="docs/screenshots/inbox-light.png" alt="BaseDesk inbox" width="820" />
 </p>
 
-<h1 align="center">BaseDesk</h1>
+<h1 align="center">BaseDesk 🌿</h1>
 
 <p align="center">
   An open-source, self-hostable helpdesk with a fast, keyboard-first agent workspace.<br/>
