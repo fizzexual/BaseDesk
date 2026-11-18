@@ -67,8 +67,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 const body = (v: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(v) });
 
 export const portalApi = {
+  /** `pending` = the address already had tickets; a link to finish was emailed to it. */
   register(input: { name: string; email: string; password: string }) {
-    return req<{ token: string; contact: Contact }>('/register', body(input));
+    return req<{ token: string; contact: Contact } | { pending: true }>('/register', body(input));
+  },
+  claim(token: string) {
+    return req<{ token: string; contact: Contact }>('/claim', body({ token }));
   },
   login(input: { email: string; password: string }) {
     return req<{ token: string; contact: Contact }>('/login', body(input));

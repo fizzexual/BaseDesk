@@ -9,7 +9,9 @@ export interface PortalState {
   tickets: Ticket[];
   branding: Branding;
   init(): Promise<void>;
-  register(input: { name: string; email: string; password: string }): Promise<void>;
+  /** Resolves 'pending' when a link to finish was emailed instead of signing in. */
+  register(input: { name: string; email: string; password: string }): Promise<'signed-in' | 'pending'>;
+  claim(token: string): Promise<void>;
   login(input: { email: string; password: string }): Promise<void>;
   logout(): void;
   refreshTickets(): Promise<void>;
@@ -55,7 +57,16 @@ export const usePortal = create<PortalState>()((set) => ({
   },
 
   async register(input) {
-    const { token, contact } = await portalApi.register(input);
+    const res = await portalApi.register(input);
+    if ('pending' in res) return 'pending';
+    setToken(res.token);
+    const tickets = await portalApi.listTickets();
+    set({ contact: res.contact, tickets });
+    return 'signed-in';
+  },
+
+  async claim(claimToken) {
+    const { token, contact } = await portalApi.claim(claimToken);
     setToken(token);
     const tickets = await portalApi.listTickets();
     set({ contact, tickets });

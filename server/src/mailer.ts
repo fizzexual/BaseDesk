@@ -76,3 +76,35 @@ export async function sendTestEmail(cfg: SmtpConfig, to: string): Promise<void> 
     html: '<p style="font-family:system-ui,sans-serif;font-size:14px">This is a test email from BaseDesk. If you are reading this, SMTP is configured correctly.</p>',
   });
 }
+
+/** The link that proves a customer owns an address that already has tickets. */
+export async function sendPortalClaimEmail(cfg: SmtpConfig, opts: { toEmail: string; toName: string; url: string }): Promise<void> {
+  const text = [
+    `Hi ${firstName(opts.toName)},`,
+    '',
+    'Someone (hopefully you) asked to create a support portal account for this email address.',
+    'Open this link within an hour to finish and see your earlier tickets:',
+    '',
+    opts.url,
+    '',
+    'If it was not you, ignore this email and nothing changes.',
+    '',
+    `— ${cfg.fromName}`,
+  ].join('\n');
+  const html = [
+    '<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;color:#171a19">',
+    `<p style="font-size:15px">Hi ${escapeHtml(firstName(opts.toName))},</p>`,
+    '<p style="font-size:14px;color:#5c6461">Someone (hopefully you) asked to create a support portal account for this email address. Open this link within an hour to finish and see your earlier tickets.</p>',
+    `<p style="margin-top:20px"><a href="${escapeHtml(opts.url)}" style="display:inline-block;background:#171a19;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">Finish creating my account</a></p>`,
+    '<p style="font-size:12px;color:#68716d">If it was not you, ignore this email and nothing changes.</p>',
+    `<p style="font-size:12px;color:#68716d;margin-top:24px">— ${escapeHtml(cfg.fromName)}</p>`,
+    '</div>',
+  ].join('');
+  await sendMail(transportOf(cfg), {
+    from: { name: cfg.fromName, email: cfg.fromEmail },
+    to: opts.toEmail,
+    subject: 'Finish creating your support account',
+    text,
+    html,
+  });
+}

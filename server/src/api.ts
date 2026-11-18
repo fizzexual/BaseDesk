@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -28,7 +28,7 @@ import { parseCsv, toCsv } from './csv.js';
 import { RateLimiter } from './rate-limit.js';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { channelCanSend, sendToChannel } from './channel-send.js';
-import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
+import { sendPortalClaimEmail, sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { randomizeChannelTokens, seedIfEmpty, seedForumIfEmpty, seedMinimal } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
@@ -793,6 +793,8 @@ export function createApp(
     if (!smtpReady(cfg)) return;
     const contact = getContact(db, ticket.requesterId);
     if (contact === null || contact.email.trim() === '') return;
+    // Chat and Discord senders get a synthetic @basedesk.local address; there is no inbox there.
+    if (contact.email.toLowerCase().endsWith('@basedesk.local')) return;
     const ticketUrl = `${cfg.publicUrl.replace(/\/+$/, '')}/portal/ticket/${ticket.id}`;
     void sendReplyNotification(cfg, {
       toEmail: contact.email, toName: contact.name, ticketNumber: ticket.number,
@@ -3754,7 +3756,20 @@ export function createApp(
     let contact = getContactByEmail(db, email);
     if (contact !== null) {
       if (getPortalAuth(db, contact.id) !== null) return c.json({ error: 'An account with this email already exists — please sign in.' }, 409);
-      // Claim an existing agent/inbound-created contact by setting its first password.
+      // This address already has tickets (it wrote in by email, chat or an agent added it).
+      // Handing over those tickets to whoever types the address would let anyone read
+      // anyone's support history, so the claim only completes from a link sent to it.
+      const cfg = getSmtpConfig(db);
+      if (!smtpReady(cfg) || cfg.publicUrl.trim() === '') {
+        return c.json({ error: 'This email already has tickets with us. Email the support team to get portal access.' }, 409);
+      }
+      const claimToken = randomBytes(24).toString('base64url');
+      const claimKey = `portal_claim:${createHash('sha256').update(claimToken).digest('hex')}`;
+      setSetting(db, claimKey, JSON.stringify({ contactId: contact.id, passwordHash: hashPassword(password), exp: Date.now() + 60 * 60_000 }));
+      const claimUrl = `${cfg.publicUrl.replace(/\/+$/, '')}/portal/login?claim=${claimToken}`;
+      void sendPortalClaimEmail(cfg, { toEmail: contact.email, toName: contact.name, url: claimUrl })
+        .catch((err) => console.error('[email] portal claim link failed:', err instanceof Error ? err.message : err));
+      return c.json({ pending: true }, 202);
     } else {
       contact = {
         id: newId('c_'), name: name.trim(), email: email.trim(), company: null, avatarHue: djb2(email.trim()) % 360,
@@ -3764,6 +3779,35 @@ export function createApp(
         .run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
     }
     setPortalAuth(db, contact.id, hashPassword(password));
+    return c.json({ token: signSession(psecret(), contact.id), contact });
+  });
+
+  // Completes a claim started by /register on an address that already had tickets.
+  app.post('/api/portal/claim', async (c) => {
+    const gate = loginLimiter.check(rateKey(c, 'portal-claim'), Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
+    let input: { token?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const token = typeof input.token === 'string' ? input.token : '';
+    const claimKey = `portal_claim:${createHash('sha256').update(token).digest('hex')}`;
+    const raw = token === '' ? null : getSetting(db, claimKey);
+    let claim: { contactId?: unknown; passwordHash?: unknown; exp?: unknown } = {};
+    try {
+      claim = raw === null ? {} : JSON.parse(raw);
+    } catch {
+      /* treated as missing */
+    }
+    if (raw !== null) db.prepare('DELETE FROM app_settings WHERE key = ?').run(claimKey); // one use only
+    const contact = typeof claim.contactId === 'string' ? getContact(db, claim.contactId) : null;
+    if (contact === null || typeof claim.passwordHash !== 'string' || typeof claim.exp !== 'number' || claim.exp < Date.now()) {
+      return c.json({ error: 'This link has expired or was already used. Create your account again to get a new one.' }, 400);
+    }
+    if (getPortalAuth(db, contact.id) !== null) return c.json({ error: 'An account with this email already exists — please sign in.' }, 409);
+    setPortalAuth(db, contact.id, claim.passwordHash);
     return c.json({ token: signSession(psecret(), contact.id), contact });
   });
 

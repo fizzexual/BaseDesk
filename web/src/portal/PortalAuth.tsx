@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { usePortal } from './store';
 import { Button } from '../components/Button';
 import { cx } from '../components/util';
@@ -13,7 +13,12 @@ type Mode = 'login' | 'register';
 export function PortalAuth() {
   const login = usePortal((s) => s.login);
   const register = usePortal((s) => s.register);
+  const claim = usePortal((s) => s.claim);
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const claimToken = params.get('claim');
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const claimed = useRef(false);
 
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
@@ -27,13 +32,30 @@ export function PortalAuth() {
     password.length >= 8 &&
     (mode === 'login' || name.trim() !== '');
 
+  // Arrived from the "finish creating your account" email: complete the claim once.
+  useEffect(() => {
+    if (claimToken === null || claimed.current) return;
+    claimed.current = true;
+    setBusy(true);
+    claim(claimToken)
+      .then(() => navigate('/portal', { replace: true }))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'This link did not work');
+        setMode('register');
+        setBusy(false);
+      });
+  }, [claimToken, claim, navigate]);
+
   async function submit() {
     if (!valid || busy) return;
     setBusy(true);
     setError(null);
     try {
       if (mode === 'login') await login({ email: email.trim(), password });
-      else await register({ name: name.trim(), email: email.trim(), password });
+      else if ((await register({ name: name.trim(), email: email.trim(), password })) === 'pending') {
+        setSentTo(email.trim());
+        return;
+      }
       navigate('/portal');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -105,6 +127,11 @@ export function PortalAuth() {
             {error !== null && (
               <div className="rounded-md border border-red/30 bg-red-bg px-3 py-2 text-[13px] text-red">{error}</div>
             )}
+            {sentTo !== null && (
+              <div className="rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-text-2">
+                This email already has tickets with us. We sent a link to <strong>{sentTo}</strong>: open it within an hour to finish.
+              </div>
+            )}
 
             <Button variant="primary" size="md" disabled={!valid || busy} onClick={() => void submit()}>
               {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
@@ -112,10 +139,6 @@ export function PortalAuth() {
           </form>
         </div>
 
-        <p className="mt-4 text-center text-[12px] text-text-3">
-          Your password is stored hashed on this self-hosted server. For a production deployment, add
-          email verification (magic links) before going live.
-        </p>
       </div>
     </div>
   );

@@ -112,14 +112,14 @@ describe('portal profile', () => {
     expect((await app.request('/api/portal/login', json('POST', { email: 'alice@x.com', password: 'brandnewpass' }))).status).toBe(200);
   });
 
-  it('lets a customer claim an existing agent-created contact and see its tickets', async () => {
+  it('does not hand an existing contact (and its tickets) to whoever types the address', async () => {
     const app = makeApp();
     const boot = await (await app.request('/api/bootstrap')).json();
     const seeded = boot.contacts[0];
-    const reg = await register(app, seeded.name, seeded.email, 'claimthisaccount');
-    expect(reg.contact.id).toBe(seeded.id);
-    const list = await (await app.request('/api/portal/tickets', auth(reg.token))).json();
-    expect(Array.isArray(list)).toBe(true);
+    // No email set up, so there is no way to prove the address: refused, no session.
+    const res = await app.request('/api/portal/register', json('POST', { name: 'Mallory', email: seeded.email, password: 'claimthisaccount' }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).token).toBeUndefined();
   });
 });
 
