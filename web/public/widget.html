@@ -234,6 +234,7 @@
 
       async function send(body, name, attachmentIds) {
         var payload = { from: { email: email }, body: body };
+        if (visitorToken) payload.visitor = visitorToken; // keeps follow-ups in this conversation
         if (name) payload.from.name = name;
         if (attachmentIds && attachmentIds.length) payload.attachmentIds = attachmentIds;
         var res = await fetch(base + '/api/channels/' + channel + '/inbound?token=' + encodeURIComponent(token), {

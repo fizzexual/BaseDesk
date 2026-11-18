@@ -4288,16 +4288,18 @@ export function createApp(
   };
 
   // A web-chat channel's inbound token ships inside a <script> tag on the customer's
-  // public site, so it identifies the *channel*, never a person. After a visitor sends
-  // their first message we hand back a signed token scoped to that one conversation;
-  // reading the thread requires it. The `visitor:` prefix keeps these tokens from being
-  // interchangeable with portal sessions, which are signed with the same secret.
-  const signVisitor = (channelId: string, contactId: string): string =>
-    signSession(psecret(), `visitor:${channelId}:${contactId}`);
-  const visitorContactId = (channelId: string, token: string | undefined): string | null => {
+  // public site, so it identifies the *channel*, never a person, and the email a visitor
+  // types proves nothing. After the first message we hand back a signed token scoped to
+  // that one ticket: reading the thread, and adding to it, require it. Scoping it to the
+  // contact (as before) let anyone type a customer's email and read their chat. The
+  // `visitor:` prefix keeps these tokens from being interchangeable with portal sessions,
+  // which are signed with the same secret.
+  const signVisitor = (channelId: string, ticketId: string): string =>
+    signSession(psecret(), `visitor:${channelId}:t:${ticketId}`);
+  const visitorTicketId = (channelId: string, token: string | undefined): string | null => {
     if (token === undefined || token === '') return null;
     const subject = verifySession(psecret(), token);
-    const prefix = `visitor:${channelId}:`;
+    const prefix = `visitor:${channelId}:t:`;
     return subject !== null && subject.startsWith(prefix) ? subject.slice(prefix.length) : null;
   };
 
@@ -4317,7 +4319,7 @@ export function createApp(
     const bad = checkInbound(c, channel, raw);
     if (bad !== null) return bad;
 
-    let input: { from?: { name?: unknown; email?: unknown; externalId?: unknown }; subject?: unknown; body?: unknown; attachmentIds?: unknown };
+    let input: { from?: { name?: unknown; email?: unknown; externalId?: unknown }; subject?: unknown; body?: unknown; attachmentIds?: unknown; visitor?: unknown };
     try {
       input = JSON.parse(raw);
     } catch {
@@ -4357,12 +4359,25 @@ export function createApp(
         .run(contact.id, contact.name, contact.email, contact.company, contact.avatarHue, contact.location, contact.timezone, contact.createdAt, contact.mrr);
     }
 
-    // Thread into this sender's most recent still-open ticket on this channel.
-    const openRow = db
-      .prepare(
-        "SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? AND bucket = 'inbox' AND status NOT IN ('solved', 'closed') ORDER BY lastMessageAt DESC LIMIT 1",
-      )
-      .get(channel.id, contact.id) as TicketRow | undefined;
+    // Thread into this sender's most recent still-open ticket on this channel. Bots and
+    // relays hold a secret channel token, so their sender ids are trusted. The web chat's
+    // token is public, so there only the visitor token of the conversation can thread.
+    const openRow = channel.type === 'webchat'
+      ? (() => {
+          const tid = visitorTicketId(channel.id, typeof input.visitor === 'string' ? input.visitor : undefined);
+          return tid === null
+            ? undefined
+            : (db
+                .prepare(
+                  "SELECT * FROM tickets WHERE id = ? AND channelId = ? AND requesterId = ? AND bucket = 'inbox' AND status NOT IN ('solved', 'closed')",
+                )
+                .get(tid, channel.id, contact.id) as TicketRow | undefined);
+        })()
+      : (db
+          .prepare(
+            "SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? AND bucket = 'inbox' AND status NOT IN ('solved', 'closed') ORDER BY lastMessageAt DESC LIMIT 1",
+          )
+          .get(channel.id, contact.id) as TicketRow | undefined);
 
     if (openRow !== undefined) {
       const existing = rowToTicket(openRow);
@@ -4379,7 +4394,7 @@ export function createApp(
         throw err;
       }
       notifyCustomerReply({ ticket: existing, message, contactName: contact.name });
-      return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true, visitorToken: signVisitor(channel.id, contact.id) });
+      return c.json({ ticketId: existing.id, ticketNumber: existing.number, threaded: true, visitorToken: signVisitor(channel.id, existing.id) });
     }
 
     const maxRow = db.prepare('SELECT COALESCE(MAX(number), 0) AS maxNumber FROM tickets').get() as { maxNumber: number };
@@ -4405,7 +4420,7 @@ export function createApp(
     autoAssign(ticket.id, null, ticket.category);
     sendAutoAck(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
     sendOutsideHours(ticket.id, getContact(db, ticket.requesterId)?.name ?? '');
-    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false, visitorToken: signVisitor(channel.id, contact.id) });
+    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number, threaded: false, visitorToken: signVisitor(channel.id, ticket.id) });
   });
 
   // Manage a ticket from the channel side (e.g. a Discord slash command relayed
@@ -4590,13 +4605,9 @@ export function createApp(
     const channel = getChannel(db, id);
     if (channel === null) return c.json({ error: 'channel not found' }, 404);
     if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
-    const contactId = visitorContactId(channel.id, c.req.query('visitor'));
-    if (contactId === null) return c.json({ error: 'invalid visitor token' }, 401);
-    const contact = getContact(db, contactId);
-    if (contact === null) return c.json([]);
-    const ticket = db
-      .prepare('SELECT * FROM tickets WHERE channelId = ? AND requesterId = ? ORDER BY createdAt DESC LIMIT 1')
-      .get(channel.id, contact.id) as TicketRow | undefined;
+    const ticketId = visitorTicketId(channel.id, c.req.query('visitor'));
+    if (ticketId === null) return c.json({ error: 'invalid visitor token' }, 401);
+    const ticket = db.prepare('SELECT * FROM tickets WHERE id = ? AND channelId = ?').get(ticketId, channel.id) as TicketRow | undefined;
     if (ticket === undefined) return c.json([]);
     // Customers see public replies only — never internal notes — and get a
     // trimmed shape (no authorId) plus each reply's attachments.
