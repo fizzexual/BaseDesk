@@ -50,6 +50,23 @@ import { FORUM_CATEGORIES } from './types.js';
 
 const AUTONOMY_RANK: Record<Autonomy, number> = { resolve: 3, draft: 2, suggest: 1 };
 const AUTONOMIES: Autonomy[] = ['suggest', 'draft', 'resolve'];
+/** True for a real calendar date written as YYYY-MM-DD (rejects 2026-02-30). */
+function isIsoDate(v: unknown): boolean {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** True for an IANA time zone this runtime knows. */
+function isTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz.trim() !== '';
+  } catch {
+    return false;
+  }
+}
+
 const CHANNEL_TYPES: ChannelType[] = ['webchat', 'webhook', 'email', 'discord', 'slack', 'whatsapp', 'telegram', 'messenger', 'sms'];
 const CHANNEL_TO_TICKET: Record<ChannelType, Channel> = {
   webchat: 'chat', webhook: 'api', email: 'email', discord: 'chat', slack: 'chat',
@@ -419,9 +436,11 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
       return DEFAULT_AUTOMATION;
     }
   };
-  const slaHours = () => {
+  const slaHours = (): SlaHours => {
     try {
-      return JSON.parse(getSetting(db, 'sla_hours') ?? '') as unknown;
+      const raw = JSON.parse(getSetting(db, 'sla_hours') ?? '') as Partial<SlaHours>;
+      // Installs saved before the holiday calendar existed have no `holidays` field.
+      return { ...DEFAULT_SLA_HOURS, ...raw, holidays: Array.isArray(raw.holidays) ? raw.holidays : [] };
     } catch {
       return DEFAULT_SLA_HOURS;
     }
@@ -2916,17 +2935,25 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
-    const h = input as Record<string, unknown>;
+    const h = (input ?? {}) as Record<string, unknown>;
+    const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const holidaysIn = h.holidays === undefined ? [] : h.holidays;
     if (
-      typeof h?.enabled !== 'boolean' || typeof h?.timezone !== 'string' ||
-      !Array.isArray(h?.days) || !h.days.every((d) => typeof d === 'number' && d >= 0 && d <= 6) ||
-      typeof h?.start !== 'string' || !/^\d{2}:\d{2}$/.test(h.start) ||
-      typeof h?.end !== 'string' || !/^\d{2}:\d{2}$/.test(h.end)
+      typeof h.enabled !== 'boolean' || typeof h.timezone !== 'string' || !isTimeZone(h.timezone) ||
+      !Array.isArray(h.days) || !h.days.every((d) => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6) ||
+      typeof h.start !== 'string' || !HM.test(h.start) ||
+      typeof h.end !== 'string' || !HM.test(h.end) || h.start >= h.end ||
+      !Array.isArray(holidaysIn) || holidaysIn.length > 1000 || !holidaysIn.every(isIsoDate)
     ) {
       return c.json({ error: 'invalid business hours' }, 400);
     }
-    setSetting(db, 'sla_hours', JSON.stringify(input));
-    return c.json(input);
+    // Store only the known fields, so a client cannot park arbitrary data in settings.
+    const value: SlaHours = {
+      enabled: h.enabled, timezone: h.timezone, days: [...new Set(h.days as number[])].sort(),
+      start: h.start, end: h.end, holidays: [...new Set(holidaysIn as string[])].sort(),
+    };
+    setSetting(db, 'sla_hours', JSON.stringify(value));
+    return c.json(value);
   });
 
   app.put('/api/settings/auto-ack', async (c) => {

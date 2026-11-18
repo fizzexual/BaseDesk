@@ -19,7 +19,7 @@ function ticket(over: Partial<Ticket>): Ticket {
 
 describe('businessDueMs', () => {
   it('counts only working hours across a weekend', () => {
-    const hours: SlaHours = { enabled: true, timezone: 'UTC', days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00' };
+    const hours: SlaHours = { enabled: true, timezone: 'UTC', days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00', holidays: [] };
     const satNoon = Date.parse('2026-07-11T12:00:00Z'); // a Saturday
     // 60 minutes of business time → Monday 09:00 + 60m = Monday 10:00.
     expect(new Date(businessDueMs(satNoon, 60, hours)).toISOString()).toBe('2026-07-13T10:00:00.000Z');

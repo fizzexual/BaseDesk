@@ -41,10 +41,11 @@ function instantFromLocal(dayUtc: number, minuteOfDay: number, tz: string): numb
  * configured weekdays and hours. Falls back to raw wall-clock on a bad config
  * or an unknown timezone so a badge is always produced.
  */
-function businessDueMs(startMs: number, budgetMins: number, hours: SlaHours): number {
+export function businessDueMs(startMs: number, budgetMins: number, hours: SlaHours): number {
   const startMin = parseHHMM(hours.start);
   const endMin = parseHHMM(hours.end);
   const daySet = new Set(hours.days);
+  const holidays = new Set(Array.isArray(hours.holidays) ? hours.holidays : []);
   if (endMin <= startMin || daySet.size === 0) return startMs + budgetMins * MIN_MS;
   try {
     const parts = localParts(startMs, hours.timezone);
@@ -52,7 +53,9 @@ function businessDueMs(startMs: number, budgetMins: number, hours: SlaHours): nu
     let cursorMin = parts.tod;
     let budget = budgetMins;
     for (let guard = 0; guard < 4000; guard++) {
-      if (daySet.has(new Date(cursorDay).getUTCDay())) {
+      // cursorDay is the desk-local date at midnight UTC, so its ISO date is the local date.
+      const offToday = holidays.has(new Date(cursorDay).toISOString().slice(0, 10));
+      if (!offToday && daySet.has(new Date(cursorDay).getUTCDay())) {
         const from = Math.max(cursorMin, startMin);
         const avail = endMin - from;
         if (avail > 0) {

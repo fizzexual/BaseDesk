@@ -251,7 +251,7 @@ function seedData(): LocalData {
     canned: seed.canned.map((c) => ({ ...c, actions: c.actions ?? null })),
     deals: seed.deals.map((d) => ({ ...d })),
     sla: DEFAULT_SLA_TARGETS,
-    slaHours: { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days] },
+    slaHours: { ...DEFAULT_SLA_HOURS, days: [...DEFAULT_SLA_HOURS.days], holidays: [] },
     automation: DEFAULT_AUTOMATION.map((r) => ({ ...r })),
     kb: seed.kb.map((a) => ({ ...a })),
     aiAgents: seed.aiAgents.map((a) => ({ ...a, scopeCategories: a.scopeCategories ?? [] })),
@@ -461,6 +461,7 @@ export class LocalRepository implements Repository {
         this.data.automation = normalizeAutomation(this.data.automation);
         this.persist();
       }
+      if (!Array.isArray(this.data.slaHours.holidays)) this.data.slaHours.holidays = []; // saved before holidays existed
       // Backfill the AI provider status for blobs written before it existed.
       if (this.data.aiProvider === undefined) {
         this.data.aiProvider = { ...DEFAULT_AI_PROVIDER };
@@ -508,7 +509,7 @@ export class LocalRepository implements Repository {
         .map((d) => ({ ...d })),
       currentAgentId: CURRENT_AGENT_ID,
       sla: this.data.sla,
-      slaHours: { ...this.data.slaHours, days: [...this.data.slaHours.days] },
+      slaHours: { ...this.data.slaHours, days: [...this.data.slaHours.days], holidays: [...this.data.slaHours.holidays] },
       automation: this.data.automation.map((r) => ({ ...r })),
       kb: this.data.kb.map((a) => ({ ...a })),
       aiAgents: this.data.aiAgents.map((a) => ({ ...a })),
@@ -1671,9 +1672,9 @@ export class LocalRepository implements Repository {
   }
 
   async saveSlaHours(hours: SlaHours): Promise<SlaHours> {
-    this.data.slaHours = { ...hours, days: [...hours.days] };
+    this.data.slaHours = { ...hours, days: [...hours.days], holidays: [...new Set(hours.holidays ?? [])].sort() };
     this.persist();
-    return { ...this.data.slaHours, days: [...this.data.slaHours.days] };
+    return { ...this.data.slaHours, days: [...this.data.slaHours.days], holidays: [...this.data.slaHours.holidays] };
   }
 
   async inviteAgent(input: AgentInvite): Promise<Agent> {

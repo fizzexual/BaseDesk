@@ -6,7 +6,7 @@ import type { SlaHours, Ticket } from '../src/data/types';
 const NOW = Date.parse('2026-07-12T12:00:00Z'); // a Sunday
 
 // Mon–Fri, 09:00–17:00 UTC (an 8-hour, 480-minute working day).
-const BIZ: SlaHours = { enabled: true, timezone: 'UTC', days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00' };
+const BIZ: SlaHours = { enabled: true, timezone: 'UTC', days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00', holidays: [] };
 
 function ticket(over: Partial<Ticket>): Ticket {
   return {

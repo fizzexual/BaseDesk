@@ -172,6 +172,8 @@ export interface SlaHours {
   days: number[];        // 0=Sun .. 6=Sat
   start: string;         // 'HH:MM'
   end: string;           // 'HH:MM'
+  /** Days off ('YYYY-MM-DD', desk time zone) on which SLA clocks do not run. */
+  holidays: string[];
 }
 
 export type ArticleStatus = 'draft' | 'published';

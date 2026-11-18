@@ -71,6 +71,7 @@ export const DEFAULT_SLA_HOURS: SlaHours = {
   days: [1, 2, 3, 4, 5],
   start: '09:00',
   end: '17:00',
+  holidays: [],
 };
 
 /** AI does nothing on its own out of the box — every switch is opt-in. */

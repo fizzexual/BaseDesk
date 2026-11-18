@@ -26,6 +26,13 @@ const COMMON_ZONES = [
   'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney',
 ];
 
+/** 'YYYY-MM-DD' → 'Fri, 25 Dec 2026'. Formatted in UTC so the label never shifts a day. */
+function formatHoliday(d: string): string {
+  const date = new Date(`${d}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return d;
+  return date.toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function allZones(): string[] {
   try {
     const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
@@ -109,10 +116,23 @@ export function SlaSettings() {
   const slaHours = useApp((s) => s.slaHours);
   const saveSlaHours = useApp((s) => s.saveSlaHours);
   const [draft, setDraft] = useState<SlaDraft>(() => toDraft(sla));
-  const [hours, setHours] = useState<SlaHours>(() => ({ ...slaHours, days: [...slaHours.days] }));
+  const [hours, setHours] = useState<SlaHours>(() => ({
+    ...slaHours, days: [...slaHours.days], holidays: [...(slaHours.holidays ?? [])],
+  }));
   const [savingHours, setSavingHours] = useState(false);
+  const [holidayDraft, setHolidayDraft] = useState('');
 
   const hoursValid = hours.start < hours.end;
+
+  function addHoliday() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(holidayDraft)) return;
+    setHours((h) => ({ ...h, holidays: [...new Set([...(h.holidays ?? []), holidayDraft])].sort() }));
+    setHolidayDraft('');
+  }
+
+  function removeHoliday(d: string) {
+    setHours((h) => ({ ...h, holidays: (h.holidays ?? []).filter((x) => x !== d) }));
+  }
 
   function toggleDay(d: number) {
     setHours((h) => ({
@@ -294,6 +314,57 @@ export function SlaSettings() {
           </label>
           {!hoursValid && (
             <span className="pb-2 text-[12px] text-red">End time must be after start.</span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium">
+            <Tooltip
+              title="Holidays"
+              label="Days off in the time zone above. SLA clocks do not run on these dates, even on a working weekday."
+            >
+              Holidays
+            </Tooltip>
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              aria-label="Holiday date"
+              value={holidayDraft}
+              onChange={(e) => setHolidayDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addHoliday();
+                }
+              }}
+              className="h-9 rounded-md border border-line bg-bg px-2.5 text-[14px] tabular-nums outline-none focus:border-line-2"
+            />
+            <Button variant="subtle" size="sm" disabled={!/^\d{4}-\d{2}-\d{2}$/.test(holidayDraft)} onClick={addHoliday}>
+              Add holiday
+            </Button>
+          </div>
+          {(hours.holidays ?? []).length === 0 ? (
+            <span className="text-[12px] text-text-3">No holidays. Clocks run on every working day.</span>
+          ) : (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Holidays">
+              {(hours.holidays ?? []).map((d) => (
+                <li
+                  key={d}
+                  className="flex h-7 items-center gap-1 rounded-md border border-line pl-2 pr-1 text-[13px] tabular-nums text-text-2"
+                >
+                  {formatHoliday(d)}
+                  <button
+                    type="button"
+                    aria-label={`Remove holiday ${d}`}
+                    onClick={() => removeHoliday(d)}
+                    className="grid h-5 w-5 place-items-center rounded text-text-3 hover:bg-surface-2 hover:text-text"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

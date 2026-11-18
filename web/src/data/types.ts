@@ -86,6 +86,8 @@ export interface SlaHours {
   days: number[];
   start: string;
   end: string;
+  /** Days off ('YYYY-MM-DD', desk time zone) on which SLA clocks do not run. */
+  holidays: string[];
 }
 
 export type SlaState = 'met' | 'breached' | 'due_soon' | 'on_track' | 'paused';
