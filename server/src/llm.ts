@@ -1,3 +1,4 @@
+import { assertOutboundUrl } from './net-guard.js';
 // Minimal OpenAI-compatible chat client. Works with any provider that exposes
 // the `/chat/completions` shape — DeepSeek, OpenAI, OpenRouter, Together, a local
 // Ollama, etc. — so the model is chosen entirely by base URL + model id. No SDK,
@@ -46,8 +47,14 @@ function endpoint(baseUrl: string): string {
 }
 
 async function once(url: string, cfg: LlmConfig, messages: ChatMessage[], opts: ChatOptions): Promise<ChatResult> {
+  try {
+    await assertOutboundUrl(url);
+  } catch (err) {
+    throw new LlmError(err instanceof Error ? err.message : 'blocked URL');
+  }
   const res = await fetch(url, {
     method: 'POST',
+    redirect: 'manual', // never follow the provider somewhere else with our key
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${cfg.apiKey}`,

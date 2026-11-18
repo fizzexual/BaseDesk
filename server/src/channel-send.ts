@@ -1,4 +1,5 @@
 import type { ChannelConn } from './types.js';
+import { assertOutboundUrl } from './net-guard.js';
 
 /**
  * Outbound delivery for chat channels. When an agent (or an AI agent) replies to
@@ -79,15 +80,20 @@ export async function sendToChannel(
   const url = channel.outboundUrl?.trim();
   if (!url) return { ok: false, error: 'no outbound URL configured' };
 
+  try {
+    await assertOutboundUrl(url);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'blocked URL' };
+  }
   const { body, headers } = buildRequest(channel, msg);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 10_000);
   try {
-    const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return { ok: false, status: res.status, error: `HTTP ${res.status}${text.trim() ? `: ${clip(text.trim(), 140)}` : ''}` };
-    }
+    // Redirects are not followed (they could point back inside the network), and the
+    // response body is never echoed: this endpoint must not become a way to read pages.
+    const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) return { ok: false, status: res.status, error: `HTTP ${res.status}: redirects are not followed` };
+    if (!res.ok) return { ok: false, status: res.status, error: `HTTP ${res.status}` };
     return { ok: true, status: res.status };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return { ok: false, error: 'request timed out' };

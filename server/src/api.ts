@@ -29,6 +29,7 @@ import { RateLimiter } from './rate-limit.js';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendPortalClaimEmail, sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
+import { assertOutboundUrl } from './net-guard.js';
 import { randomizeChannelTokens, seedIfEmpty, seedForumIfEmpty, seedMinimal } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
@@ -173,9 +174,22 @@ function providerStatusHint(status: number): string {
   return `Provider returned ${status}.`;
 }
 
+const sameBaseUrl = (a: string, b: string): boolean => a.trim().replace(/\/+$/, '') === b.trim().replace(/\/+$/, '');
+
+/**
+ * The saved API key, but only for the saved provider URL. The Test and Load-models
+ * buttons accept an unsaved URL from the form; sending the stored key there would hand
+ * it to any URL typed into the request.
+ */
+const storedKeyFor = (baseUrl: string, stored: { baseUrl: string; apiKey: string }): string =>
+  sameBaseUrl(baseUrl, stored.baseUrl) ? stored.apiKey : '';
+
 /** Fetch the model ids a provider currently offers (OpenAI-compatible GET /models). Throws on failure. */
 async function fetchModelIds(baseUrl: string, apiKey: string): Promise<string[]> {
-  const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/models`, {
+  const url = `${baseUrl.replace(/\/+$/, '')}/models`;
+  await assertOutboundUrl(url);
+  const res = await fetch(url, {
+    redirect: 'manual',
     headers: apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(15_000),
   });
@@ -3552,10 +3566,11 @@ export function createApp(
       // no body — test the stored config
     }
     const stored = getAiProviderConfig(db);
+    const baseUrl = typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl.trim() : stored.baseUrl;
     const cfg: LlmConfig = {
-      baseUrl: typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl.trim() : stored.baseUrl,
+      baseUrl,
       model: typeof override.model === 'string' && override.model.trim() !== '' ? override.model.trim() : stored.model,
-      apiKey: typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey.trim() : stored.apiKey,
+      apiKey: typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey.trim() : storedKeyFor(baseUrl, stored),
       temperature: 0,
     };
     if (cfg.apiKey === '') return c.json({ ok: false, error: 'Add an API key first' }, 400);
@@ -3581,14 +3596,15 @@ export function createApp(
     }
     const stored = getAiProviderConfig(db);
     const baseUrl = (typeof override.baseUrl === 'string' && override.baseUrl.trim() !== '' ? override.baseUrl : stored.baseUrl).trim();
-    const apiKey = (typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey : stored.apiKey).trim();
+    const apiKey = (typeof override.apiKey === 'string' && override.apiKey.trim() !== '' ? override.apiKey : storedKeyFor(baseUrl, stored)).trim();
     if (baseUrl === '') return c.json({ error: 'Enter a base URL first.' });
     // Most providers require auth for /models — a keyless request just 401s.
     const isLocal = /localhost|127\.0\.0\.1|::1/.test(baseUrl);
     if (apiKey === '' && !isLocal) return c.json({ error: 'Add your API key first, then load models.' });
     try {
       const models = await fetchModelIds(baseUrl, apiKey);
-      setModelCache(db, { baseUrl, models, fetchedAt: new Date().toISOString() }); // a manual fetch also refreshes the cache
+      // A manual fetch also refreshes the cache, but only for the saved provider.
+      if (sameBaseUrl(baseUrl, stored.baseUrl)) setModelCache(db, { baseUrl, models, fetchedAt: new Date().toISOString() });
       return c.json({ models });
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Could not reach the provider.' });
