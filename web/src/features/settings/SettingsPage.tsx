@@ -1,6 +1,6 @@
 import { NavLink, useParams } from 'react-router';
 import { cx } from '../../components/util';
-import { IconBell, IconClock, IconContacts, IconFilter, IconImport, IconList, IconLock, IconMegaphone, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
+import { IconBell, IconChannels, IconClock, IconContacts, IconFilter, IconImport, IconList, IconLock, IconMegaphone, IconNote, IconSend, IconSparkle, IconSun, IconTag, IconTicket, IconUser } from '../../icons';
 import { Profile } from './Profile';
 import { TeamSettings } from './TeamSettings';
 import { OnCallSettings } from './OnCallSettings';
@@ -17,8 +17,9 @@ import { ImportSettings } from './ImportSettings';
 import { AnnouncementsSettings } from './AnnouncementsSettings';
 import { BusinessHoursSettings } from './BusinessHoursSettings';
 import { SecuritySettings } from './SecuritySettings';
+import { WebhooksSettings } from './WebhooksSettings';
 
-type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'hours' | 'automation' | 'ai' | 'email' | 'announcements' | 'security' | 'import';
+type TabId = 'profile' | 'team' | 'oncall' | 'appearance' | 'canned' | 'templates' | 'fields' | 'form' | 'sla' | 'hours' | 'automation' | 'ai' | 'email' | 'announcements' | 'security' | 'webhooks' | 'import';
 
 const TABS: Array<{
   id: TabId;
@@ -40,6 +41,7 @@ const TABS: Array<{
   { id: 'email', label: 'Email', icon: IconSend },
   { id: 'announcements', label: 'Announcements', icon: IconMegaphone },
   { id: 'security', label: 'Security', icon: IconLock },
+  { id: 'webhooks', label: 'Webhooks', icon: IconChannels },
   { id: 'import', label: 'Import', icon: IconImport },
 ];
 
@@ -60,6 +62,7 @@ export function SettingsPage() {
     params.tab === 'email' ||
     params.tab === 'announcements' ||
     params.tab === 'security' ||
+    params.tab === 'webhooks' ||
     params.tab === 'import'
       ? params.tab
       : 'profile';
@@ -102,6 +105,7 @@ export function SettingsPage() {
         {tab === 'email' && <EmailSettings />}
         {tab === 'announcements' && <AnnouncementsSettings />}
         {tab === 'security' && <SecuritySettings />}
+        {tab === 'webhooks' && <WebhooksSettings />}
         {tab === 'import' && <ImportSettings />}
       </div>
     </div>

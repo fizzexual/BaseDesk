@@ -5,6 +5,7 @@ import type {
   AssignmentSettings, AuditEvent, AutoAck, BusinessHours, ScheduledMessage, ChoiceOption, DraftResult, ImportInput, ImportResult, ImportType, IntakeAnswer, IntakeForm, KbArticle, Message, MessageEmbed, Notification, SlaHours, SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, TimeRule,
   AiAutomation, Announcement, Branding, ApprovalStatus, CustomReport, ComponentStatus, IncidentImpact, IncidentStatus, StatusComponent, StatusIncident, StatusPageData, HandoverNote, OnCallConfig, SideConversation, SummaryResult, Ticket, TicketApproval, TicketEvent, TicketSeen, TicketFollower, TicketTask, TicketTemplate, TicketLink, TicketLinkType, TicketPatch, TicketPriority, TicketStatus,
   ForumCategory, ForumList, ForumTopicDetail,
+  Webhook, WebhookDelivery, WebhookEvent, WebhookPatch, WebhookWithSecret,
 } from './types';
 import { FORUM_CATEGORIES } from './types';
 import { autoMapColumns, IMPORT_EMAIL_RE, IMPORT_FIELDS, parseCsv, toCsv } from './import';
@@ -292,6 +293,8 @@ function seedData(): LocalData {
  * an in-memory Map elsewhere). Seeds itself from shared/seed.json on first run
  * and mirrors the server's mutation semantics exactly.
  */
+const demoId = (prefix: string): string => `${prefix}${Math.random().toString(36).slice(2, 12)}`;
+
 export class LocalRepository implements Repository {
   private readonly storage: StorageLike;
   private data: LocalData;
@@ -313,6 +316,8 @@ export class LocalRepository implements Repository {
   private sideConvos: { id: string; ticketId: string; subject: string; participant: string | null; createdAt: string }[] = []; // demo-only
   private sideMsgs: { id: string; sideId: string; authorId: string; body: string; at: string }[] = []; // demo-only
   private handover: { id: string; authorId: string; body: string; createdAt: string }[] = []; // demo-only
+  private webhooks: Webhook[] = []; // demo-only, in-memory
+  private webhookDeliveries: WebhookDelivery[] = []; // demo-only, in-memory
   private forum: ForumTopicDetail[] | null = null; // demo-only, lazily seeded from the loaded contacts/agents
 
   constructor(storage?: StorageLike) {
@@ -1054,6 +1059,59 @@ export class LocalRepository implements Repository {
       .filter((e) => e.ticketId === ticketId)
       .sort((a, b) => a.at.localeCompare(b.at))
       .map((e) => ({ ...e }));
+  }
+
+  // The in-browser demo keeps webhooks in memory and never sends anything: a browser tab
+  // cannot sign and deliver server-side, so a test "ping" says so plainly.
+  async listWebhooks(): Promise<Webhook[]> {
+    return this.webhooks.map((w) => ({ ...w, events: [...w.events] }));
+  }
+  async createWebhook(url: string, events: WebhookEvent[]): Promise<WebhookWithSecret> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url.trim());
+    } catch {
+      throw new Error('That is not a valid URL.');
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Only http and https URLs are allowed.');
+    if (events.length === 0) throw new Error('Pick at least one event.');
+    const webhook: Webhook = { id: demoId('wh_'), url: url.trim(), events: [...events], enabled: true, createdAt: new Date().toISOString(), lastDelivery: null, failed: 0 };
+    this.webhooks.push(webhook);
+    return { webhook: { ...webhook }, secret: demoId('whsec_demo_') };
+  }
+  async updateWebhook(id: string, patch: WebhookPatch): Promise<WebhookWithSecret> {
+    const w = this.webhooks.find((x) => x.id === id);
+    if (!w) throw new Error('webhook not found');
+    if (patch.events !== undefined && patch.events.length === 0) throw new Error('Pick at least one event.');
+    if (patch.url !== undefined) w.url = patch.url.trim();
+    if (patch.events !== undefined) w.events = [...patch.events];
+    if (patch.enabled !== undefined) w.enabled = patch.enabled;
+    return { webhook: { ...w }, ...(patch.rotateSecret ? { secret: demoId('whsec_demo_') } : {}) };
+  }
+  async deleteWebhook(id: string): Promise<void> {
+    this.webhooks = this.webhooks.filter((w) => w.id !== id);
+    this.webhookDeliveries = this.webhookDeliveries.filter((d) => d.webhookId !== id);
+  }
+  async testWebhook(id: string): Promise<WebhookDelivery> {
+    const w = this.webhooks.find((x) => x.id === id);
+    if (!w) throw new Error('webhook not found');
+    const at = new Date().toISOString();
+    const d: WebhookDelivery = {
+      id: demoId('whd_'), webhookId: id, event: 'ping', status: 'failed', attempts: 1, lastStatus: null,
+      lastError: 'The in-browser demo does not send webhooks. Run the server to deliver them.', nextAttemptAt: at, createdAt: at, deliveredAt: null,
+    };
+    this.webhookDeliveries.unshift(d);
+    w.lastDelivery = { ...d };
+    w.failed += 1;
+    return { ...d };
+  }
+  async listWebhookDeliveries(id: string): Promise<WebhookDelivery[]> {
+    return this.webhookDeliveries.filter((d) => d.webhookId === id).slice(0, 25).map((d) => ({ ...d }));
+  }
+  async retryWebhookDelivery(deliveryId: string): Promise<WebhookDelivery> {
+    const d = this.webhookDeliveries.find((x) => x.id === deliveryId);
+    if (!d) throw new Error('only a failed delivery can be retried');
+    return { ...d };
   }
 
   async getAuditLog(limit = 500): Promise<AuditEvent[]> {

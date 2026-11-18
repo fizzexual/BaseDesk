@@ -31,6 +31,10 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendPortalClaimEmail, sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { assertOutboundUrl } from './net-guard.js';
+import {
+  createWebhook, deleteWebhook, deliverDue, getDelivery, getWebhook, installWebhookSchema, listDeliveries, listWebhooks,
+  normalizeEvents, queuePing, retryDelivery, updateWebhook, webhookUrlProblem,
+} from './webhooks.js';
 import { randomizeChannelTokens, seedIfEmpty, seedForumIfEmpty, seedMinimal } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
@@ -458,8 +462,16 @@ export interface AppOptions {
 export function createApp(
   dataDir: string,
   opts: AppOptions = {},
-): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number; setupToken: string | null; sweepOrphanUploads: (nowMs: number) => number } {
+): {
+  app: Hono;
+  db: DatabaseSync;
+  flushScheduled: (nowMs: number) => number;
+  setupToken: string | null;
+  sweepOrphanUploads: (nowMs: number) => number;
+  deliverWebhooks: (nowMs: number) => Promise<number>;
+} {
   const db = openDb(dataDir);
+  installWebhookSchema(db);
   const production = opts.production === true;
   const demo = opts.demo ?? !production;
   if (demo) {
@@ -1194,7 +1206,7 @@ export function createApp(
   // login off there is no identity to check, so this is a no-op, like the gate above.)
   // PATCH /api/agents/:id checks inside the route: agents may edit their own profile.
   const ADMIN_WRITE_RE = /^\/api\/(?:agents|settings|channels|ai\/agents|ai\/provider|status\/components|status\/incidents)(?:\/|$)/;
-  const ADMIN_ANY_RE = /^\/api\/(?:ai\/models|ai\/provider\/test|import|export)(?:\/|$)/;
+  const ADMIN_ANY_RE = /^\/api\/(?:ai\/models|ai\/provider\/test|import|export|webhooks)(?:\/|$)/;
   const isAdminOnly = (method: string, p: string): boolean =>
     !CHANNEL_PUBLIC_RE.test(p) &&
     (ADMIN_ANY_RE.test(p) || (method !== 'GET' && ADMIN_WRITE_RE.test(p) && !(method === 'PATCH' && /^\/api\/agents\/[^/]+$/.test(p))));
@@ -4761,6 +4773,88 @@ export function createApp(
     return c.json({ ticketIds: rows.map((r) => r.id) });
   });
 
+  // --- Outgoing webhooks (admin only: /api/webhooks is in ADMIN_ANY_RE) ---------------
+  // One send loop at a time: the timer and the "Send test" button share it.
+  let webhookRun: Promise<number> = Promise.resolve(0);
+  const deliverWebhooks = (nowMs: number, onlyId?: string): Promise<number> => {
+    webhookRun = webhookRun
+      .catch(() => 0)
+      .then(() => deliverDue(db, nowMs, onlyId !== undefined ? { onlyId } : {}));
+    return webhookRun;
+  };
+
+  app.get('/api/webhooks', (c) => c.json(listWebhooks(db)));
+
+  app.post('/api/webhooks', async (c) => {
+    let input: { url?: unknown; events?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const problem = await webhookUrlProblem(input.url);
+    if (problem !== null) return c.json({ error: problem }, 400);
+    const events = normalizeEvents(input.events);
+    if (events === null) return c.json({ error: 'Pick at least one event.' }, 400);
+    if ((db.prepare('SELECT COUNT(*) AS n FROM webhooks').get() as { n: number }).n >= 20) {
+      return c.json({ error: 'A desk can have at most 20 webhooks.' }, 400);
+    }
+    return c.json(createWebhook(db, String(input.url), events, new Date().toISOString()), 201);
+  });
+
+  app.patch('/api/webhooks/:id', async (c) => {
+    let input: { url?: unknown; events?: unknown; enabled?: unknown; rotateSecret?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const patch: Parameters<typeof updateWebhook>[2] = {};
+    if (input.url !== undefined) {
+      const problem = await webhookUrlProblem(input.url);
+      if (problem !== null) return c.json({ error: problem }, 400);
+      patch.url = String(input.url);
+    }
+    if (input.events !== undefined) {
+      const events = normalizeEvents(input.events);
+      if (events === null) return c.json({ error: 'Pick at least one event.' }, 400);
+      patch.events = events;
+    }
+    if (input.enabled !== undefined) {
+      if (typeof input.enabled !== 'boolean') return c.json({ error: 'enabled must be true or false' }, 400);
+      patch.enabled = input.enabled;
+    }
+    if (input.rotateSecret === true) patch.rotateSecret = true;
+    const res = updateWebhook(db, c.req.param('id'), patch);
+    return res === null ? c.json({ error: 'webhook not found' }, 404) : c.json(res);
+  });
+
+  app.delete('/api/webhooks/:id', (c) =>
+    deleteWebhook(db, c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'webhook not found' }, 404),
+  );
+
+  app.get('/api/webhooks/:id/deliveries', (c) => {
+    if (getWebhook(db, c.req.param('id')) === null) return c.json({ error: 'webhook not found' }, 404);
+    return c.json(listDeliveries(db, c.req.param('id')));
+  });
+
+  // Sends a "ping" right now and answers with how it went, so the admin sees the result
+  // on the settings screen instead of waiting for the next real event.
+  app.post('/api/webhooks/:id/test', async (c) => {
+    const id = c.req.param('id');
+    if (getWebhook(db, id) === null) return c.json({ error: 'webhook not found' }, 404);
+    const deliveryId = queuePing(db, id, new Date().toISOString());
+    await deliverWebhooks(Date.now(), deliveryId);
+    return c.json(getDelivery(db, deliveryId));
+  });
+
+  app.post('/api/webhooks/deliveries/:id/retry', async (c) => {
+    const id = c.req.param('id');
+    if (!retryDelivery(db, id, new Date().toISOString())) return c.json({ error: 'only a failed delivery can be retried' }, 404);
+    await deliverWebhooks(Date.now(), id);
+    return c.json(getDelivery(db, id));
+  });
+
   // Evaluate time-based rules on a background interval. Unref'd so it never keeps
   // the process (or a test harness) alive; wrapped so a bad rule can't crash it.
   const timeRuleTimer = setInterval(() => {
@@ -4796,5 +4890,10 @@ export function createApp(
   }, 60 * 60_000);
   if (typeof janitorTimer.unref === 'function') janitorTimer.unref();
 
-  return { app, db, flushScheduled, setupToken, sweepOrphanUploads };
+  const webhookTimer = setInterval(() => {
+    deliverWebhooks(Date.now()).catch((err: unknown) => console.error('[webhooks]', err instanceof Error ? err.message : err));
+  }, 5_000);
+  if (typeof webhookTimer.unref === 'function') webhookTimer.unref();
+
+  return { app, db, flushScheduled, setupToken, sweepOrphanUploads, deliverWebhooks: (nowMs: number) => deliverWebhooks(nowMs) };
 }

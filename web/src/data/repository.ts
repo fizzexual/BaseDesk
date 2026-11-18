@@ -5,6 +5,7 @@ import type {
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
   ForumCategory, ForumList, ForumTopicDetail,
+  Webhook, WebhookDelivery, WebhookEvent, WebhookPatch, WebhookWithSecret,
 } from './types';
 
 export interface BootstrapData {
@@ -36,6 +37,15 @@ export interface Repository {
   getTicketEvents(ticketId: string): Promise<TicketEvent[]>;
   /** Recent activity across every ticket, newest first — the global audit log. */
   getAuditLog(limit?: number): Promise<AuditEvent[]>;
+  /** Outgoing webhooks (admin only). */
+  listWebhooks(): Promise<Webhook[]>;
+  createWebhook(url: string, events: WebhookEvent[]): Promise<WebhookWithSecret>;
+  updateWebhook(id: string, patch: WebhookPatch): Promise<WebhookWithSecret>;
+  deleteWebhook(id: string): Promise<void>;
+  /** Sends a "ping" now and resolves with how it went. */
+  testWebhook(id: string): Promise<WebhookDelivery>;
+  listWebhookDeliveries(id: string): Promise<WebhookDelivery[]>;
+  retryWebhookDelivery(deliveryId: string): Promise<WebhookDelivery>;
   /** Read receipts: when each participant last viewed this ticket's thread. */
   getTicketSeen(ticketId: string): Promise<TicketSeen[]>;
   /** Intake-form answers captured when the ticket was opened (ticket metadata). */

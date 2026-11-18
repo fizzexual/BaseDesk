@@ -641,3 +641,27 @@ export interface ImportResult {
 }
 export type TicketPatch = Partial<Pick<Ticket,
   'status' | 'priority' | 'assigneeId' | 'tags' | 'bucket' | 'snoozedUntil' | 'subject' | 'customFields'>>;
+
+/** Outgoing webhooks: BaseDesk POSTs a signed JSON body to the URL when one of these happens. */
+export type WebhookEvent = 'ticket.created' | 'ticket.status_changed' | 'ticket.assignee_changed' | 'message.created';
+export const WEBHOOK_EVENTS: { value: WebhookEvent; label: string }[] = [
+  { value: 'ticket.created', label: 'Ticket created' },
+  { value: 'ticket.status_changed', label: 'Status changed' },
+  { value: 'ticket.assignee_changed', label: 'Assignee changed' },
+  { value: 'message.created', label: 'Public reply (customer or agent)' },
+];
+export interface WebhookDelivery {
+  id: string; webhookId: string; event: WebhookEvent | 'ping';
+  status: 'pending' | 'delivered' | 'failed';
+  attempts: number; lastStatus: number | null; lastError: string | null;
+  nextAttemptAt: string; createdAt: string; deliveredAt: string | null;
+}
+export interface Webhook {
+  id: string; url: string; events: WebhookEvent[]; enabled: boolean; createdAt: string;
+  lastDelivery: WebhookDelivery | null;
+  /** Deliveries that used every retry and gave up (kept 14 days). */
+  failed: number;
+}
+export interface WebhookPatch { url?: string; events?: WebhookEvent[]; enabled?: boolean; rotateSecret?: boolean }
+/** The signing secret is only ever shown here: on create, and on "new secret". */
+export interface WebhookWithSecret { webhook: Webhook; secret?: string }

@@ -5,6 +5,7 @@ import type {
   Contact, CopilotTriage, Deal, DealCreate, DealPatch, DealStage, DealType, DraftResult, KbArticle, Message, MessageEmbed, SlaHours,
   SlaTargets, SmtpSave, SmtpSettings, SmtpTestResult, StatsOverview, SummaryResult, Ticket, TicketPatch, TicketPriority,
   ForumCategory, ForumList, ForumTopicDetail,
+  Webhook, WebhookDelivery, WebhookEvent, WebhookPatch, WebhookWithSecret,
 } from './types';
 import type { BootstrapData, Repository } from './repository';
 
@@ -104,6 +105,27 @@ export class ApiRepository implements Repository {
   }
   getAuditLog(limit = 500): Promise<AuditEvent[]> {
     return request(`/events?limit=${limit}`);
+  }
+  listWebhooks(): Promise<Webhook[]> {
+    return request('/webhooks');
+  }
+  createWebhook(url: string, events: WebhookEvent[]): Promise<WebhookWithSecret> {
+    return request('/webhooks', jsonInit('POST', { url, events }));
+  }
+  updateWebhook(id: string, patch: WebhookPatch): Promise<WebhookWithSecret> {
+    return request(`/webhooks/${encodeURIComponent(id)}`, jsonInit('PATCH', patch));
+  }
+  async deleteWebhook(id: string): Promise<void> {
+    await request(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+  testWebhook(id: string): Promise<WebhookDelivery> {
+    return request(`/webhooks/${encodeURIComponent(id)}/test`, { method: 'POST' });
+  }
+  listWebhookDeliveries(id: string): Promise<WebhookDelivery[]> {
+    return request(`/webhooks/${encodeURIComponent(id)}/deliveries`);
+  }
+  retryWebhookDelivery(deliveryId: string): Promise<WebhookDelivery> {
+    return request(`/webhooks/deliveries/${encodeURIComponent(deliveryId)}/retry`, { method: 'POST' });
   }
   getTicketSeen(ticketId: string): Promise<TicketSeen[]> {
     return request(`/tickets/${encodeURIComponent(ticketId)}/seen`);
