@@ -82,9 +82,14 @@ Customer portal — end-users sign in to track and reply to their own tickets:
 git clone https://github.com/fizzexual/BaseDesk.git
 cd BaseDesk
 docker compose up -d
-# → http://localhost:4010  agent dashboard   (seeded with demo data on first boot)
+docker compose logs basedesk   # copy the one-time setup token from here
+# → http://localhost:4010  agent dashboard: paste the token, create the admin account
 # → http://localhost:4011  customer portal
 ```
+
+A fresh install starts empty and locked: the first visit asks for the setup token the
+server printed, then creates the admin account. Want the demo data to look around? Add
+`BASEDESK_DEMO=1` to the service's `environment:` before the first start.
 
 ### From source
 
@@ -93,13 +98,68 @@ Requires Node ≥ 23.4 (built-in SQLite).
 ```bash
 npm install
 npm run build
-npm start
+npm start          # prints a one-time setup token on first run
 # → http://localhost:4010  agent dashboard
 # → http://localhost:4011  customer portal
 ```
 
 The same server serves both ports. Data lives in `./data/basedesk.db` (override
 with `DATA_DIR`); ports via `ADMIN_PORT` (default 4010) and `PORTAL_PORT` (4011).
+
+## Running it safely
+
+`npm start` and the Docker image run in **production mode**:
+
+- **Login is always on.** The first admin is created with the setup token from the server
+  log (it changes on every restart until setup is done). Teammates join through an invite
+  link (`/invite/<token>`) and pick their own password. Sessions last 14 days; signing out
+  or changing a password ends every session of that account.
+- **Admins configure, agents work tickets.** The team, settings, channels, the AI provider,
+  webhooks, import and export are admin-only.
+- **No demo data** unless `BASEDESK_DEMO=1`. A production demo gets fresh random channel
+  tokens instead of the documented ones.
+- **Put it behind a TLS reverse proxy** (Caddy, nginx, Traefik) and do not expose 4010/4011
+  directly. If the proxy sets `X-Forwarded-For`, start with `TRUST_PROXY=1` so the rate limits
+  (sign-in, setup, portal, anonymous uploads) see the real client address.
+- **The port split is enforced:** the portal port only answers the portal, widget, status and
+  inbound-channel routes; the admin API is a 404 there.
+- **Secrets live in the database.** SMTP and AI keys, channel secrets and webhook signing
+  secrets are stored in `basedesk.db` as plain text (never sent back to the browser). Treat the
+  data directory and its backups as secret.
+- **Outbound requests** (AI provider, channel replies, webhooks) never follow redirects and
+  refuse link-local and cloud-metadata addresses (`169.254.0.0/16`, `fe80::/10`, …). Loopback
+  and LAN addresses stay allowed on purpose, for a local model or an in-house relay. The check
+  runs at DNS lookup time, so DNS rebinding is not covered.
+
+`npm run dev` is the development server: login is off unless you turn it on, and the
+demo desk is seeded.
+
+## Webhooks
+
+Settings → Webhooks sends a signed JSON `POST` to your URL when something happens:
+
+| Event | When |
+| --- | --- |
+| `ticket.created` | a ticket is created from anywhere (agent, portal, widget, email, channel, bot, import, split) |
+| `ticket.status_changed` | the status changes; `change: { from, to }` |
+| `ticket.assignee_changed` | the assignee changes (`to: null` = unassigned); `change: { from, to }` |
+| `message.created` | a public reply from a customer or an agent (internal notes are never sent) |
+
+Every request carries `X-BaseDesk-Event`, `X-BaseDesk-Delivery` (dedupe on it: a delivery
+whose answer got lost is sent again) and `X-BaseDesk-Signature: sha256=<hex>`, the
+HMAC-SHA256 of the raw body with the webhook's secret (shown once, when you create it or
+press **New secret**). Check it before trusting the body:
+
+```js
+import { createHmac, timingSafeEqual } from 'node:crypto';
+const expected = Buffer.from('sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex'));
+const given = Buffer.from(req.headers['x-basedesk-signature'] ?? '');
+const ok = given.length === expected.length && timingSafeEqual(given, expected);
+```
+
+Answer with any 2xx within 5 seconds. Anything else is retried after 30 s, 2 min, 10 min,
+1 h and 6 h, then marked failed (the settings screen shows it, with a **Retry** button).
+**Send test** posts a `ping` event and shows the result right away.
 
 ## Development
 
@@ -122,7 +182,7 @@ npm run typecheck  # strict TS, both workspaces
 - **AI copilot** (human-in-the-loop): reply drafts answered **strictly from your knowledge base** by default (the model is given only the relevant articles and told not to invent anything — if the KB doesn't cover it, it says so instead of guessing; a settings toggle relaxes this to general knowledge), priority/tag triage suggestions, and one-line thread summaries. Connects to any OpenAI-compatible model (DeepSeek, OpenAI, OpenRouter, local Ollama), with **per-generation token counts and dollar cost** shown to admins, and always falls back to the rule-based engine. Your API key stays on your server, never in the browser
 - **AI agents** (autonomous, human-in-the-loop): configurable agents that triage, draft, or auto-resolve new tickets within a scope you set (tags/priorities), with a suggest → draft → resolve autonomy dial; a pending draft surfaces **right inside the ticket** — approve, edit-into-the-composer, or dismiss without a trip to the queue — and KB-grounded deflections send automatically
 - **Channels**: a multi-source inbox — a polished **web-chat launcher** (a floating bottom-right bubble that opens a chat panel; embed it on any site with one `<script>` tag) and a generic inbound webhook work out of the box, and **agent replies deliver back out to the channel they came from**: Discord and Slack via a channel webhook URL, and Telegram/Messenger/WhatsApp/SMS via a generic JSON relay envelope (with an optional Bearer token). Every reply path — a manual reply, an AI-approved draft, an AI auto-resolve — fans out to the channel and to email; each connector has a **Send test** button. **Inbound** messages thread into one ongoing ticket per sender (matched by email or external id — a conversation is one ticket, not one per message), and a token- + HMAC-signed **command** endpoint lets a bot manage a ticket straight from the channel (reply / solve / reopen), so you can run a whole Discord conversation from Discord. All channel secrets stay server-side (masked, in the git-ignored DB). Each ticket shows its source — see [docs/channels.md](docs/channels.md)
-- **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee on create or update
+- **SLA + automation**: response/resolution targets per priority with live breach indicators and attainment reporting; **business-hours-aware clocks** that pause outside working hours; **multi-condition automation** (All/Any) that sets priority, status, tags, or assignee when a ticket is created
 - **Team**: invite teammates with shareable links, admin/agent roles, and per-agent reply signatures (the last active admin is protected)
 - **Customer portal** (`/portal`, served on its own port): a separate customer-facing app where end-users sign in (email + password, scrypt-hashed) to see only their own tickets (filter + search), reply, open new tickets, edit their profile, and browse the help center — replies reopen solved tickets, internal notes stay hidden, the ticket view **updates live with a notification chime** when support replies, and it has its own light/dark theme toggle
 - **Email notifications**: connect an SMTP server (a small built-in client — no nodemailer) to **email customers when an agent or AI replies**, with a link back to the portal; the password stays on your server. A test-send button verifies your setup
@@ -145,11 +205,13 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **AI agents** — autonomous triage/draft/auto-resolve with scoped autonomy and approval queues *(v0.4)*
 - [x] **Channels** — web-chat widget + inbound webhook live; email/Discord/Slack/WhatsApp via forwarding *(v0.4)*
 - [x] **Business-hours-aware SLA clocks** — pause outside working hours *(v0.4)*
-- [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, on create or update *(v0.4)*
+- [x] **Multi-condition automation** — All/Any matching, set status/priority/tag/assignee, when a ticket is created *(v0.4)*; running rules on updates too is next
 - [x] **Team management** — invites, roles, signatures *(v0.4)*; auth/SSO next
 - [x] **Customer portal** — end-user sign-in (scrypt-hashed passwords), scoped tickets, replies, new tickets, profile, help center *(v0.5)*; magic-link email verification next
 - [x] **Model provider** — connect DeepSeek / any OpenAI-compatible model to power the copilot and agents; a model catalog (8 providers) with per-1M pricing, context, and reasoning info; an **auto-refresher** re-checks your provider's live `/models` list on startup and daily, so the picker always shows everything on offer right now (new models appear automatically, retired ones are flagged); key kept server-side; rule-based fallback *(v0.5)*
-- [ ] Holiday calendars for SLA clocks
+- [x] **Holiday calendars for SLA clocks** — dates when the SLA clock does not run, on top of business hours *(v0.7)*
+- [x] **Outgoing webhooks** — signed event POSTs with retries, a test button and delivery history *(v0.7)*
+- [x] **Secure by default** — setup token, login always on in production, admin/agent roles, working invites, expiring sessions, rate limits, request size caps, outbound URL guard, safe attachment serving, non-root Docker image *(v0.7)*
 - [x] **Outbound email** — SMTP notifications to customers on reply (zero-dep client) *(v0.5)*
 - [ ] Inbound email ingestion (IMAP + Gmail/MS365 OAuth) — bulletproof threading or nothing
 - [x] **Custom fields** — admin-defined ticket fields (text, long text, number, dropdown, checkbox, date), managed in Settings and edited from the ticket side panel *(v0.6)*
@@ -161,7 +223,7 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Saved views** — pin a named filter (base view + priority + assignee + tag) to the sidebar; filters are shareable via the URL *(v0.6)*
 - [x] **Macros** — extend a canned reply with actions (set status/priority, add tags, assign to me) that fire when you insert it from the composer *(v0.6)*
 - [x] **@mention notifications** — @mention a teammate in an internal note and they get a notification (header bell + unread badge, click through to the ticket) *(v0.6)*
-- [x] **Merge tickets** — fold a duplicate into another ticket: its messages and attachments move over, a note records the merge, and the source becomes a read-only pointer to the target *(v0.6)*
+- [x] **Merge tickets** — fold a duplicate into another ticket: a note records the merge on both sides, the source closes as a read-only pointer to the target, and a customer reply on the old ticket lands on the target *(v0.6)*
 - [x] **Customer-side attachments** — end-users attach files from the portal (new ticket + replies) and the web-chat widget, reusing the same upload pipeline; the widget thread now serves public replies only (internal notes never leak) *(v0.6)*
 - [x] **Outbound channel delivery** — agent/AI replies posted to Discord & Slack channel webhooks, plus a generic JSON relay envelope (optional Bearer token) for Telegram/Messenger/WhatsApp/SMS, with a per-channel test send *(v0.6)*
 - [x] **Two-way channels** — inbound threads into one ticket per sender, an HMAC-signed **command** endpoint manages tickets from a bot (reply/solve/reopen), all secrets server-side; connect a provider via a small relay ([docs/channels.md](docs/channels.md)) *(v0.6)*
@@ -172,6 +234,18 @@ The web app talks to a plain REST API you can use directly — see the route tab
 - [x] **Activity log** — a ticket's status, priority, assignee, and tag changes (plus merges and auto-assignments) are recorded and shown inline in the conversation timeline, with who did it and when *(v0.6)*
 - [x] **CSV export** — download all contacts or tickets as a CSV (one row per record, RFC-4180 quoting) from Settings → Import, the round-trip complement to CSV import *(v0.6)*
 - [ ] Single-binary packaging
+
+## Known issues
+
+- **The Discord bot needs a desk without login.** [`bot/`](bot/) creates its channel and polls
+  through admin API routes without a session, so it only works against `npm run dev` today. A
+  bot token is the fix; until then, connect Discord through the channel relay in
+  [docs/channels.md](docs/channels.md).
+- **Automation rules run when a ticket is created only.** Rules saved as "on create or update"
+  do not fire on updates yet.
+- **The agent dashboard is built for desktop widths.** The customer portal and the chat widget
+  work on phones; the dashboard does not.
+- **Outbound URL checks do not cover DNS rebinding** (see Running it safely).
 
 ## Philosophy
 
