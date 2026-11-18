@@ -2285,6 +2285,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const { name, email, company } = input;
     if (typeof name !== 'string' || name.trim() === '') return c.json({ error: 'name is required' }, 400);
     if (typeof email !== 'string' || email.trim() === '') return c.json({ error: 'email is required' }, 400);
+    if (!IMPORT_EMAIL_RE.test(email.trim())) return c.json({ error: 'enter a valid email' }, 400);
 
     const contact: Contact = {
       id: newId('c_'),
@@ -4181,6 +4182,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const email = typeof input.from?.email === 'string' ? input.from.email.trim() : '';
     const externalId = typeof input.from?.externalId === 'string' ? input.from.externalId.trim() : '';
     if (email === '' && externalId === '') return c.json({ error: 'from.email or from.externalId is required' }, 400);
+    // Both end up in an email address agents reply to (SMTP RCPT TO), so a CR/LF or an
+    // angle bracket here would let the sender write their own SMTP commands.
+    if (email !== '' && !IMPORT_EMAIL_RE.test(email)) return c.json({ error: 'from.email is not a valid email' }, 400);
+    if (externalId !== '' && !/^[^\s<>"@\x00-\x1f\x7f]{1,128}$/.test(externalId)) return c.json({ error: 'from.externalId has invalid characters' }, 400);
 
     // A stable identity so the same sender maps to one contact + threads together.
     const identity = email !== '' ? email : `ext_${channel.type}_${externalId}@basedesk.local`;

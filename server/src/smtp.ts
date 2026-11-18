@@ -102,14 +102,23 @@ function encodeHeader(value: string): string {
   return /^[\x00-\x7F]*$/.test(value) ? value : `=?UTF-8?B?${b64(value)}?=`;
 }
 
-function buildMessage(mail: OutgoingMail): string {
+/** One address, nothing else: no spaces, control characters, angle brackets or quotes. */
+// eslint-disable-next-line no-control-regex
+const SAFE_ADDRESS = /^[^\s<>"@\x00-\x1f\x7f]+@[^\s<>"@\x00-\x1f\x7f]+$/;
+export const isSafeAddress = (a: string): boolean => SAFE_ADDRESS.test(a);
+
+/** A header value on one line: a CR or LF would start a new header (header injection). */
+const oneLine = (v: string): string => v.replace(/[\r\n]+/g, ' ');
+
+export function buildMessage(mail: OutgoingMail): string {
   const boundary = `bd_${randomUUID().replace(/-/g, '')}`;
   const domain = mail.from.email.split('@')[1] ?? 'basedesk.local';
-  const dotStuff = (body: string): string => body.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
+  // Normalise every line ending (a lone CR too, the SMTP-smuggling trick) before dot-stuffing.
+  const dotStuff = (body: string): string => body.replace(/\r\n|\r|\n/g, '\r\n').replace(/^\./gm, '..');
   const headers = [
-    `From: ${encodeHeader(mail.from.name)} <${mail.from.email}>`,
+    `From: ${encodeHeader(oneLine(mail.from.name))} <${mail.from.email}>`,
     `To: <${mail.to}>`,
-    `Subject: ${encodeHeader(mail.subject)}`,
+    `Subject: ${encodeHeader(oneLine(mail.subject))}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${randomUUID()}@${domain}>`,
     'MIME-Version: 1.0',
@@ -134,6 +143,9 @@ function buildMessage(mail: OutgoingMail): string {
 
 /** Connects, authenticates, and delivers one message. Throws SmtpError on any failure. */
 export async function sendMail(transport: SmtpTransport, mail: OutgoingMail): Promise<void> {
+  // Checked before connecting: these go into MAIL FROM / RCPT TO verbatim.
+  if (!isSafeAddress(mail.to)) throw new SmtpError('invalid recipient address');
+  if (!isSafeAddress(mail.from.email)) throw new SmtpError('invalid sender address');
   let socket = await connect(transport);
   let reader = new Reader(socket);
 
