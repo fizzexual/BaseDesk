@@ -1,8 +1,9 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type { Context } from 'hono';
 import {
   getAiAction, getAiActions, getAiAgent, getAiAgents, getAiProviderConfig, getAttachment, getCannedReplies, getTicketTemplates, getCustomReports, getChannel, getChannels, getContact,
@@ -146,6 +147,13 @@ const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
 };
 
 const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+/** Constant-time compare for secrets that arrive in a request. */
+function sameSecret(given: string | undefined, expected: string): boolean {
+  const a = Buffer.from(given ?? '');
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /** Uploaded types that are safe to render inline on our origin (no SVG: it can carry script). */
 const INLINE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
 
@@ -450,7 +458,7 @@ export interface AppOptions {
 export function createApp(
   dataDir: string,
   opts: AppOptions = {},
-): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number; setupToken: string | null } {
+): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number; setupToken: string | null; sweepOrphanUploads: (nowMs: number) => number } {
   const db = openDb(dataDir);
   const production = opts.production === true;
   const demo = opts.demo ?? !production;
@@ -684,6 +692,7 @@ export function createApp(
   // both a credential-stuffing oracle and a way to starve the single event loop, so the
   // limit protects availability as much as it protects passwords.
   const loginLimiter = new RateLimiter(10, 5 * 60_000); // 10 attempts / 5 min
+  const uploadLimiter = new RateLimiter(30, 10 * 60_000); // 30 anonymous uploads / 10 min
   const signupLimiter = new RateLimiter(5, 60 * 60_000); // 5 new accounts / hour
   // Per-account cap on top of the per-address one, so spreading guesses over many
   // addresses still cannot hammer a single account.
@@ -1145,6 +1154,7 @@ export function createApp(
     !p.startsWith('/api/') ||
     p === '/api/auth/login' ||
     p === '/api/setup' ||
+    p === '/api/auth/accept-invite' ||
     p.startsWith('/api/portal/') ||
     p === '/api/health' ||
     p === '/api/status' || // the public status page (GET only; edits live under /api/status/*)
@@ -1153,11 +1163,46 @@ export function createApp(
     p === '/api/uploads' ||
     p.startsWith('/api/attachments/') ||
     CHANNEL_PUBLIC_RE.test(p);
+  // Baseline response headers. The admin app and portal must not be framed (clickjacking);
+  // the chat widget page is the one thing customers embed in an iframe on their own site.
+  app.use('*', async (c, next) => {
+    await next();
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (c.req.path !== '/widget.html') c.header('X-Frame-Options', 'DENY');
+  });
+
+  // Request bodies are read whole into memory, so cap them: uploads at the 10 MB file
+  // limit plus form overhead, CSV import at 20 MB, everything else at 1 MB.
+  const tooLarge = (c: Context) => c.json({ error: 'request body is too large' }, 413);
+  app.use('/api/uploads', bodyLimit({ maxSize: MAX_UPLOAD + 1024 * 1024, onError: tooLarge }));
+  app.use('/api/import', bodyLimit({ maxSize: 20 * 1024 * 1024, onError: tooLarge }));
+  app.use('/api/*', async (c, next) => {
+    if (c.req.path === '/api/uploads' || c.req.path === '/api/import') return next();
+    return bodyLimit({ maxSize: 1024 * 1024, onError: tooLarge })(c, next);
+  });
+
   app.use('*', async (c, next) => {
     if (!authEnabled()) return next();
     const agentId = sessionAgentId(bearerToken(c.req.header('Authorization')));
     if (agentId === null && !isPublicPath(c.req.path)) return c.json({ error: 'authentication required' }, 401);
     return agentCtx.run(agentId ?? '', next);
+  });
+
+  // With login on, desk configuration is for admins: the team, settings, channels, the AI
+  // provider, import and export. Agents keep everything about working tickets. (With
+  // login off there is no identity to check, so this is a no-op, like the gate above.)
+  // PATCH /api/agents/:id checks inside the route: agents may edit their own profile.
+  const ADMIN_WRITE_RE = /^\/api\/(?:agents|settings|channels|ai\/agents|ai\/provider|status\/components|status\/incidents)(?:\/|$)/;
+  const ADMIN_ANY_RE = /^\/api\/(?:ai\/models|ai\/provider\/test|import|export)(?:\/|$)/;
+  const isAdminOnly = (method: string, p: string): boolean =>
+    !CHANNEL_PUBLIC_RE.test(p) &&
+    (ADMIN_ANY_RE.test(p) || (method !== 'GET' && ADMIN_WRITE_RE.test(p) && !(method === 'PATCH' && /^\/api\/agents\/[^/]+$/.test(p))));
+  const isAdminCaller = (): boolean => getAgent(db, currentAgentId())?.role === 'admin';
+  app.use('/api/*', async (c, next) => {
+    if (!authEnabled() || !agentCtx.getStore() || !isAdminOnly(c.req.method, c.req.path)) return next();
+    if (!isAdminCaller()) return c.json({ error: 'Only an admin can change this' }, 403);
+    return next();
   });
 
   app.get('/api/health', (c) => c.json({ ok: true, version: VERSION }));
@@ -1201,6 +1246,29 @@ export function createApp(
   });
 
   app.get('/api/setup', (c) => c.json({ needed: setupNeeded() }));
+
+  // An invited teammate opens their /invite/<token> link and picks a password. Before this
+  // route existed nothing ever turned an invite into an active agent.
+  app.post('/api/auth/accept-invite', async (c) => {
+    const key = rateKey(c, 'accept-invite');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
+    let input: { token?: unknown; password?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const token = typeof input.token === 'string' ? input.token.trim() : '';
+    const password = typeof input.password === 'string' ? input.password : '';
+    const row = token === '' ? undefined : (db.prepare("SELECT id FROM agents WHERE inviteToken = ? AND status = 'invited'").get(token) as { id: string } | undefined);
+    if (row === undefined) return c.json({ error: 'This invite link is not valid any more. Ask an admin for a new one.' }, 404);
+    if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+    db.prepare("UPDATE agents SET status = 'active', inviteToken = NULL WHERE id = ?").run(row.id);
+    upsertAgentAuth(db, row.id, { passwordHash: hashPassword(password) });
+    loginLimiter.reset(key);
+    return c.json({ token: issueSession(row.id), agent: getAgent(db, row.id) });
+  });
 
   app.post('/api/setup', async (c) => {
     const key = rateKey(c, 'setup');
@@ -2354,6 +2422,12 @@ export function createApp(
 
   // Upload a file (unattached until a message references it), then serve it back.
   app.post('/api/uploads', async (c) => {
+    // The portal and chat widget upload before anyone is signed in, so this route is
+    // open. Throttle callers without an agent session so it cannot fill the disk.
+    if (!agentCtx.getStore()) {
+      const gate = uploadLimiter.check(rateKey(c, 'upload'), Date.now());
+      if (!gate.ok) return tooMany(c, gate.retryAfter);
+    }
     const form = await c.req.parseBody().catch(() => null);
     if (form === null) return c.json({ error: 'invalid form body' }, 400);
     const file = form.file;
@@ -3245,6 +3319,15 @@ export function createApp(
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
+    // Agents may edit their own name, signature and skills; anything else is an admin's.
+    if (authEnabled() && !isAdminCaller() && (id !== currentAgentId() || 'role' in patch)) {
+      return c.json({ error: 'Only an admin can change this' }, 403);
+    }
+    // Demoting the last active admin used to succeed and then 500 every request.
+    if (patch.role === 'agent' && existing.role === 'admin' && existing.status === 'active') {
+      const admins = db.prepare("SELECT COUNT(*) AS n FROM agents WHERE role = 'admin' AND status = 'active'").get() as { n: number };
+      if (admins.n <= 1) return c.json({ error: 'cannot demote the last admin' }, 400);
+    }
     const sets: string[] = [];
     const params: string[] = [];
     if ('name' in patch) {
@@ -3285,7 +3368,19 @@ export function createApp(
     if (existing.role === 'admin' && existing.status === 'active' && admins.n <= 1) {
       return c.json({ error: 'cannot remove the last admin' }, 400);
     }
-    db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+    // Their tickets go back to the unassigned pool instead of pointing at nobody.
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE tickets SET assigneeId = NULL WHERE assigneeId = ?').run(id);
+      db.prepare('DELETE FROM ticket_followers WHERE agentId = ?').run(id);
+      db.prepare('DELETE FROM agent_auth WHERE agentId = ?').run(id);
+      db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    revokeSessions(id);
     return c.json({ ok: true });
   });
 
@@ -4293,7 +4388,7 @@ export function createApp(
   // the raw body. Returns an error Response to short-circuit, or null when valid.
   const checkInbound = (c: Context, channel: ChannelConn, raw: string): Response | null => {
     if (!channel.enabled) return c.json({ error: 'channel disabled' }, 403);
-    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
+    if (!sameSecret(c.req.query('token'), channel.inboundToken)) return c.json({ error: 'invalid token' }, 401);
     const secret = channel.inboundSecret?.trim();
     if (secret) {
       const sig =
@@ -4620,7 +4715,7 @@ export function createApp(
     const id = c.req.param('id');
     const channel = getChannel(db, id);
     if (channel === null) return c.json({ error: 'channel not found' }, 404);
-    if (c.req.query('token') !== channel.inboundToken) return c.json({ error: 'invalid token' }, 401);
+    if (!sameSecret(c.req.query('token'), channel.inboundToken)) return c.json({ error: 'invalid token' }, 401);
     const ticketId = visitorTicketId(channel.id, c.req.query('visitor'));
     if (ticketId === null) return c.json({ error: 'invalid visitor token' }, 401);
     const ticket = db.prepare('SELECT * FROM tickets WHERE id = ? AND channelId = ?').get(ticketId, channel.id) as TicketRow | undefined;
@@ -4666,5 +4761,29 @@ export function createApp(
   }, 5 * 60_000);
   if (typeof timeRuleTimer.unref === 'function') timeRuleTimer.unref();
 
-  return { app, db, flushScheduled, setupToken };
+  // Uploads that never got attached to a message (an abandoned form, or abuse of the open
+  // upload route) are removed after a day, file and row.
+  const sweepOrphanUploads = (nowMs: number): number => {
+    const cutoff = new Date(nowMs - 24 * 60 * 60_000).toISOString();
+    const rows = db.prepare('SELECT id FROM attachments WHERE messageId IS NULL AND createdAt < ?').all(cutoff) as { id: string }[];
+    for (const { id } of rows) {
+      try {
+        rmSync(path.join(attachDir, id), { force: true });
+      } catch {
+        /* the row goes anyway */
+      }
+      db.prepare('DELETE FROM attachments WHERE id = ?').run(id);
+    }
+    return rows.length;
+  };
+  const janitorTimer = setInterval(() => {
+    try {
+      sweepOrphanUploads(Date.now());
+    } catch (err) {
+      console.error('[uploads]', err instanceof Error ? err.message : err);
+    }
+  }, 60 * 60_000);
+  if (typeof janitorTimer.unref === 'function') janitorTimer.unref();
+
+  return { app, db, flushScheduled, setupToken, sweepOrphanUploads };
 }

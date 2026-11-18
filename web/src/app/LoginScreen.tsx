@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { claimSetup, fetchSetupNeeded } from '../data/api';
+import { acceptInvite, claimSetup, fetchSetupNeeded } from '../data/api';
 import { useApp } from '../data/store';
 import { IconLogo } from '../icons';
 
@@ -140,6 +140,56 @@ function SignInForm() {
           className="mt-5 h-9 w-full rounded-md bg-accent text-[14px] font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/** Opened from an /invite/<token> link: the teammate picks their password and is in. */
+export function AcceptInviteScreen({ token }: { token: string }) {
+  const productName = useApp((s) => s.branding.productName);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await acceptInvite(token, password);
+      window.location.replace('/'); // a fresh boot as the new teammate
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not accept the invite');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center bg-bg p-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-1">
+        <div className="mb-5 flex items-center gap-2.5">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-fg">
+            <IconLogo size={20} />
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold">Join {productName}</div>
+            <div className="text-[12px] text-text-3">Pick a password to accept your invite</div>
+          </div>
+        </div>
+
+        <label htmlFor="invite-password" className="mb-1 block text-[13px] font-medium text-text-2">Password</label>
+        <input id="invite-password" type="password" autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={FIELD} placeholder="At least 8 characters" />
+
+        {error !== null && <p className="mt-3 text-[13px] text-red">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={busy || password.length < 8}
+          className="mt-5 h-9 w-full rounded-md bg-accent text-[14px] font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {busy ? 'Joining…' : 'Accept invite'}
         </button>
       </form>
     </div>

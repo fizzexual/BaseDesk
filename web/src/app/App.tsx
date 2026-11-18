@@ -25,7 +25,7 @@ import { ChannelsPage } from '../features/channels/ChannelsPage';
 import { WallboardPage } from '../features/wallboard/WallboardPage';
 import { DocsPage } from '../features/docs/DocsPage';
 import { ForumPage } from '../features/forum/ForumPage';
-import { LoginScreen } from './LoginScreen';
+import { AcceptInviteScreen, LoginScreen } from './LoginScreen';
 
 function Boot({ children }: { children: React.ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -64,6 +64,9 @@ function Boot({ children }: { children: React.ReactNode }) {
 }
 
 function AgentApp() {
+  // An invite link works before anyone is signed in, so it skips the boot gate.
+  const invite = /^\/invite\/([^/]+)$/.exec(useLocation().pathname);
+  if (invite !== null) return <AcceptInviteScreen token={decodeURIComponent(invite[1])} />;
   return (
     <Boot>
       <Routes>

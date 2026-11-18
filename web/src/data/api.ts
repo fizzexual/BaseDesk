@@ -516,3 +516,11 @@ export async function claimSetup(input: { token: string; name: string; email: st
   if (!res.ok || typeof data.token !== 'string') throw new Error(data.error ?? 'Setup failed');
   setAdminToken(data.token);
 }
+
+/** An invited teammate picks a password; stores the session on success. */
+export async function acceptInvite(token: string, password: string): Promise<void> {
+  const res = await fetch('/api/auth/accept-invite', jsonInit('POST', { token, password }));
+  const data = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
+  if (!res.ok || typeof data.token !== 'string') throw new Error(data.error ?? 'Could not accept the invite');
+  setAdminToken(data.token);
+}
