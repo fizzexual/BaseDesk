@@ -180,7 +180,8 @@
         if (text) d.appendChild(document.createTextNode(text));
         (atts || []).forEach(function (a) {
           var url = base + '/api/attachments/' + encodeURIComponent(a.id);
-          var isImg = a.mimeType && a.mimeType.indexOf('image/') === 0 && a.mimeType !== 'image/svg+xml';
+          var bare = String(a.mimeType || '').split(';')[0].trim().toLowerCase();
+          var isImg = /^image\/(png|jpeg|gif|webp|avif)$/.test(bare); // same list the server inlines; never SVG
           if (isImg) {
             var img = document.createElement('img');
             img.className = 'att-img'; img.src = url; img.alt = a.filename || 'image';

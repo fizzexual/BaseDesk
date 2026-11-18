@@ -145,6 +145,22 @@ const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
 };
 
 const normHeader = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+/** Uploaded types that are safe to render inline on our origin (no SVG: it can carry script). */
+const INLINE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
+
+/**
+ * A Content-Disposition header for any filename. Header values must be Latin-1, so a
+ * name like "отчёт.pdf" used to throw and 500 the download; it now goes in the RFC 5987
+ * `filename*` parameter with an ASCII fallback for old clients.
+ */
+export function contentDisposition(kind: 'inline' | 'attachment', filename: string): string {
+  // eslint-disable-next-line no-control-regex
+  const clean = filename.replace(/[\x00-\x1f\x7f"\\]/g, '').trim() || 'file';
+  const ascii = clean.replace(/[^\x20-\x7e]/g, '_');
+  const encoded = encodeURIComponent(clean).replace(/['()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 const IMPORT_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /** A human, actionable message for a provider HTTP status. */
@@ -2349,14 +2365,19 @@ export function createApp(
     const filePath = path.join(attachDir, id);
     if (!existsSync(filePath)) return c.json({ error: 'file missing' }, 404);
     const buf = readFileSync(filePath);
-    // Inline images so they preview in-thread, but never SVG (script vector); everything else downloads.
-    const inline = att.mimeType.startsWith('image/') && att.mimeType !== 'image/svg+xml';
-    const safeName = att.filename.replace(/[\r\n"]/g, '');
+    // The MIME type is whatever the uploader claimed. Only a closed list of raster image
+    // types is shown inline, compared on the bare type: "image/svg+xml; charset=utf-8"
+    // used to slip past an exact-match SVG check and run its script on our origin.
+    // Everything else downloads as opaque bytes, and the sandbox CSP stops it running
+    // even if a browser renders it anyway.
+    const baseType = att.mimeType.split(';')[0].trim().toLowerCase();
+    const inline = INLINE_IMAGE_TYPES.has(baseType);
     return c.body(new Uint8Array(buf), 200, {
-      'Content-Type': att.mimeType,
-      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
+      'Content-Type': inline ? baseType : 'application/octet-stream',
+      'Content-Disposition': contentDisposition(inline ? 'inline' : 'attachment', att.filename),
       'Content-Length': String(buf.length),
       'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
     });
   });
 

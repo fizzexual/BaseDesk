@@ -12,9 +12,13 @@ export function attachmentUrl(att: Attachment): string {
   return localUrls.get(att.id) ?? `/api/attachments/${encodeURIComponent(att.id)}`;
 }
 
-/** Images we preview inline in the thread (SVG excluded — it can carry script). */
+// Same closed list the server inlines (SVG excluded: it can carry script). Compared on the
+// bare type, so "image/svg+xml; charset=utf-8" is not mistaken for a safe image.
+const INLINE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
+
+/** Images we preview inline in the thread. */
 export function isImage(att: Attachment): boolean {
-  return att.mimeType.startsWith('image/') && att.mimeType !== 'image/svg+xml';
+  return INLINE_IMAGE_TYPES.has(att.mimeType.split(';')[0].trim().toLowerCase());
 }
 
 export function formatBytes(n: number): string {
