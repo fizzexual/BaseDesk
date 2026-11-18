@@ -142,12 +142,16 @@ export function buildMessage(mail: OutgoingMail): string {
 }
 
 /** Connects, authenticates, and delivers one message. Throws SmtpError on any failure. */
-export async function sendMail(transport: SmtpTransport, mail: OutgoingMail): Promise<void> {
+export async function sendMail(transport: SmtpTransport, mail: OutgoingMail, opts: { deadlineMs?: number } = {}): Promise<void> {
   // Checked before connecting: these go into MAIL FROM / RCPT TO verbatim.
   if (!isSafeAddress(mail.to)) throw new SmtpError('invalid recipient address');
   if (!isSafeAddress(mail.from.email)) throw new SmtpError('invalid sender address');
   let socket = await connect(transport);
   let reader = new Reader(socket);
+  // The connect timeout only covers the handshake. A server that accepts and then goes
+  // silent used to leave this pending forever (and the Send-test button spinning), so
+  // the whole conversation gets a deadline too.
+  const deadline = setTimeout(() => socket.destroy(new SmtpError('SMTP server stopped answering')), opts.deadlineMs ?? 30_000);
 
   const expect = async (ok: number[], label: string) => {
     const r = await reader.read();
@@ -184,6 +188,7 @@ export async function sendMail(transport: SmtpTransport, mail: OutgoingMail): Pr
     await expect([250], 'message body');
     socket.write('QUIT\r\n');
   } finally {
+    clearTimeout(deadline);
     socket.end();
     socket.destroy();
   }

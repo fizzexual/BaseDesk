@@ -98,3 +98,18 @@ describe('inbound channel API refuses identities that would reach RCPT TO', () =
     expect(res.status).toBe(400);
   });
 });
+
+describe('SMTP deadline (correctness finding #12)', () => {
+  it('gives up on a server that accepts the connection and never answers', async () => {
+    const server = net.createServer(() => { /* accept, say nothing */ });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const port = (server.address() as net.AddressInfo).port;
+    try {
+      const started = Date.now();
+      await expect(sendMail({ host: '127.0.0.1', port, secure: false, user: '', pass: '' }, mail(), { deadlineMs: 300 })).rejects.toThrow(/stopped answering|closed/);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      server.close();
+    }
+  });
+});

@@ -2,6 +2,16 @@ import type { BusinessHours, DayHours } from './types.js';
 
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+export function isValidTimeZone(tz: string): boolean {
+  if (tz === '') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function normDay(d: unknown): DayHours | null {
   if (d === null || typeof d !== 'object') return null;
   const { open, close } = d as { open?: unknown; close?: unknown };
@@ -17,7 +27,9 @@ export function normalizeBusinessHours(raw: unknown, fallback: BusinessHours): B
     : fallback.days.map((d) => (d ? { ...d } : null));
   return {
     enabled: r.enabled === true,
-    timezone: typeof r.timezone === 'string' && r.timezone.trim() !== '' ? r.timezone : fallback.timezone,
+    // An unknown zone used to be stored as typed and then throw a RangeError on the next
+    // inbound ticket (after it was inserted), so customers retried and made duplicates.
+    timezone: typeof r.timezone === 'string' && isValidTimeZone(r.timezone.trim()) ? r.timezone.trim() : fallback.timezone,
     message: typeof r.message === 'string' && r.message.trim() !== '' ? r.message : fallback.message,
     days,
   };

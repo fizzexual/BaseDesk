@@ -4102,8 +4102,15 @@ export function createApp(
   app.post('/api/portal/tickets/:id/messages', async (c) => {
     const contact = contactFromAuth(c.req.header('Authorization'));
     if (contact === null) return c.json({ error: 'not signed in' }, 401);
-    const ticket = getTicket(db, c.req.param('id'));
+    let ticket = getTicket(db, c.req.param('id'));
     if (ticket === null || ticket.requesterId !== contact.id) return c.json({ error: 'ticket not found' }, 404);
+    // A merged ticket is a tombstone: the conversation lives on in the ticket it was
+    // merged into, so the reply goes there instead of reopening the tombstone.
+    if (ticket.mergedIntoId !== null) {
+      const target = getTicket(db, ticket.mergedIntoId);
+      if (target === null || target.requesterId !== contact.id) return c.json({ error: 'this conversation was merged into another ticket' }, 409);
+      ticket = target;
+    }
     let input: { body?: unknown; attachmentIds?: unknown };
     try {
       input = await c.req.json();
@@ -4127,8 +4134,11 @@ export function createApp(
       db.prepare('INSERT INTO messages (id, ticketId, authorKind, authorId, kind, body, at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(message.id, message.ticketId, message.authorKind, message.authorId, message.kind, message.body, message.at);
       if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, ticket.id);
-      db.prepare('UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
-        .run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, previewText, ticket.id);
+      // A customer writing back wants an answer: wake a snoozed ticket and bring an
+      // archived one back to the inbox, or it reopens somewhere no agent ever looks.
+      db.prepare(
+        "UPDATE tickets SET status = ?, resolvedAt = ?, updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, snoozedUntil = NULL, bucket = CASE WHEN bucket = 'archive' THEN 'inbox' ELSE bucket END WHERE id = ?",
+      ).run(nextStatus, nextStatus === 'open' ? null : ticket.resolvedAt, now, now, previewText, ticket.id);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -4497,7 +4507,8 @@ export function createApp(
       try {
         insertMessageRow(message);
         if (attachmentIds.length > 0) linkAttachments(db, attachmentIds, message.id, existing.id);
-        db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ? WHERE id = ?')
+        // Threaded into an open ticket: a new message wakes it if it was snoozed.
+        db.prepare('UPDATE tickets SET updatedAt = ?, lastMessageAt = ?, lastMessagePreview = ?, snoozedUntil = NULL WHERE id = ?')
           .run(now, now, previewText, existing.id);
         db.exec('COMMIT');
       } catch (err) {
