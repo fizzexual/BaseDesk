@@ -24,3 +24,13 @@ const ASSET_EXT =
 export function isStaticAssetPath(pathname: string): boolean {
   return pathname.startsWith('/assets/') || ASSET_EXT.test(pathname);
 }
+
+/**
+ * The customer-portal port answers only the API the portal and the chat widget use.
+ * Both ports used to serve the whole app, so the full admin API sat on the port that is
+ * meant to face customers (and with login off, it was open to them).
+ */
+const PORTAL_API = /^\/api\/(?:portal\/.+|uploads|attachments\/[^/]+|status|health|channels\/[^/]+\/(?:inbound|thread))$/;
+export function portalAllows(pathname: string): boolean {
+  return !pathname.startsWith('/api/') || PORTAL_API.test(pathname);
+}

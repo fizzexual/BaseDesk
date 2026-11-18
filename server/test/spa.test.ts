@@ -45,3 +45,23 @@ describe('SPA fallback: what must 404 instead of returning index.html', () => {
     expect(isStaticAssetPath('/widget.html')).toBe(false);
   });
 });
+
+describe('portal port: only the customer-facing API (security finding #2)', () => {
+  it('serves what the portal and the chat widget call', async () => {
+    const { portalAllows } = await import('../src/spa.js');
+    for (const p of [
+      '/', '/tickets/t_1', '/assets/index-abc.js', '/widget.html',
+      '/api/portal/login', '/api/portal/tickets/t_1/messages', '/api/uploads', '/api/attachments/att_1',
+      '/api/status', '/api/health', '/api/channels/ch_1/inbound', '/api/channels/ch_1/thread',
+    ]) expect(portalAllows(p), p).toBe(true);
+  });
+
+  it('refuses the admin API', async () => {
+    const { portalAllows } = await import('../src/spa.js');
+    for (const p of [
+      '/api/bootstrap', '/api/auth/password', '/api/settings/auth', '/api/agents', '/api/export',
+      '/api/channels', '/api/channels/ch_1', '/api/channels/ch_1/command', '/api/status/components',
+      '/api/attachments/att_1/extra', '/api/portal', '/api/tickets',
+    ]) expect(portalAllows(p), p).toBe(false);
+  });
+});

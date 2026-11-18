@@ -1115,6 +1115,7 @@ export function createApp(
     p === '/api/setup' ||
     p.startsWith('/api/portal/') ||
     p === '/api/health' ||
+    p === '/api/status' || // the public status page (GET only; edits live under /api/status/*)
     // The customer portal and the chat widget run without an admin session and cannot
     // render a thread without these two.
     p === '/api/uploads' ||

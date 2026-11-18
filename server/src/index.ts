@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp, refreshModelCache } from './api.js';
-import { isStaticAssetPath } from './spa.js';
+import { isStaticAssetPath, portalAllows } from './spa.js';
 
 const dataDir = process.env.DATA_DIR ?? './data';
 mkdirSync(dataDir, { recursive: true });
@@ -76,7 +76,10 @@ if (hasDist) {
   });
 
   serve({ fetch: app.fetch, port: adminPort }, log('admin'));
-  if (portalPort !== adminPort) serve({ fetch: app.fetch, port: portalPort }, log('portal'));
+  // The portal port gets only the customer-facing API; the admin API is not served there.
+  const portalFetch: typeof app.fetch = (req, ...rest) =>
+    portalAllows(new URL(req.url).pathname) ? app.fetch(req, ...rest) : Response.json({ error: 'not found' }, { status: 404 });
+  if (portalPort !== adminPort) serve({ fetch: portalFetch, port: portalPort }, log('portal'));
 } else {
   // Dev: just the API (the two Vite servers serve the SPA and proxy here).
   serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 4012) }, log('API'));
