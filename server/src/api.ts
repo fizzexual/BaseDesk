@@ -25,6 +25,8 @@ import {
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { hashPassword, randomTotpSecret, signSession, totpUri, verifyPassword, verifySession, verifyTotp } from './auth.js';
 import { parseCsv, toCsv } from './csv.js';
+import { RateLimiter } from './rate-limit.js';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
 import { seedIfEmpty, seedForumIfEmpty } from './seed-load.js';
@@ -624,6 +626,38 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const s = agentCtx.getStore();
     return s !== undefined && s !== '' ? s : firstAdminId();
   };
+  // Credential endpoints are the one place an anonymous caller can make us burn CPU on
+  // demand: every attempt runs scrypt, which is deliberately slow. Unthrottled that is
+  // both a credential-stuffing oracle and a way to starve the single event loop, so the
+  // limit protects availability as much as it protects passwords.
+  const loginLimiter = new RateLimiter(10, 5 * 60_000); // 10 attempts / 5 min
+  const signupLimiter = new RateLimiter(5, 60 * 60_000); // 5 new accounts / hour
+  // Per-account cap on top of the per-address one, so spreading guesses over many
+  // addresses still cannot hammer a single account.
+  const accountLimiter = new RateLimiter(20, 15 * 60_000); // 20 attempts / 15 min per email
+  /**
+   * Rate-limit bucket for a request. Keyed per route so a burst against sign-in cannot
+   * spend the signup budget for the same address.
+   *
+   * The address is the TCP peer. X-Forwarded-For is only believed when the operator says a
+   * reverse proxy sits in front (TRUST_PROXY=1): a direct caller can put anything in that
+   * header, so trusting it by default let one client rotate it and never be throttled.
+   */
+  const clientAddress = (c: Context): string => {
+    if (process.env.TRUST_PROXY === '1') {
+      const fwd = c.req.header('x-forwarded-for')?.split(',').pop()?.trim();
+      if (fwd !== undefined && fwd !== '') return fwd;
+    }
+    try {
+      return getConnInfo(c).remote.address ?? 'local';
+    } catch {
+      return 'local'; // app.request() in tests has no socket
+    }
+  };
+  const rateKey = (c: Context, route: string): string => `${route}:${clientAddress(c)}`;
+  const tooMany = (c: Context, retryAfter: number): Response =>
+    c.json({ error: 'Too many attempts — please wait and try again.' }, 429, { 'Retry-After': String(retryAfter) });
+
   const authEnabled = (): boolean => getSetting(db, 'auth_enabled') === '1';
   const authSecret = (): string => {
     let s = getSetting(db, 'auth_secret');
@@ -1053,6 +1087,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
 
   // --- Admin authentication (opt-in). Set a password while auth is off, then enable it. ---
   app.post('/api/auth/login', async (c) => {
+    const key = rateKey(c, 'auth-login');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { email?: unknown; password?: unknown; code?: unknown };
     try {
       input = await c.req.json();
@@ -1061,6 +1098,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     }
     const email = typeof input.email === 'string' ? input.email.trim() : '';
     const password = typeof input.password === 'string' ? input.password : '';
+    const accountKey = `agent:${email.toLowerCase()}`;
+    const accountGate = accountLimiter.check(accountKey, Date.now());
+    if (!accountGate.ok) return tooMany(c, accountGate.retryAfter);
     const agent = getAgentByEmail(db, email);
     const auth = agent !== null ? getAgentAuth(db, agent.id) : null;
     if (agent === null || agent.status !== 'active' || auth === null || auth.passwordHash === null || !verifyPassword(password, auth.passwordHash)) {
@@ -1072,6 +1112,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
         return c.json({ error: 'A valid two-factor code is required', needs2fa: true }, 401);
       }
     }
+    loginLimiter.reset(key); // a correct sign-in clears the slate; typos should not accumulate
+    accountLimiter.reset(accountKey);
     return c.json({ token: signSession(authSecret(), agent.id), agent });
   });
 
@@ -3586,6 +3628,10 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   };
 
   app.post('/api/portal/register', async (c) => {
+    // Signup is also an account-enumeration surface: it answers differently for an
+    // address that already has a portal account than for one that does not.
+    const gate = signupLimiter.check(rateKey(c, 'portal-register'), Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { name?: unknown; email?: unknown; password?: unknown };
     try {
       input = await c.req.json();
@@ -3615,6 +3661,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   });
 
   app.post('/api/portal/login', async (c) => {
+    const key = rateKey(c, 'portal-login');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
     let input: { email?: unknown; password?: unknown };
     try {
       input = await c.req.json();
@@ -3623,11 +3672,16 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     }
     const { email, password } = input;
     if (typeof email !== 'string' || typeof password !== 'string') return c.json({ error: 'Email and password are required' }, 400);
+    const accountKey = `contact:${email.trim().toLowerCase()}`;
+    const accountGate = accountLimiter.check(accountKey, Date.now());
+    if (!accountGate.ok) return tooMany(c, accountGate.retryAfter);
     const contact = getContactByEmail(db, email);
     const hash = contact !== null ? getPortalAuth(db, contact.id) : null;
     if (contact === null || hash === null || !verifyPassword(password, hash)) {
       return c.json({ error: 'Wrong email or password' }, 401);
     }
+    loginLimiter.reset(key);
+    accountLimiter.reset(accountKey);
     return c.json({ token: signSession(psecret(), contact.id), contact });
   });
 
