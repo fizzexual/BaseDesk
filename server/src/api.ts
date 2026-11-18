@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -29,7 +29,7 @@ import { RateLimiter } from './rate-limit.js';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { channelCanSend, sendToChannel } from './channel-send.js';
 import { sendReplyNotification, sendTestEmail, smtpReady } from './mailer.js';
-import { seedIfEmpty, seedForumIfEmpty } from './seed-load.js';
+import { randomizeChannelTokens, seedIfEmpty, seedForumIfEmpty, seedMinimal } from './seed-load.js';
 import { computeStats } from './stats.js';
 import { expectedFirstReplyAt } from './sla.js';
 import { DEFAULT_AI_AUTOMATION, DEFAULT_AUTO_ACK, DEFAULT_AUTOMATION, DEFAULT_BRANDING, DEFAULT_BUSINESS_HOURS, DEFAULT_ON_CALL, DEFAULT_SLA_HOURS, DEFAULT_SLA_TARGETS, DEFAULT_TIME_RULES, normalizeAutomation } from './defaults.js';
@@ -405,10 +405,33 @@ function viewWhere(view: ViewId, nowIso: string, currentAgentId: string): { sql:
   }
 }
 
-export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number } {
+export interface AppOptions {
+  /**
+   * A real deployment (the `npm start` / Docker entry point). Login is always required,
+   * the first admin is claimed with a one-time setup token printed to the server log, and
+   * demo data is only loaded when `demo` asks for it. Off by default so tests and the dev
+   * server keep the open, demo-seeded desk.
+   */
+  production?: boolean;
+  /** Load the showcase tickets, contacts and channels. Defaults to `!production`. */
+  demo?: boolean;
+}
+
+export function createApp(
+  dataDir: string,
+  opts: AppOptions = {},
+): { app: Hono; db: DatabaseSync; flushScheduled: (nowMs: number) => number; setupToken: string | null } {
   const db = openDb(dataDir);
-  seedIfEmpty(db);
-  seedForumIfEmpty(db); // idempotent — also backfills databases created before the forum existed
+  const production = opts.production === true;
+  const demo = opts.demo ?? !production;
+  if (demo) {
+    // The seed ships fixed channel tokens so the docs and tests can use them. On a real
+    // server those would be public knowledge, so a production demo gets fresh ones.
+    if (seedIfEmpty(db) && production) randomizeChannelTokens(db);
+    seedForumIfEmpty(db); // idempotent — also backfills databases created before the forum existed
+  } else {
+    seedMinimal(db);
+  }
   // Refresh the available-model list on boot (no-op unless a provider is set up).
   void refreshModelCache(db);
 
@@ -658,7 +681,8 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   const tooMany = (c: Context, retryAfter: number): Response =>
     c.json({ error: 'Too many attempts — please wait and try again.' }, 429, { 'Retry-After': String(retryAfter) });
 
-  const authEnabled = (): boolean => getSetting(db, 'auth_enabled') === '1';
+  // Production never runs without login: an open admin API on a public port is a takeover.
+  const authEnabled = (): boolean => production || getSetting(db, 'auth_enabled') === '1';
   const authSecret = (): string => {
     let s = getSetting(db, 'auth_secret');
     if (s === null) {
@@ -671,13 +695,32 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     const m = h !== undefined ? /^Bearer\s+(.+)$/i.exec(h.trim()) : null;
     return m ? m[1] : null;
   };
+  // Agent sessions carry an expiry and a per-agent epoch. Signing out or changing the
+  // password bumps the epoch, which kills every token issued before it on every device.
+  const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+  const sessionEpoch = (agentId: string): string => getSetting(db, `session_epoch:${agentId}`) ?? '0';
+  const revokeSessions = (agentId: string): void =>
+    setSetting(db, `session_epoch:${agentId}`, String(Number(sessionEpoch(agentId)) + 1));
+  const issueSession = (agentId: string): string =>
+    signSession(authSecret(), `${agentId}~${Date.now() + SESSION_TTL_MS}~${sessionEpoch(agentId)}`);
   const sessionAgentId = (token: string | null): string | null => {
     if (token === null) return null;
-    const id = verifySession(authSecret(), token);
-    if (id === null) return null;
+    const subject = verifySession(authSecret(), token);
+    if (subject === null) return null;
+    const [id, exp, epoch] = subject.split('~');
+    if (id === undefined || exp === undefined || epoch === undefined) return null;
+    if (!(Number(exp) > Date.now()) || epoch !== sessionEpoch(id)) return null;
     const agent = getAgent(db, id);
     return agent !== null && agent.status === 'active' ? agent.id : null;
   };
+
+  // First run of a production server: nobody has a password yet, so nobody can sign in.
+  // The server prints a one-time token to its log, and only someone who can read that log
+  // (the operator) can claim the admin account with it.
+  const setupNeeded = (): boolean =>
+    production &&
+    !getAgents(db).some((a) => a.role === 'admin' && a.status === 'active' && getAgentAuth(db, a.id).passwordHash !== null);
+  const setupToken = setupNeeded() ? randomBytes(18).toString('base64url') : null;
 
   // Ephemeral in-memory presence — who is viewing each ticket right now, keyed by a
   // per-tab session id so concurrent viewers stay distinct even under one login.
@@ -1069,6 +1112,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   const isPublicPath = (p: string): boolean =>
     !p.startsWith('/api/') ||
     p === '/api/auth/login' ||
+    p === '/api/setup' ||
     p.startsWith('/api/portal/') ||
     p === '/api/health' ||
     // The customer portal and the chat widget run without an admin session and cannot
@@ -1114,10 +1158,47 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     }
     loginLimiter.reset(key); // a correct sign-in clears the slate; typos should not accumulate
     accountLimiter.reset(accountKey);
-    return c.json({ token: signSession(authSecret(), agent.id), agent });
+    return c.json({ token: issueSession(agent.id), agent });
   });
 
-  app.post('/api/auth/logout', (c) => c.json({ ok: true })); // stateless — the client drops its token
+  // Signs this agent out everywhere: every token issued so far stops working.
+  app.post('/api/auth/logout', (c) => {
+    if (agentCtx.getStore()) revokeSessions(currentAgentId());
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/setup', (c) => c.json({ needed: setupNeeded() }));
+
+  app.post('/api/setup', async (c) => {
+    const key = rateKey(c, 'setup');
+    const gate = loginLimiter.check(key, Date.now());
+    if (!gate.ok) return tooMany(c, gate.retryAfter);
+    if (!setupNeeded() || setupToken === null) return c.json({ error: 'This desk is already set up. Sign in instead.' }, 409);
+    let input: { token?: unknown; name?: unknown; email?: unknown; password?: unknown };
+    try {
+      input = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid JSON body' }, 400);
+    }
+    const given = Buffer.from(typeof input.token === 'string' ? input.token.trim() : '');
+    const want = Buffer.from(setupToken);
+    if (given.length !== want.length || !timingSafeEqual(given, want)) {
+      return c.json({ error: 'That setup token is not right. Copy it from the server log.' }, 401);
+    }
+    const name = typeof input.name === 'string' ? input.name.trim() : '';
+    const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+    const password = typeof input.password === 'string' ? input.password : '';
+    if (name === '' || name.length > 100) return c.json({ error: 'Enter your name' }, 400);
+    if (!IMPORT_EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email' }, 400);
+    if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+    const adminId = firstAdminId();
+    const clash = getAgentByEmail(db, email);
+    if (clash !== null && clash.id !== adminId) return c.json({ error: 'Another teammate already uses that email' }, 409);
+    db.prepare("UPDATE agents SET name = ?, email = ?, status = 'active' WHERE id = ?").run(name, email, adminId);
+    upsertAgentAuth(db, adminId, { passwordHash: hashPassword(password) });
+    loginLimiter.reset(key);
+    return c.json({ token: issueSession(adminId), agent: getAgent(db, adminId) });
+  });
 
   app.get('/api/auth/me', (c) => {
     const agent = getAgent(db, currentAgentId());
@@ -1136,7 +1217,9 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     }
     if (typeof input.password !== 'string' || input.password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
     upsertAgentAuth(db, currentAgentId(), { passwordHash: hashPassword(input.password) });
-    return c.json({ ok: true });
+    // A new password signs out every other device; this tab gets a fresh token.
+    revokeSessions(currentAgentId());
+    return c.json({ ok: true, token: issueSession(currentAgentId()) });
   });
 
   app.post('/api/auth/2fa/setup', (c) => {
@@ -1172,6 +1255,7 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
     } catch {
       return c.json({ error: 'invalid JSON body' }, 400);
     }
+    if (production && input.enabled !== true) return c.json({ error: 'Login is always required on a production server' }, 400);
     // Guard against lockout: refuse to require login until the current agent has a password.
     if (input.enabled === true && getAgentAuth(db, currentAgentId()).passwordHash === null) {
       return c.json({ error: 'Set your password before enabling login' }, 400);
@@ -4489,5 +4573,5 @@ export function createApp(dataDir: string): { app: Hono; db: DatabaseSync; flush
   }, 5 * 60_000);
   if (typeof timeRuleTimer.unref === 'function') timeRuleTimer.unref();
 
-  return { app, db, flushScheduled };
+  return { app, db, flushScheduled, setupToken };
 }

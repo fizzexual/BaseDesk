@@ -310,11 +310,15 @@ export class ApiRepository implements Repository {
     return data.agent;
   }
   async logout(): Promise<void> {
+    // Sent with the token, so the server can revoke this agent's sessions everywhere.
+    await request('/auth/logout', jsonInit('POST', {})).catch(() => undefined);
     setAdminToken(null);
-    await fetch('/api/auth/logout', jsonInit('POST', {})).catch(() => undefined);
   }
   setAdminPassword(password: string): Promise<void> {
-    return request<{ ok: true }>('/auth/password', jsonInit('POST', { password })).then(() => undefined);
+    // A new password revokes every older session; the server hands this tab a fresh one.
+    return request<{ ok: true; token?: string }>('/auth/password', jsonInit('POST', { password })).then((r) => {
+      if (typeof r.token === 'string') setAdminToken(r.token);
+    });
   }
   setup2fa(): Promise<{ secret: string; uri: string }> {
     return request('/auth/2fa/setup', jsonInit('POST', {}));
@@ -492,4 +496,23 @@ export class ApiRepository implements Repository {
   aiSummarize(ticketId: string): Promise<SummaryResult> {
     return request('/ai/summarize', jsonInit('POST', { ticketId }));
   }
+}
+
+/** First-run setup of a production server (no admin has a password yet). */
+export async function fetchSetupNeeded(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/setup');
+    if (!res.ok) return false;
+    return ((await res.json()) as { needed?: unknown }).needed === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Claims the admin account with the token from the server log; stores the session. */
+export async function claimSetup(input: { token: string; name: string; email: string; password: string }): Promise<void> {
+  const res = await fetch('/api/setup', jsonInit('POST', input));
+  const data = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
+  if (!res.ok || typeof data.token !== 'string') throw new Error(data.error ?? 'Setup failed');
+  setAdminToken(data.token);
 }

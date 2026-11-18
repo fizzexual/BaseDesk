@@ -9,7 +9,20 @@ import { isStaticAssetPath } from './spa.js';
 const dataDir = process.env.DATA_DIR ?? './data';
 mkdirSync(dataDir, { recursive: true });
 
-const { app, db, flushScheduled } = createApp(dataDir);
+// `npm start` / Docker is a real deployment: login is always required and demo data is
+// only loaded when asked for. The dev server (BASEDESK_DEV=1) keeps the open demo desk.
+const isDevServer = process.env.BASEDESK_DEV === '1';
+const { app, db, flushScheduled, setupToken } = createApp(dataDir, {
+  production: !isDevServer,
+  demo: isDevServer || process.env.BASEDESK_DEMO === '1',
+});
+if (setupToken !== null) {
+  console.log('');
+  console.log('  First run: open the admin page and claim the admin account with this setup token:');
+  console.log(`    ${setupToken}`);
+  console.log('  It changes on every restart until setup is done.');
+  console.log('');
+}
 
 // The model "addresser": re-check the provider's available models once a day
 // (createApp already refreshes on boot). unref() so it never blocks shutdown.
@@ -27,7 +40,7 @@ setInterval(() => {
 // Serve the built SPA in production (web/dist present). In dev (BASEDESK_DEV=1)
 // the two Vite servers serve the SPA, so the API stays API-only even if a stale
 // web/dist exists from an earlier build.
-const isDev = process.env.BASEDESK_DEV === '1';
+const isDev = isDevServer;
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(moduleDir, '../../web/dist');
 const hasDist = !isDev && existsSync(distDir);

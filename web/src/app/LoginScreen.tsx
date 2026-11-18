@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { claimSetup, fetchSetupNeeded } from '../data/api';
 import { useApp } from '../data/store';
 import { IconLogo } from '../icons';
 
@@ -6,6 +7,82 @@ const FIELD = 'h-9 w-full rounded-md border border-line bg-bg px-2.5 text-[14px]
 
 /** Shown by the boot gate when the server requires login and we have no session. */
 export function LoginScreen() {
+  const [setup, setSetup] = useState<boolean | null>(null);
+  useEffect(() => {
+    void fetchSetupNeeded().then(setSetup);
+  }, []);
+  if (setup === null) return <div className="h-full bg-bg" />;
+  return setup ? <SetupForm /> : <SignInForm />;
+}
+
+/**
+ * First run of a production server: claim the admin account. The setup token is printed
+ * in the server log, so only the person running the server can do this.
+ */
+function SetupForm() {
+  const init = useApp((s) => s.init);
+  const productName = useApp((s) => s.branding.productName);
+  const [token, setToken] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await claimSetup({ token: token.trim(), name: name.trim(), email: email.trim(), password });
+      await init(); // signed in: re-bootstrap and leave this screen
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Setup failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center bg-bg p-4">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-1">
+        <div className="mb-5 flex items-center gap-2.5">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-accent-fg">
+            <IconLogo size={20} />
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold">Set up {productName}</div>
+            <div className="text-[12px] text-text-3">Create the admin account</div>
+          </div>
+        </div>
+
+        <label htmlFor="setup-token" className="mb-1 block text-[13px] font-medium text-text-2">Setup token</label>
+        <input id="setup-token" autoFocus autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} className={`${FIELD} font-mono`} placeholder="From the server log" />
+        <p className="mt-1 text-[12px] text-text-3">The server printed it when it started.</p>
+
+        <label htmlFor="setup-name" className="mb-1 mt-3 block text-[13px] font-medium text-text-2">Your name</label>
+        <input id="setup-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} className={FIELD} placeholder="Jane Doe" />
+
+        <label htmlFor="setup-email" className="mb-1 mt-3 block text-[13px] font-medium text-text-2">Email</label>
+        <input id="setup-email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={FIELD} placeholder="you@company.com" />
+
+        <label htmlFor="setup-password" className="mb-1 mt-3 block text-[13px] font-medium text-text-2">Password</label>
+        <input id="setup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={FIELD} placeholder="At least 8 characters" />
+
+        {error !== null && <p className="mt-3 text-[13px] text-red">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={busy || token.trim() === '' || name.trim() === '' || email.trim() === '' || password.length < 8}
+          className="mt-5 h-9 w-full rounded-md bg-accent text-[14px] font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {busy ? 'Creating…' : 'Create admin account'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function SignInForm() {
   const login = useApp((s) => s.login);
   const productName = useApp((s) => s.branding.productName);
   const [email, setEmail] = useState('');

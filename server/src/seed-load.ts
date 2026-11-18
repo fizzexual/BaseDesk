@@ -1,3 +1,4 @@
+import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,10 +87,14 @@ export function seedForumIfEmpty(db: DatabaseSync): void {
   }
 }
 
-/** Imports shared/seed.json into the database if the tickets table is empty. */
-export function seedIfEmpty(db: DatabaseSync): void {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number };
-  if (row.n > 0) return;
+/**
+ * Imports shared/seed.json into a brand-new database. Returns whether it did.
+ * A desk that already has agents is never re-seeded, even with zero tickets: that is a
+ * real desk someone emptied, and the seed's fixed ids would collide with its rows.
+ */
+export function seedIfEmpty(db: DatabaseSync): boolean {
+  const row = db.prepare('SELECT (SELECT COUNT(*) FROM tickets) + (SELECT COUNT(*) FROM agents) AS n').get() as { n: number };
+  if (row.n > 0) return false;
 
   const seedPath = path.resolve(moduleDir, '../../shared/seed.json');
   const seed = JSON.parse(readFileSync(seedPath, 'utf8')) as SeedData;
@@ -203,4 +208,35 @@ export function seedIfEmpty(db: DatabaseSync): void {
     db.exec('ROLLBACK');
     throw err;
   }
+  return true;
+}
+
+/**
+ * A fresh production desk without demo data: one admin seat (claimed through first-run
+ * setup), plus the default ticket templates and status components. Idempotent.
+ */
+export function seedMinimal(db: DatabaseSync): void {
+  const row = db.prepare('SELECT COUNT(*) AS n FROM agents').get() as { n: number };
+  if (row.n > 0) return;
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      'INSERT INTO agents (id, name, email, avatarHue, role, status, inviteToken, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(`a_${randomUUID().replace(/-/g, '').slice(0, 12)}`, 'Admin', 'admin@localhost', 220, 'admin', 'active', null, '');
+    const insertTemplate = db.prepare('INSERT OR IGNORE INTO ticket_templates (id, name, subject, body, priority, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for (const t of DEFAULT_TICKET_TEMPLATES) insertTemplate.run(t.id, t.name, t.subject, t.body, t.priority, t.category, JSON.stringify(t.tags));
+    const insertComponent = db.prepare('INSERT OR IGNORE INTO status_components (id, name, status, position) VALUES (?, ?, ?, ?)');
+    for (const cmp of DEFAULT_STATUS_COMPONENTS) insertComponent.run(cmp.id, cmp.name, cmp.status, cmp.position);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** Replaces every channel's inbound token with a fresh random one. */
+export function randomizeChannelTokens(db: DatabaseSync): void {
+  const ids = db.prepare('SELECT id FROM channels').all() as { id: string }[];
+  const update = db.prepare('UPDATE channels SET inboundToken = ? WHERE id = ?');
+  for (const { id } of ids) update.run(`tok_${randomBytes(16).toString('hex')}`, id);
 }
